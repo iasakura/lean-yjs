@@ -1,0 +1,10 @@
+name = "lean-yjs"
+version = "0.1.0"
+defaultTargets = ["lean-yjs"]
+
+[[lean_lib]]
+name = "LeanYjs"
+
+[[lean_exe]]
+name = "lean-yjs"
+root = "Main"
