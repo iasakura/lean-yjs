@@ -196,3 +196,16 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
     else
       return ((LoopCommand.Continue (return (scanning, i + 1)))))
   return (Array.insertIdxIfInBounds arr (Int.toNat i) newItem)
+
+inductive ArrayPairwise {α : Type} (f : α -> α -> Prop) : Array α -> Prop where
+| empty : ArrayPairwise f #[] -- empty array is pairwise
+| push : forall (a : α) (arr : Array α),
+  ArrayPairwise f arr -> (forall b: α, b ∈ arr -> f b a)
+  -> ArrayPairwise f (Array.push arr a) -- if the tail is pairwise, then adding an element is pairwise
+
+
+theorem integrate_sound (A: Type) [BEq A] (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
+  ArrayPairwise (@YjsLessThan A) arr
+  -> integrate newItem arr = Except.ok newArr
+  -> ArrayPairwise (@YjsLessThan A) newArr := by
+  sorry
