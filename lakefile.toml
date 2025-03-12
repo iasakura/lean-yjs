@@ -8,3 +8,7 @@ name = "LeanYjs"
 [[lean_exe]]
 name = "lean-yjs"
 root = "Main"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"

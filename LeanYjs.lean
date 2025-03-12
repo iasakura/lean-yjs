@@ -1,6 +1,7 @@
 -- This module serves as the root of the `LeanYjs` library.
 -- Import modules here that should be built as part of the library.
 import LeanYjs.Basic
+import Mathlib.Order.Defs.Unbundled
 
 variable (A : Type) [BEq A]
 
@@ -158,7 +159,7 @@ def findIdx (p : YjsPtr A) (arr : Array (YjsItem A)) : Except IntegrateError Int
   | YjsPtr.last => return (Array.size arr - 1)
 
 def getExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError (YjsItem A) :=
-  match Array.get? arr idx with
+  match arr[idx]? with
   | some item => return item
   | none => Except.error IntegrateError.notFound
 
@@ -203,9 +204,10 @@ inductive ArrayPairwise {α : Type} (f : α -> α -> Prop) : Array α -> Prop wh
   ArrayPairwise f arr -> (forall b: α, b ∈ arr -> f b a)
   -> ArrayPairwise f (Array.push arr a) -- if the tail is pairwise, then adding an element is pairwise
 
-
 theorem integrate_sound (A: Type) [BEq A] (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrayPairwise (@YjsLessThan A) arr
   -> integrate newItem arr = Except.ok newArr
   -> ArrayPairwise (@YjsLessThan A) newArr := by
   sorry
+
+set_option autoImplicit false
