@@ -65,17 +65,6 @@ def YjsItem.rightOrigin {A : Type} : YjsItem A -> YjsPtr A
 def YjsItem.id {A : Type} : YjsItem A -> ActorId
 | YjsItem.item _ _ id _ => id
 
--- inductive YjsLessThan1 (A : Type) : YjsItem A -> YjsItem A -> Prop where
--- | ltOrigin : forall (item : YjsItem A) (right : YjsPtr A) (id : ActorId) (c : A),
---     YjsLessThan1 A item (YjsItem.item (YjsPtr.itemPtr item) right id c)
--- | ltRightOrigin : forall (item : YjsItem A) (left : YjsPtr A) (id : ActorId) (c : A),
---     YjsLessThan1 A (YjsItem.item left (YjsPtr.itemPtr item) id c) item
-
--- /- transitive closure -/
--- inductive YjsLessThanTr {a : Type} : YjsItem a -> YjsItem a -> Prop where
--- | base : forall (item1 item2 : YjsItem a), YjsLessThan1 a item1 item2 -> YjsLessThanTr item1 item2
--- | trans : forall (item1 item2 item3 : YjsItem a), YjsLessThanTr item1 item2 -> YjsLessThan1 a item2 item3 -> YjsLessThanTr item1 item3
-
 inductive YjsLessThan {A : Type} : YjsPtr A -> YjsPtr A -> Prop where
 | ltFirst: forall l r id (c : A), YjsLessThan (YjsPtr.first) (YjsItem.item l r id c)
 | ltLast: forall l r id (c : A), YjsLessThan (YjsItem.item l r id c) (YjsPtr.last)
