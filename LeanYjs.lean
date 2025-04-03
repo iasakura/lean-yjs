@@ -65,83 +65,64 @@ def YjsItem.rightOrigin {A : Type} : YjsItem A -> YjsPtr A
 def YjsItem.id {A : Type} : YjsItem A -> ActorId
 | YjsItem.item _ _ id _ => id
 
-inductive YjsLessThan1 (A : Type) : YjsItem A -> YjsItem A -> Prop where
-| ltOrigin : forall (item : YjsItem A) (right : YjsPtr A) (id : ActorId) (c : A),
-    YjsLessThan1 A item (YjsItem.item (YjsPtr.itemPtr item) right id c)
-| ltRightOrigin : forall (item : YjsItem A) (left : YjsPtr A) (id : ActorId) (c : A),
-    YjsLessThan1 A (YjsItem.item left (YjsPtr.itemPtr item) id c) item
+-- inductive YjsLessThan1 (A : Type) : YjsItem A -> YjsItem A -> Prop where
+-- | ltOrigin : forall (item : YjsItem A) (right : YjsPtr A) (id : ActorId) (c : A),
+--     YjsLessThan1 A item (YjsItem.item (YjsPtr.itemPtr item) right id c)
+-- | ltRightOrigin : forall (item : YjsItem A) (left : YjsPtr A) (id : ActorId) (c : A),
+--     YjsLessThan1 A (YjsItem.item left (YjsPtr.itemPtr item) id c) item
 
-/- transitive closure -/
-inductive YjsLessThanTr {a : Type} : YjsItem a -> YjsItem a -> Prop where
-| base : forall (item1 item2 : YjsItem a), YjsLessThan1 a item1 item2 -> YjsLessThanTr item1 item2
-| trans : forall (item1 item2 item3 : YjsItem a), YjsLessThanTr item1 item2 -> YjsLessThan1 a item2 item3 -> YjsLessThanTr item1 item3
+-- /- transitive closure -/
+-- inductive YjsLessThanTr {a : Type} : YjsItem a -> YjsItem a -> Prop where
+-- | base : forall (item1 item2 : YjsItem a), YjsLessThan1 a item1 item2 -> YjsLessThanTr item1 item2
+-- | trans : forall (item1 item2 item3 : YjsItem a), YjsLessThanTr item1 item2 -> YjsLessThan1 a item2 item3 -> YjsLessThanTr item1 item3
 
-inductive YjsLessThan {A : Type} : YjsItem A -> YjsItem A -> Prop where
-| ltOrigin : forall item1 item2, YjsLessThanTr item1 item2 -> YjsLessThan item1 item2
-| ltTr : forall item1 item2 item3, YjsLessThan item1 item2 -> YjsLessThan item2 item3 -> YjsLessThan item1 item3
-| lt1 : forall (left1 left2 right1 right2 : YjsItem A) (id1 id2 : ActorId) (c1 c2 : A),
-    item1 = YjsItem.item left1 right1 id1 c1
-    -> item2 = YjsItem.item left2 right2 id2 c2
-    /- left1 < item2 < right1 -/
-    -> YjsLessThanTr left1 item2 -> YjsLessThanTr item2 right1
-    /- left1 < left2 -/
-    -> YjsLessThanTr left1 left2
-    /- left2 < item1 -/
-    -> YjsLessThan left2 item1
-    -> YjsLessThan item2 item1
-| lt2 : forall (left1 left2 right1 right2 : YjsItem A) (id1 id2 : ActorId) (c1 c2 : A),
-    item1 = YjsItem.item left1 right1 id1 c1
-    -> item2 = YjsItem.item left2 right2 id2 c2
-    /- left1 < item2 < right1 -/
-    -> YjsLessThanTr left1 item2 -> YjsLessThanTr item2 right1
-    /- left2 < left1 -/
-    -> YjsLessThanTr left2 left1
-    -> YjsLessThan item1 item2
-| ltId1 : forall (left right1 right2 : YjsItem A) (id1 id2 : ActorId) (c1 c2 : A),
-    item1 = YjsItem.item left right1 id1 c1
-    -> item2 = YjsItem.item left right2 id2 c2
-    -> YjsLessThan item1 right2
-    -> id1 < id2
-    -> YjsLessThan item1 item2
-| ltId2 : forall (left right : YjsPtr A) (id1 id2 : ActorId) (c1 c2 : A),
-    item1 = YjsItem.item left right id1 c1
-    -> item2 = YjsItem.item left right id2 c2
-    -> id1 < id2
-    -> YjsLessThan item1 item2
-| ltId3 : forall (left : YjsPtr A) (right1 right2 : YjsItem A) (id1 id2 : ActorId) (c1 c2 : A),
-    item1 = YjsItem.item left right1 id1 c1
-    -> item2 = YjsItem.item left right2 id2 c2
-    -> id1 < id2
-    /- left < item2 < right1 -/
-    -> YjsLessThan item2 right1
-    -> YjsLessThan item1 right2
-    -> YjsLessThan item1 item2
+inductive YjsLessThan {A : Type} : YjsPtr A -> YjsPtr A -> Prop where
+| ltFirst: forall l r id (c : A), YjsLessThan (YjsPtr.first) (YjsItem.item l r id c)
+| ltLast: forall l r id (c : A), YjsLessThan (YjsItem.item l r id c) (YjsPtr.last)
+| ltL1 : forall l r id c, YjsLessThan l (YjsItem.item l r id c)
+| ltR1 : forall l r id c, YjsLessThan (YjsItem.item l r id c) r
+| ltL2 : forall l1 r1 id1 l2 r2 id2 (c1 c2 : A),
+  YjsLessThan (YjsItem.item l1 r1 id1 c1) l2 -> YjsLessThan (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
+| ltR2 : forall l1 r1 id1 l2 r2 id2 (c1 c2 : A),
+  YjsLessThan r1 (YjsItem.item l2 r2 id2 c2) -> YjsLessThan (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
+| ltOriginDiff : forall l1 l2 (r1 r2 : YjsItem A) id1 id2 c1 c2,
+  YjsLessThan l2 l1
+  -> YjsLessThan (YjsItem.item l1 r1 id1 c1) r2
+  -> YjsLessThan l1 (YjsItem.item l2 r2 id2 c2)
+  -> YjsLessThan (YjsItem.item l2 r2 id2 c2) r1
+  -> YjsLessThan (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
+| ltOriginSame : forall l r1 r2 id1 id2 (c1 c2 : A),
+  YjsLessThan (YjsItem.item l r1 id1 c1) r2
+  -> YjsLessThan (YjsItem.item l r2 id2 c2) r1
+  -> id1 < id2
+  -> YjsLessThan (YjsItem.item l r1 id1 c1) (YjsItem.item l r2 id2 c2)
 
 namespace ex1
   open Nat
-  def item1 := YjsItem.item YjsPtr.first YjsPtr.last 1 1
-  def item2 := YjsItem.item YjsPtr.first YjsPtr.last 2 2
+  def item1 : YjsPtr Nat := YjsItem.item YjsPtr.first YjsPtr.last 1 1
+  def item2 : YjsPtr Nat := YjsItem.item YjsPtr.first YjsPtr.last 2 2
 
   example : YjsLessThan item1 item2 :=
   by
-    apply @YjsLessThan.ltId2 (item1 := item1) (item2 := item2) <;> try rfl
+    unfold item1 item2
+    apply YjsLessThan.ltOriginSame <;> try rfl
+    . apply YjsLessThan.ltLast
+    . apply YjsLessThan.ltLast
     simp [ActorId]
 end ex1
 
 namespace ex2
-  def item0 := YjsItem.item YjsPtr.first YjsPtr.last 0 0
-  def item1 := YjsItem.item YjsPtr.first YjsPtr.last 1 1
-  def item2 := YjsItem.item YjsPtr.first item0 2 2
+  def item0 : YjsPtr Nat := YjsItem.item YjsPtr.first YjsPtr.last 0 0
+  def item1 : YjsPtr Nat := YjsItem.item YjsPtr.first YjsPtr.last 1 1
+  def item2 : YjsPtr Nat := YjsItem.item YjsPtr.first item0 2 2
 
   example : YjsLessThan item2 item1 :=
   by
-    apply YjsLessThan.ltTr (item2 := item0)
-    . apply YjsLessThan.ltOrigin
-      apply YjsLessThanTr.base
-      apply YjsLessThan1.ltRightOrigin
-    . apply YjsLessThan.ltId2 <;> try rfl
-      unfold ActorId
-      decide
+    apply YjsLessThan.ltR2
+    . apply YjsLessThan.ltOriginSame
+      apply YjsLessThan.ltLast
+      apply YjsLessThan.ltLast
+      simp [ActorId]
 end ex2
 
 inductive IntegrateError where
@@ -205,9 +186,18 @@ inductive ArrayPairwise {α : Type} (f : α -> α -> Prop) : Array α -> Prop wh
   -> ArrayPairwise f (Array.push arr a) -- if the tail is pairwise, then adding an element is pairwise
 
 theorem integrate_sound (A: Type) [BEq A] (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
-  ArrayPairwise (@YjsLessThan A) arr
+  ArrayPairwise (fun (x y : YjsItem A) => @YjsLessThan A x y) arr
   -> integrate newItem arr = Except.ok newArr
-  -> ArrayPairwise (@YjsLessThan A) newArr := by
+  -> ArrayPairwise (fun (x y : YjsItem A) => @YjsLessThan A x y) newArr := by
   sorry
 
-set_option autoImplicit false
+theorem order_is_strict_total: IsStrictTotalOrder _ (@YjsLessThan A) := by
+  sorry
+
+theorem integrate_commutative (A: Type) [BEq A] (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
+  integrate a arr1 = Except.ok arr2
+  -> integrate b arr2 = Except.ok arr3
+  -> integrate b arr1 = Except.ok arr2'
+  -> integrate a arr2' = Except.ok arr3'
+  -> arr3 = arr3' := by
+  sorry
