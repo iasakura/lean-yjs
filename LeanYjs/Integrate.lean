@@ -61,9 +61,9 @@ inductive ArrayPairwise {α : Type} (f : α -> α -> Prop) : Array α -> Prop wh
   -> ArrayPairwise f (Array.push arr a) -- if the tail is pairwise, then adding an element is pairwise
 
 theorem integrate_sound (A: Type) [BEq A] (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
-  ArrayPairwise (fun (x y : YjsItem A) => @YjsLessThan A x y) arr
+  ArrayPairwise (fun (x y : YjsItem A) => @YjsLt A x y) arr
   -> integrate newItem arr = Except.ok newArr
-  -> ArrayPairwise (fun (x y : YjsItem A) => @YjsLessThan A x y) newArr := by
+  -> ArrayPairwise (fun (x y : YjsItem A) => @YjsLt A x y) newArr := by
   sorry
 
 theorem integrate_commutative (A: Type) [BEq A] (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
