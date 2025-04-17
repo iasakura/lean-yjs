@@ -1,104 +1,31 @@
 import Mathlib.Order.Defs.Unbundled
-
-variable (A : Type) [BEq A]
-
-def ActorId := Nat
-
-instance : LT ActorId where
-  lt x y := Nat.lt x y
-
-instance : DecidableRel (· < · : ActorId → ActorId → Prop) := by
-  intros x y
-  unfold ActorId at x y
-  apply (inferInstance : Decidable (x < y))
-
-instance ActorIdOfNat n : OfNat ActorId n where
-  ofNat := n
-
-mutual
-inductive YjsPtr : Type where
-| itemPtr : YjsItem -> YjsPtr
-| first : YjsPtr
-| last : YjsPtr
-
-inductive YjsItem : Type where
-| item (origin : YjsPtr) (rightOrigin : YjsPtr) : ActorId -> A -> YjsItem
-end
-
-mutual
-def YjsPtr.size {A : Type} (x : YjsPtr A) :=
-  match x with
-  | YjsPtr.itemPtr item => item.size + 1
-  | YjsPtr.first => 0
-  | YjsPtr.last => 0
-
-def YjsItem.size {A : Type} (item : YjsItem A) :=
-  match item with
-  | YjsItem.item origin rightOrigin _ _ =>
-    origin.size + rightOrigin.size + 2
-end
-
-instance : BEq ActorId where
-  beq x y := by
-    unfold ActorId at x y
-    apply Nat.beq x y
-
-mutual
-def yjsItemEq (x y : YjsItem A) : Bool :=
-  match x, y with
-  | YjsItem.item origin1 rightOrigin1 id1 c1, YjsItem.item origin2 rightOrigin2 id2 c2 =>
-    yjsPtrEq origin1 origin2 && yjsPtrEq rightOrigin1 rightOrigin2 && id1 == id2 && c1 == c2
-
-def yjsPtrEq (x y : YjsPtr A) : Bool :=
-  match x, y with
-  | YjsPtr.itemPtr item1, YjsPtr.itemPtr item2 => yjsItemEq item1 item2
-  | YjsPtr.first, YjsPtr.first => true
-  | YjsPtr.last, YjsPtr.last => true
-  | _, _ => false
-end
-
-instance BEqYjsItem : BEq (YjsItem A) where
-  beq := yjsItemEq _
-
-instance BEqYjsPtr : BEq (@YjsPtr A) where
-  beq := yjsPtrEq _
-
-instance : Coe (YjsItem A) (YjsPtr A) where
-  coe item := YjsPtr.itemPtr item
-
-def YjsItem.origin {A : Type} : YjsItem A -> YjsPtr A
-| YjsItem.item origin _  _ _ => origin
-
-def YjsItem.rightOrigin {A : Type} : YjsItem A -> YjsPtr A
-| YjsItem.item _ rightOrigin _ _ => rightOrigin
-
-def YjsItem.id {A : Type} : YjsItem A -> ActorId
-| YjsItem.item _ _ id _ => id
+import LeanYjs.ActorId
+import LeanYjs.YItem
 
 mutual
 inductive YjsLt {A : Type} : YjsPtr A -> YjsPtr A -> Prop where
-| ltFirst : forall item, YjsLt (YjsPtr.first) (YjsPtr.itemPtr item)
-| ltLast : forall item, YjsLt (YjsPtr.itemPtr item) (YjsPtr.last)
-| ltFirstLast: YjsLt (YjsPtr.first) (YjsPtr.last)
-| ltL1 : forall l r id c, YjsLt l (YjsItem.item l r id c)
-| ltR1 : forall l r id c, YjsLt (YjsItem.item l r id c) r
-| ltL2 : forall l1 r1 id1 l2 r2 id2 (c1 c2 : A),
-  YjsLeq (YjsItem.item l1 r1 id1 c1) l2
-  -> YjsLt (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
-| ltR2 : forall l1 r1 id1 l2 r2 id2 (c1 c2 : A),
-  YjsLeq r1 (YjsItem.item l2 r2 id2 c2)
-  -> YjsLt (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
-| ltOriginDiff : forall l1 l2 r1 r2 id1 id2 c1 c2,
-  YjsLt l2 l1
-  -> YjsLt (YjsItem.item l1 r1 id1 c1) r2
-  -> YjsLt l1 (YjsItem.item l2 r2 id2 c2)
-  -> YjsLt (YjsItem.item l2 r2 id2 c2) r1
-  -> YjsLt (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
-| ltOriginSame : forall l r1 r2 id1 id2 (c1 c2 : A),
-  YjsLt (YjsItem.item l r1 id1 c1) r2
-  -> YjsLt (YjsItem.item l r2 id2 c2) r1
-  -> id1 < id2
-  -> YjsLt (YjsItem.item l r1 id1 c1) (YjsItem.item l r2 id2 c2)
+  | ltFirst : forall (item : YjsItem A), YjsLt (YjsPtr.first) (YjsPtr.itemPtr item)
+  | ltLast : forall (item : YjsItem A), YjsLt (YjsPtr.itemPtr item) (YjsPtr.last)
+  | ltFirstLast: YjsLt (YjsPtr.first) (YjsPtr.last)
+  | ltL1 : forall l r id c, YjsLt l (YjsItem.item l r id c)
+  | ltR1 : forall l r id c, YjsLt (YjsItem.item l r id c) r
+  | ltL2 : forall l1 r1 id1 l2 r2 id2 (c1 c2 : A),
+    YjsLeq (YjsItem.item l1 r1 id1 c1) l2
+    -> YjsLt (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
+  | ltR2 : forall l1 r1 id1 l2 r2 id2 (c1 c2 : A),
+    YjsLeq r1 (YjsItem.item l2 r2 id2 c2)
+    -> YjsLt (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
+  | ltOriginDiff : forall l1 l2 r1 r2 id1 id2 c1 c2,
+    YjsLt l2 l1
+    -> YjsLt (YjsItem.item l1 r1 id1 c1) r2
+    -> YjsLt l1 (YjsItem.item l2 r2 id2 c2)
+    -> YjsLt (YjsItem.item l2 r2 id2 c2) r1
+    -> YjsLt (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
+  | ltOriginSame : forall l r1 r2 id1 id2 (c1 c2 : A),
+    YjsLt (YjsItem.item l r1 id1 c1) r2
+    -> YjsLt (YjsItem.item l r2 id2 c2) r1
+    -> id1 < id2
+    -> YjsLt (YjsItem.item l r1 id1 c1) (YjsItem.item l r2 id2 c2)
 
 inductive YjsLeq {A : Type} : YjsPtr A -> YjsPtr A -> Prop where
   | ltLeq x y : YjsLt x y -> YjsLeq x y
@@ -265,33 +192,40 @@ lemma yjs_decidable2 A : forall (x y : YjsItem A), @YjsLeq A x y ∨ @YjsLt A y 
 termination_by x y => x.size + y.size
 end
 
+mutual
 lemma yjs_lt_invert (x y : YjsItem A) (x' y' : YjsPtr A) :
-  x = x' -> y = y' -> @YjsLt A x' y' -> YjsLeq x (y.origin) ∨ YjsLeq (x.origin) (y.origin) := by
-  intros hx hy hlt
-  induction hlt
-  . injection hx
-  . injection hy
-  . left
+  x = x' -> y = y' -> @YjsLt A x' y' -> YjsLeq x (y.origin) ∨ YjsLeq (x.origin) (y.origin) := fun hx hy hlt => by
+  cases hlt with
+  | ltFirst item =>
+    injection hx
+  | ltLast item =>
+    injection hy
+  | ltFirstLast =>
+    injection hx
+  | ltL1 l r id c =>
+    left
     right
     injection hy with hy
     rw [hx, hy]
     eq_refl
-  . left
+  | ltR1 l r id c =>
+    left
     left
     injection hx with hx
     rw [hx, <-hy]
     sorry -- item < item.rightOrigin.originが必要
-  . left
+  | ltL2 l1 r1 id1 l2 r2 id2 c1 c2 hleq =>
     left
     injections hx hy
     rw [hx, hy]
     simp!
     assumption
-  . injections hx hy
+  | ltR2 l1 r1 id1 l2 r2 id2 c1 c2 hleq =>
+    injections hx hy
     rw [hx, hy]
     simp!
 
-
+end
 
 theorem order_is_strict_total: IsStrictTotalOrder _ (@YjsLt A) := by
   sorry
