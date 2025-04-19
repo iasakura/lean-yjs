@@ -1,4 +1,6 @@
-import LeanYjs.Basic
+import LeanYjs.YItem
+import LeanYjs.ActorId
+import LeanYjs.ItemPartialOrder
 
 inductive IntegrateError where
 | notFound : IntegrateError

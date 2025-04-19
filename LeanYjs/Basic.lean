@@ -1,6 +1,6 @@
 import Mathlib.Order.Defs.Unbundled
 import LeanYjs.ActorId
-import LeanYjs.YItem
+import LeanYjs.Item
 
 mutual
 inductive YjsLt {A : Type} : YjsPtr A -> YjsPtr A -> Prop where
