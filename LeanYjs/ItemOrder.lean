@@ -7,7 +7,7 @@ import Mathlib.Tactic.ApplyAt
 mutual
 inductive YjsLt {A : Type} : YjsPtr A -> YjsPtr A -> Type where
   | ltConflict i1 i2 : ConflictLt i1 i2 -> YjsLt i1 i2
-  | ltOriginOrder i1 i2 : YjsPtrLt2 _ i1 i2 -> YjsLt i1 i2
+  | ltOriginOrder i1 i2 : OriginLt _ i1 i2 -> YjsLt i1 i2
   | ltTrans x y z: YjsLt x y -> YjsLt y z -> YjsLt x z
 
 inductive ConflictLt {A : Type} : YjsPtr A -> YjsPtr A -> Type where
@@ -40,7 +40,7 @@ end
 inductive LtSequence {A : Type} : YjsPtr A -> YjsPtr A -> List (YjsPtr A) -> Prop where
   | base : forall x, LtSequence x x []
   | step1 : forall x y z is, ConflictLt x y -> LtSequence y z is -> LtSequence x z (y :: is)
-  | step2 : forall x y z is, YjsPtrLt2 _ x y -> LtSequence y z is -> LtSequence x z (y :: is)
+  | step2 : forall x y z is, OriginLt _ x y -> LtSequence y z is -> LtSequence x z (y :: is)
 
 lemma LtSequenceConcat {A : Type} {x y z : YjsPtr A} {is1 is2 : List (YjsPtr A)} :
   LtSequence x y is1 -> LtSequence y z is2 -> LtSequence x z (is1 ++ is2) := by
