@@ -12,23 +12,19 @@ inductive YjsItem : Type where
 | item (origin : YjsPtr) (rightOrigin : YjsPtr) : ActorId -> A -> YjsItem
 end
 
-def YjsItem.origin {A : Type} (item : YjsItem A) : YjsPtr A :=
-  match item with
+def YjsItem.origin {A : Type} : YjsItem A -> YjsPtr A
   | YjsItem.item origin _ _ _ => origin
 
-def YjsItem.rightOrigin {A : Type} (item : YjsItem A) : YjsPtr A :=
-  match item with
+def YjsItem.rightOrigin {A : Type} : YjsItem A -> YjsPtr A
   | YjsItem.item _ rightOrigin _ _ => rightOrigin
 
 mutual
-def YjsPtr.size {A : Type} (x : YjsPtr A) :=
-  match x with
+def YjsPtr.size {A : Type} : YjsPtr A -> Nat
   | YjsPtr.itemPtr item => item.size + 1
   | YjsPtr.first => 0
   | YjsPtr.last => 0
 
-def YjsItem.size {A : Type} (item : YjsItem A) :=
-  match item with
+def YjsItem.size {A : Type} : YjsItem A -> Nat
   | YjsItem.item origin rightOrigin _ _ =>
     origin.size + rightOrigin.size + 2
 end
