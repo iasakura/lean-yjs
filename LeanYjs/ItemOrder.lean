@@ -143,8 +143,7 @@ lemma LtSequenceConcat {A : Type} {P : @ClosedPredicate A} {x y z : YjsPtr A} {i
       apply ih
       assumption
 
-mutual
-def YjsLtSequence (A : Type) (P : ClosedPredicate A): forall (x y : YjsPtr A) h, YjsLt P h x y ->
+lemma YjsLtSequence (A : Type) (P : ClosedPredicate A): forall (x y : YjsPtr A) h, YjsLt P h x y ->
   ∃ is : List (YjsPtr A), LtSequence P x y is := by
     intros x y h
     apply Nat.strongRecOn' (P := fun h => ∀ x y, YjsLt P h x y -> ∃ is : List (YjsPtr A), LtSequence P x y is)
@@ -159,20 +158,13 @@ def YjsLtSequence (A : Type) (P : ClosedPredicate A): forall (x y : YjsPtr A) h,
       apply LtSequence.step2 <;> try assumption
       apply LtSequence.base
     | YjsLt.ltTrans h1 h2 _ z _  lt1 lt2 =>
-      -- have h : lt1.height < (YjsLt.ltTrans x z _ lt1 lt2).height := by
-      --   simp [YjsLt.height]
-      --   omega
       have hlt1 : h1 < max h1 h2 + 1 := by
         omega
       match ih h1 hlt1 x z lt1 with
       | Exists.intro is1 lt1' =>
-        -- have h : lt2.height < (YjsLt.ltTrans x z _ lt1 lt2).height := by
-        --   simp [YjsLt.height]
-        --   omega
         have hlt2 : h2 < max h1 h2 + 1 := by
           omega
         match ih h2 hlt2 z y lt2 with
         | Exists.intro is2 lt2 =>
           apply Exists.intro (is1 ++ is2)
           apply LtSequenceConcat <;> try assumption
-end
