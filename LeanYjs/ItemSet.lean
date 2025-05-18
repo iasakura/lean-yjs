@@ -35,8 +35,8 @@ def ItemSetInvariant :=
   P.val YjsPtr.last ∧
   (∀ (o : YjsPtr A) r id c, P.val (YjsItem.item o r id c) -> P.val o) ∧
   (∀ o (r : YjsPtr A) id c, P.val (YjsItem.item o r id c) -> P.val r) ∧
-  (∀ (x y : YjsPtr A), P.val x -> P.val y -> OriginLt A P x y -> OriginLt A P y x -> False) ∧
-  YjsInvariant P
+  (∀ (x y : YjsPtr A), P.val x -> P.val y -> OriginLt A P x y -> OriginLt A P y x -> False) -- ∧
+  -- YjsInvariant P
 
 lemma origin_p_valid {A} {P : ClosedPredicate A} : forall (x : YjsItem A), P.val x -> P.val x.origin := by
   intros x px
@@ -54,7 +54,6 @@ lemma right_origin_p_valid {A} {P : ClosedPredicate A} : forall (x : YjsItem A),
   simp [YjsItem.rightOrigin] at *
   tauto
 
-
 lemma not_item_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsItem A), ¬ @YjsLt A P h o YjsPtr.first := by
   intros hinv h o
   apply @Nat.strongRecOn' (P := fun h => ∀ (o : YjsItem A), ¬ @YjsLt A P h o YjsPtr.first)
@@ -68,7 +67,7 @@ lemma not_item_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ 
       . apply hinv.1
       . apply origin_lt_p1 at hlt; assumption
       . apply OriginLtStep.lt_first
-    obtain ⟨ hfirst, hlast, hleft, hright, hanti, hinv ⟩ := hinv
+    obtain ⟨ hfirst, hlast, hleft, hright, hanti ⟩ := hinv
     apply hanti (x := YjsPtr.first) (y := o) <;> try assumption
     apply origin_lt_p1 at hlt; assumption
   | ltTrans h1 h2 x y z hlt1 hlt2 =>
@@ -89,7 +88,7 @@ lemma not_last_lt_item {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h
       . apply origin_lt_p2 at hlt; assumption
       . apply hinv.2.1
       . apply OriginLtStep.lt_last
-    obtain ⟨ hfirst, hlast, hleft, hright, hanti, hinv ⟩ := hinv
+    obtain ⟨ hfirst, hlast, hleft, hright, hanti ⟩ := hinv
     apply hanti (x := YjsPtr.last) (y := o) <;> try assumption
     apply origin_lt_p2 at hlt; assumption
   | ltTrans h1 h2 x y z hlt1 hlt2 =>
@@ -109,7 +108,7 @@ lemma not_last_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ 
       obtain ⟨ P, ⟨ a, b, c ⟩ ⟩ := P
       apply OriginLt.ltOrigin <;> try assumption
       apply OriginLtStep.lt_first_last
-    obtain ⟨ hfirst, hlast, hleft, hright, hanti, hinv ⟩ := hinv
+    obtain ⟨ hfirst, hlast, hleft, hright, hanti ⟩ := hinv
     apply hanti (x := YjsPtr.first) (y := YjsPtr.last) <;> assumption
   | ltTrans h1 h2 x y z hlt1 hlt2 =>
     apply not_item_lt_first at hlt2 <;> assumption
@@ -124,7 +123,7 @@ lemma not_first_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀
       apply not_item_lt_first hinv at hlt2; contradiction
     | ltOriginOrder _ _ hlt =>
       assumption
-  obtain ⟨ hfirst, hlast, hleft, hright, hanti, hinv ⟩ := hinv
+  obtain ⟨ hfirst, hlast, hleft, hright, hanti ⟩ := hinv
   apply hanti (x := YjsPtr.first) (y := YjsPtr.first) <;> try assumption
 
 lemma not_last_lt_last {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.last := by
@@ -137,7 +136,7 @@ lemma not_last_lt_last {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h
       apply not_last_lt_item hinv at hlt1; contradiction
     | ltOriginOrder _ _ hlt =>
       assumption
-  obtain ⟨ hfirst, hlast, hleft, hright, hanti, hinv ⟩ := hinv
+  obtain ⟨ hfirst, hlast, hleft, hright, hanti ⟩ := hinv
   apply hanti (x := YjsPtr.last) (y := YjsPtr.last) <;> try assumption
 
 lemma not_ptr_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
