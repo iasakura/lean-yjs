@@ -104,7 +104,6 @@ lemma yjs_lt_p2_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
       | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
         apply yjs_lt_p1 hlt2
 
-
 lemma yjs_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLt P h x y -> P.val y := by
     intros x y hlt
