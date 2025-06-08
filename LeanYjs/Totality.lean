@@ -101,11 +101,16 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
         apply YjsLt.ltOriginOrder <;> try assumption
         apply OriginLt.lt_left
       | inr hltyox =>
+        have hdec : yr.size + (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size < (YjsPtr.itemPtr x').size + (YjsPtr.itemPtr y').size := by
+          rw [<-heqx, <-heqy]
+          simp [YjsPtr.size, YjsItem.size]
+          omega
         obtain hleq := yjs_lt_total _ _ hyr hx (inv := inv)
         cases hleq with
         | inl hleq =>
           obtain ⟨ h, hleq ⟩ := hleq
           right
+          rw [<-heqx, <-heqy]
           apply yjs_leq_p_trans2 inv _ _ _ 0 _ _ hleq
           apply YjsLt.ltOriginOrder <;> try assumption
           apply OriginLt.lt_right
@@ -115,6 +120,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
           | inl hleq =>
             obtain ⟨ h, hleq ⟩ := hleq
             right
+            rw [<-heqx, <-heqy]
             apply yjs_leq_p_trans1 inv _ _ _ _ 0 hleq _
             apply YjsLt.ltOriginOrder <;> try assumption
             apply OriginLt.lt_left
@@ -124,6 +130,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
             | inl hleq =>
               obtain ⟨ h, hleq ⟩ := hleq
               left
+              rw [<-heqx, <-heqy]
               apply yjs_leq_p_trans inv _ _ _ 0 _ _ hleq
               right
               apply YjsLt.ltOriginOrder <;> try assumption
@@ -141,6 +148,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                 exists (max4 h5 h3 h2 h4 + 1 + 1)
                 right
                 apply YjsLt.ltConflict
+                rw [<-heqx, <-heqy]
                 apply ConflictLt.ltOriginDiff <;> try first | assumption | simp
               | inl hleq =>
                 obtain ⟨ h5, hlt_yo_xr ⟩ := hleq
@@ -149,10 +157,10 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                   right
                   exists (max4 h5 h4 h1 h3 + 1 + 1)
                   apply YjsLt.ltConflict
+                  rw [<-heqx, <-heqy]
                   apply ConflictLt.ltOriginDiff <;> try first | simp | assumption
                 | inl heq =>
                   rw [heq] at hlt_yo_x hlt_x_yo hlt_x_yr
-                  rw [heq]
                   have hid : xid < yid ∨ yid < xid ∨ xid = yid := by
                     unfold ActorId; omega
                   cases hid with
@@ -161,6 +169,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                     exists max h3 h4 + 1 + 1
                     right
                     apply YjsLt.ltConflict
+                    rw [<-heqx, <-heqy, heq]
                     apply ConflictLt.ltOriginSame <;> try assumption
                   | inr hleq =>
                     cases hleq with
@@ -168,7 +177,12 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                       right
                       exists max h4 h3 + 1 + 1
                       apply YjsLt.ltConflict
+                      rw [<-heqx, <-heqy, heq]
                       apply ConflictLt.ltOriginSame <;> try assumption
                     | inr heq =>
                       sorry
 termination_by x y => x.size + y.size
+decreasing_by
+  all_goals rw [<-heqx, <-heqy]
+  all_goals simp [YjsPtr.size, YjsItem.size]
+  all_goals omega
