@@ -22,7 +22,6 @@ lemma yjs_lt_conflict_lt_anti_symm {A} {P : ClosedPredicate A} :
   ∀ (x y : YjsPtr A) h1 h2, ConflictLt P h1 x y -> ConflictLt P h2 y x -> False := by
   intros inv x y h1 h2 hltxy hltyx
 
-
 theorem yjs_lt_anti_symm {A} {P : ClosedPredicate A} :
   ItemSetInvariant P ->
   ∀ (x y : YjsPtr A), YjsLt1 P x y -> YjsLt1 P y x -> False := by
@@ -41,4 +40,3 @@ theorem yjs_lt_anti_symm {A} {P : ClosedPredicate A} :
   | ltConflict h x y hltxy =>
     cases hltxy with
     | ltOriginSame h1' h2' l r1 r2 id1 id2 c1 c2 hltxy1 hltxy2 hltid =>
-      

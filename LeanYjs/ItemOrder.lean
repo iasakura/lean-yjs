@@ -1,4 +1,5 @@
 import LeanYjs.Item
+import LeanYjs.ItemSet
 import LeanYjs.ActorId
 import LeanYjs.ItemOriginOrder
 
@@ -12,7 +13,7 @@ def max4 (x y z w : Nat) : Nat :=
 mutual
   inductive YjsLt {A : Type} (P : @ClosedPredicate A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
     | ltConflict h i1 i2 : ConflictLt P h i1 i2 -> YjsLt P (h + 1) i1 i2
-    | ltOriginOrder i1 i2 : OriginLt _ P i1 i2 -> YjsLt P 0 i1 i2
+    | ltOriginOrder i1 i2 : P.val i1 -> P.val i2 -> OriginLt _ i1 i2 -> YjsLt P 0 i1 i2
     | ltTrans h1 h2 x (y : YjsItem A) z: YjsLt P h1 x y -> YjsLt P h2 y z -> YjsLt P (max h1 h2 + 1) x z
 
   inductive ConflictLt {A : Type} (P : @ClosedPredicate A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
@@ -42,7 +43,7 @@ lemma yjs_lt_p1_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
         let ⟨ _, h ⟩ := ih h hlt_h x y
         apply h ; assumption
       | ltOriginOrder x y _ =>
-        apply origin_lt_p1; assumption
+        assumption
       | ltTrans h1 h2 x y z _ _ =>
         have hlt_h : h1 < max h1 h2 + 1 := by
           omega
@@ -87,7 +88,7 @@ lemma yjs_lt_p2_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
         let ⟨ _, h ⟩ := ih h hlt_h x y
         apply h ; assumption
       | ltOriginOrder x y _ =>
-        apply origin_lt_p2; assumption
+        assumption
       | ltTrans h1 h2 _ y' _ hlt1 hlt2 =>
         have hlt_h : h2 < max h1 h2 + 1 := by
           omega
@@ -122,7 +123,7 @@ def YjsLeq {A : Type} (P : @ClosedPredicate A) (h : Nat) (x y : YjsPtr A) : Prop
 inductive LtSequence {A : Type} (P : @ClosedPredicate A) : YjsPtr A -> YjsPtr A -> List (YjsPtr A) -> Prop where
   | base : forall x, LtSequence P x x []
   | step1 : forall x y z is h, ConflictLt P h x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
-  | step2 : forall x y z is, OriginLt _ P x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
+  | step2 : forall x y z is, OriginLt _ x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
 
 lemma LtSequenceConcat {A : Type} {P : @ClosedPredicate A} {x y z : YjsPtr A} {is1 is2 : List (YjsPtr A)} :
   LtSequence P x y is1 -> LtSequence P y z is2 -> LtSequence P x z (is1 ++ is2) := by
@@ -152,7 +153,7 @@ lemma YjsLtSequence (A : Type) (P : ClosedPredicate A): forall (x y : YjsPtr A) 
       apply Exists.intro [y]
       apply LtSequence.step1 <;> try assumption
       apply LtSequence.base
-    | YjsLt.ltOriginOrder x y _ =>
+    | YjsLt.ltOriginOrder x y hx hy hlt =>
       apply Exists.intro [y]
       apply LtSequence.step2 <;> try assumption
       apply LtSequence.base
