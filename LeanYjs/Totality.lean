@@ -180,7 +180,53 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                       rw [<-heqx, <-heqy, heq]
                       apply ConflictLt.ltOriginSame <;> try assumption
                     | inr heq =>
-                      sorry
+                      rw [<-heqx, <-heqy, heq]
+                      have heqneq : (YjsItem.item xo xr yid xc) = (YjsItem.item yo yr yid yc) ∨ (YjsItem.item xo xr yid xc) ≠ (YjsItem.item yo yr yid yc) := by sorry
+                      cases heqneq with
+                      | inl heq =>
+                        left
+                        exists 0
+                        left
+                        rw [<-heq]
+                      | inr hneq =>
+                        rw [<-heq]
+                        rw [<-heq] at hy
+                        rw [<-heq] at *
+                        cases inv.same_id_ordered (YjsItem.item xo xr xid xc) (YjsItem.item yo yr xid yc) hx hy hneq heq with
+                        | inl hlt =>
+                          obtain ⟨ h, hlt ⟩ := hlt
+                          left
+                          exists (max h 0 + 1)
+                          right
+                          apply yjs_lt_p_trans _ _ yo _<;> try assumption
+                          apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
+                          apply OriginLt.lt_left
+                        | inr hlt =>
+                          cases hlt with
+                          | inl hlt =>
+                            obtain ⟨ h, hlt ⟩ := hlt
+                            right
+                            exists (max h 0 + 1)
+                            apply yjs_lt_p_trans _ _ xo _ <;> try assumption
+                            apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
+                            apply OriginLt.lt_left
+                          | inr hlt =>
+                            cases hlt with
+                            | inl hlt =>
+                              obtain ⟨ h, hlt ⟩ := hlt
+                              left
+                              exists (max 0 h + 1)
+                              right
+                              apply yjs_lt_p_trans _ _ xr _ <;> try assumption
+                              apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
+                              apply OriginLt.lt_right
+                            | inr hlt =>
+                              obtain ⟨ h, hlt ⟩ := hlt
+                              right
+                              exists (max 0 h + 1)
+                              apply yjs_lt_p_trans _ _ yr _ <;> try assumption
+                              apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
+                              apply OriginLt.lt_right
 termination_by x y => x.size + y.size
 decreasing_by
   all_goals rw [<-heqx, <-heqy]

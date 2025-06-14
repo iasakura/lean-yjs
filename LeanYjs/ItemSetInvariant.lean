@@ -24,6 +24,15 @@ structure ItemSetInvariant where
     P.val (YjsItem.item o r id c) ->
     OriginReachable A (YjsItem.item o r id c) x ->
     (∃ h, YjsLeq P h x o) ∨ (∃ h, YjsLeq P h r x)
+  same_id_ordered : ∀ (x y : YjsItem A),
+    P.val x -> P.val y ->
+    x ≠ y ->
+    x.id = y.id ->
+    YjsLt' P x y.origin ∨
+    YjsLt' P y x.origin ∨
+    YjsLt' P x.rightOrigin y ∨
+    YjsLt' P y.rightOrigin x
+
 
 @[simp] lemma origin_p_valid {A} {P : ClosedPredicate A} : forall (x : YjsItem A), P.val x -> P.val x.origin := by
   intros x px
