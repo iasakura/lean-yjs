@@ -181,7 +181,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                       apply ConflictLt.ltOriginSame <;> try assumption
                     | inr heq =>
                       rw [<-heqx, <-heqy, heq]
-                      have heqneq : (YjsItem.item xo xr yid xc) = (YjsItem.item yo yr yid yc) ∨ (YjsItem.item xo xr yid xc) ≠ (YjsItem.item yo yr yid yc) := by sorry
+                      have heqneq : (YjsItem.item xo xr yid xc) = (YjsItem.item yo yr yid yc) ∨ (YjsItem.item xo xr yid xc) ≠ (YjsItem.item yo yr yid yc) := by apply yjsItem_decidable_eq
                       cases heqneq with
                       | inl heq =>
                         left
