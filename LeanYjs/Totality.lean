@@ -15,7 +15,7 @@ import LeanYjs.ItemSetInvariant
   obtain ⟨ p, ⟨ hp, hp', hp'', hp''' ⟩ ⟩ := P
   assumption
 
-lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :forall (x y : YjsPtr A) (hx : P.val x) (hy : P.val y),
+lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :forall (x y : YjsPtr A), P.val x -> P.val y ->
   (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x) :=
   fun (x : YjsPtr A) (y : YjsPtr A) (hx : P.val x) (hy : P.val y) =>
   match x with
@@ -149,7 +149,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                 right
                 apply YjsLt.ltConflict
                 rw [<-heqx, <-heqy]
-                apply ConflictLt.ltOriginDiff <;> try first | assumption | simp
+                apply ConflictLt.ltOriginDiff <;> try first | assumption
               | inl hleq =>
                 obtain ⟨ h5, hlt_yo_xr ⟩ := hleq
                 cases hlt_yo_xr with
