@@ -12,12 +12,6 @@ variable {A : Type} [BEq A]
 
 variable (P : ClosedPredicate A)
 
-def YjsLt' (x y : YjsPtr A) : Prop :=
-  ∃ h, @YjsLt A P h x y
-
-def YjsLeq' (x y : YjsPtr A) : Prop :=
-  ∃ h, @YjsLeq A P h x y
-
 structure ItemSetInvariant where
   origin_not_leq : ∀ (o r c id), P.val (YjsItem.item o r id c) -> ∀ h, ¬ YjsLeq P h r o
   origin_nearest_reachable : ∀ (o r c id x),
@@ -32,7 +26,6 @@ structure ItemSetInvariant where
     YjsLt' P y x.origin ∨
     YjsLt' P x.rightOrigin y ∨
     YjsLt' P y.rightOrigin x
-
 
 @[simp] lemma origin_p_valid {A} {P : ClosedPredicate A} : forall (x : YjsItem A), P.val x -> P.val x.origin := by
   intros x px

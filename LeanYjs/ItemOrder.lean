@@ -31,6 +31,9 @@ mutual
       -> ConflictLt P (max h1 h2 + 1) (YjsItem.item l r1 id1 c1) (YjsItem.item l r2 id2 c2)
 end
 
+def YjsLt' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
+  ∃ h, @YjsLt A P h x y
+
 lemma yjs_lt_p1_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   (YjsLt P h x y -> P.val x) ∧ (ConflictLt P h x y -> P.val x) := by
     apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P.val x) ∧ (ConflictLt P h x y -> P.val x))
@@ -92,11 +95,13 @@ lemma yjs_lt_p2_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
         apply h ; assumption
       | ltOriginOrder x y _ =>
         assumption
-      | ltTrans h1 h2 _ y' _ hlt1 hlt2 =>
-        have hlt_h : h2 < max h1 h2 + 1 := by
+      | ltOrigin h x o r id c hval hlt =>
+        assumption
+      | ltRightOrigin h o r id c x hval hlt =>
+        have hlt_h : h < h + 1 := by
           omega
-        let ⟨ h, _ ⟩ := ih h2 hlt_h y' y
-        tauto
+        let ⟨ ih, _ ⟩ := ih h hlt_h r y
+        apply ih hlt
     . intro hlt
       cases hlt with
       | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 =>
@@ -123,51 +128,62 @@ lemma conflict_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y
 def YjsLeq {A : Type} (P : @ClosedPredicate A) (h : Nat) (x y : YjsPtr A) : Prop :=
   x = y ∨ YjsLt P h x y
 
-inductive LtSequence {A : Type} (P : @ClosedPredicate A) : YjsPtr A -> YjsPtr A -> List (YjsPtr A) -> Prop where
-  | base : forall x, LtSequence P x x []
-  | step1 : forall x y z is h, ConflictLt P h x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
-  | step2 : forall x y z is, OriginLt _ x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
+def YjsLeq' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
+  ∃ h, @YjsLeq A P h x y
 
-lemma LtSequenceConcat {A : Type} {P : @ClosedPredicate A} {x y z : YjsPtr A} {is1 is2 : List (YjsPtr A)} :
-  LtSequence P x y is1 -> LtSequence P y z is2 -> LtSequence P x z (is1 ++ is2) := by
-    intro lt1
-    induction lt1 with
-    | base x =>
-      intros lt2
-      apply lt2
-    | step1 x y z is _ lt1 lt2 ih =>
-      intros lt
-      apply LtSequence.step1 <;> try assumption
-      apply ih
-      assumption
-    | step2 x y z is lt1 lt2 ih =>
-      intros lt
-      apply LtSequence.step2 <;> try assumption
-      apply ih
-      assumption
+def YjsConflict {A : Type} (P : @ClosedPredicate A) (x y : YjsItem A) : Prop :=
+  YjsLt' P x.origin y ∧ YjsLt' P y x.rightOrigin ∧
+  YjsLt' P y.origin x ∧ YjsLt' P x y.rightOrigin
 
-lemma YjsLtSequence (A : Type) (P : ClosedPredicate A): forall (x y : YjsPtr A) h, YjsLt P h x y ->
-  ∃ is : List (YjsPtr A), LtSequence P x y is := by
-    intros x y h
-    apply Nat.strongRecOn' (P := fun h => ∀ x y, YjsLt P h x y -> ∃ is : List (YjsPtr A), LtSequence P x y is)
-    intros h' ih x y lt
-    match lt with
-    | YjsLt.ltConflict h x y _ =>
-      apply Exists.intro [y]
-      apply LtSequence.step1 <;> try assumption
-      apply LtSequence.base
-    | YjsLt.ltOriginOrder x y hx hy hlt =>
-      apply Exists.intro [y]
-      apply LtSequence.step2 <;> try assumption
-      apply LtSequence.base
-    | YjsLt.ltTrans h1 h2 _ z _  lt1 lt2 =>
-      have hlt1 : h1 < max h1 h2 + 1 := by
-        omega
-      match ih h1 hlt1 x z lt1 with
-      | Exists.intro is1 lt1' =>
-        have hlt2 : h2 < max h1 h2 + 1 := by
-          omega
-        match ih h2 hlt2 z y lt2 with
-        | Exists.intro is2 lt2 =>
-          apply Exists.intro (is1 ++ is2)
-          apply LtSequenceConcat <;> try assumption
+lemma yjs_lt_cases A P h (x y : YjsItem A) :
+  YjsLt P h x y ->
+    YjsLeq' P x.origin y ∨
+    YjsLeq' P x y.rightOrigin ∨
+    (YjsConflict P x y ∧
+      ((YjsLt' P y.origin x.origin) ∨ x.origin = x.origin ∧ x.id < y.id)) := by
+  sorry
+
+-- inductive LtSequence {A : Type} (P : @ClosedPredicate A) : YjsPtr A -> YjsPtr A -> List (YjsPtr A) -> Prop where
+--   | base : forall x, LtSequence P x x []
+--   | step1 : forall x y z is h, ConflictLt P h x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
+--   | step2 : forall x y z is, OriginLt _ x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
+
+-- lemma LtSequenceConcat {A : Type} {P : @ClosedPredicate A} {x y z : YjsPtr A} {is1 is2 : List (YjsPtr A)} :
+--   LtSequence P x y is1 -> LtSequence P y z is2 -> LtSequence P x z (is1 ++ is2) := by
+--     intro lt1
+--     induction lt1 with
+--     | base x =>
+--       intros lt2
+--       apply lt2
+--     | step1 x y z is _ lt1 lt2 ih =>
+--       intros lt
+--       apply LtSequence.step1 <;> try assumption
+--       apply ih
+--       assumption
+--     | step2 x y z is lt1 lt2 ih =>
+--       intros lt
+--       apply LtSequence.step2 <;> try assumption
+--       apply ih
+--       assumption
+
+-- lemma YjsLtSequence (A : Type) (P : ClosedPredicate A): forall (x y : YjsPtr A) h, YjsLt P h x y ->
+--   ∃ is : List (YjsPtr A), LtSequence P x y is := by
+--     intros x y h
+--     apply Nat.strongRecOn' (P := fun h => ∀ x y, YjsLt P h x y -> ∃ is : List (YjsPtr A), LtSequence P x y is)
+--     intros h' ih x y lt
+--     match lt with
+--     | YjsLt.ltConflict h x y _ =>
+--       apply Exists.intro [y]
+--       apply LtSequence.step1 <;> try assumption
+--       apply LtSequence.base
+--     | YjsLt.ltOriginOrder x y hx hy hlt =>
+--       apply Exists.intro [y]
+--       apply LtSequence.step2 <;> try assumption
+--       apply LtSequence.base
+--     | YjsLt.ltOrigin h x o r id c hval hlt =>
+--       have hlt_h : h < h + 1 := by
+--         omega
+--       let ⟨ is, ih ⟩ := ih h hlt_h x o hlt
+--       apply Exists.intro (is ++ [o])
+--       apply LtSequenceConcat ih
+--       apply LtSequence.step1
