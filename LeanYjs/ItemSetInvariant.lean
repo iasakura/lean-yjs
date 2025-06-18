@@ -13,7 +13,11 @@ variable {A : Type} [BEq A]
 variable (P : ClosedPredicate A)
 
 structure ItemSetInvariant where
-  origin_not_leq : ∀ (o r c id), P.val (YjsItem.item o r id c) -> ∀ h, ¬ YjsLeq P h r o
+  origin_not_leq : ∀ (o r c id), P.val (YjsItem.item o r id c) ->
+    ∀ (x : YjsPtr A) (y : YjsPtr A),
+    YjsLeq' P x o ->
+    YjsLeq' P r y ->
+    ¬ YjsLeq' P y x
   origin_nearest_reachable : ∀ (o r c id x),
     P.val (YjsItem.item o r id c) ->
     OriginReachable A (YjsItem.item o r id c) x ->
@@ -43,9 +47,9 @@ structure ItemSetInvariant where
   simp [YjsItem.rightOrigin] at *
   tauto
 
-lemma not_item_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsItem A), ¬ @YjsLt A P h o YjsPtr.first := by
+lemma not_ptr_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
   intros hinv h o
-  apply @Nat.strongRecOn' (P := fun h => ∀ (o : YjsItem A), ¬ @YjsLt A P h o YjsPtr.first)
+  apply @Nat.strongRecOn' (P := fun h => ∀ (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first)
   intros n ih o hlt
   cases hlt with
   | ltConflict h _ _ hlt =>
@@ -53,63 +57,69 @@ lemma not_item_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ 
   | ltOriginOrder o _ po pf hlt =>
     cases hlt with
     | lt_right o' _ id  c =>
-      apply hinv.origin_not_leq _ _ _ _ po 0
+      apply hinv.origin_not_leq _ _ _ _ po o' YjsPtr.first
+      exists 0; left; simp
+      exists 0; left; simp
       cases o' with
       | last =>
+        exists 0
         right
         obtain ⟨ P, hP ⟩ := P
         apply YjsLt.ltOriginOrder <;> try assumption
         . apply hP.baseLast
         . apply OriginLt.lt_first_last
       | first =>
+        exists 0
         left
         simp
       | itemPtr item =>
+        exists 0
         right
         obtain ⟨ P, hP ⟩ := P
         apply YjsLt.ltOriginOrder <;> try assumption
         . simp at *
           apply hP.closedLeft; assumption
         . apply OriginLt.lt_first
-  | ltTrans h1 h2 x y z hlt1 hlt2 =>
-    have hlt_h2 : h2 < max h1 h2 + 1 := by
-      omega
-    apply ih _ hlt_h2 _ hlt2
+  | ltRightOrigin o _ r id c po hp hlt =>
+    apply ih _ _ r hlt
+    omega
 
-lemma not_last_lt_item {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsItem A), ¬ @YjsLt A P h YjsPtr.last o := by
+lemma not_last_lt_ptr {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
   intros hinv h o
-  apply @Nat.strongRecOn' (P := fun h => ∀ (o : YjsItem A), ¬ @YjsLt A P h YjsPtr.last o)
+  apply @Nat.strongRecOn' (P := fun h => ∀ (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o)
   intros n ih o hlt
   cases hlt with
   | ltConflict h _ _ hlt =>
     cases hlt
   | ltOriginOrder _ _ _ hpo hlt =>
-    have hlt2 : @OriginLt A o YjsPtr.last := by
-      apply OriginLt.lt_last
     cases hlt with
     | lt_left o' r id c =>
-      apply hinv.origin_not_leq _ _ _ _ hpo 0
-      cases r with
-      | last =>
-        left
-        simp
-      | first =>
-        right
-        obtain ⟨ P, hP ⟩ := P
-        apply YjsLt.ltOriginOrder <;> try assumption
-        . apply hP.baseFirst
-        . apply OriginLt.lt_first_last
-      | itemPtr item =>
-        right
-        obtain ⟨ P, hP ⟩ := P
-        apply YjsLt.ltOriginOrder <;> try assumption
-        . simp at *
-          apply hP.closedRight; assumption
-        . apply OriginLt.lt_last
-  | ltTrans h1 h2 x y z hlt1 hlt2 =>
-    have hlt_h2 : h1 < max h1 h2 + 1 := by
-      omega
-    apply ih _ hlt_h2 _ hlt1
+      apply hinv.origin_not_leq _ _ _ _ hpo YjsPtr.last r
+      . exists 0; left; simp
+      . exists 0; left; simp
+      . cases r with
+        | last =>
+          exists 0
+          left
+          simp
+        | first =>
+          exists 0
+          right
+          obtain ⟨ P, hP ⟩ := P
+          apply YjsLt.ltOriginOrder <;> try assumption
+          . apply hP.baseFirst
+          . apply OriginLt.lt_first_last
+        | itemPtr item =>
+          exists 0
+          right
+          obtain ⟨ P, hP ⟩ := P
+          apply YjsLt.ltOriginOrder <;> try assumption
+          . simp at *
+            apply hP.closedRight; assumption
+          . apply OriginLt.lt_last
+  | ltOrigin h x o r id c hpo hlt =>
+    apply ih _ _ o hlt
+    omega
 
 lemma not_last_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.first := by
   intros hinv h
@@ -120,8 +130,7 @@ lemma not_last_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ 
     cases hlt
   | ltOriginOrder _ _ _ _ hlt =>
     cases hlt
-  | ltTrans h1 h2 x y z hlt1 hlt2 =>
-    apply not_item_lt_first at hlt2 <;> assumption
+
 
 lemma not_first_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.first YjsPtr.first := by
   intros hinv h hlt
@@ -129,8 +138,6 @@ lemma not_first_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀
     cases hlt with
     | ltConflict h _ _ hlt =>
       cases hlt
-    | ltTrans h1 h2 x y z hlt1 hlt2 =>
-      apply not_item_lt_first hinv at hlt2; contradiction
     | ltOriginOrder _ _ hlt =>
       assumption
   cases h with
@@ -141,31 +148,9 @@ lemma not_last_lt_last {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h
     cases hlt with
     | ltConflict h _ _ hlt =>
       cases hlt
-    | ltTrans h1 h2 x y z hlt1 hlt2 =>
-      apply not_last_lt_item hinv at hlt1; contradiction
     | ltOriginOrder _ _ hlt =>
       assumption
   cases h with
-
-lemma not_ptr_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
-  intros hinv h o
-  cases o with
-  | itemPtr item =>
-    apply not_item_lt_first hinv
-  | first =>
-    apply not_first_lt_first hinv
-  | last =>
-    apply not_last_lt_first hinv
-
-lemma not_last_lt_ptr {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
-  intros hinv h o
-  cases o with
-  | itemPtr item =>
-    apply not_last_lt_item hinv
-  | first =>
-    apply not_last_lt_first hinv
-  | last =>
-    apply not_last_lt_last hinv
 
 lemma yjs_lt_p_trans {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
   @YjsLt A P h1 x y -> @YjsLt A P h2 y z -> @YjsLt A P (max h1 h2 + 1) x z := by
@@ -176,7 +161,9 @@ lemma yjs_lt_p_trans {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y
   | last =>
     apply not_last_lt_ptr inv at hlt2; contradiction
   | itemPtr y =>
-    apply YjsLt.ltTrans <;> assumption
+    sorry
+    -- TODO: transitivity
+    -- apply YjsLt.ltTrans <;> assumption
 
 lemma yjs_leq_p_trans1 {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
   @YjsLeq A P h1 x y -> @YjsLt A P h2 y z -> ∃ h, @YjsLt A P h x z := by
