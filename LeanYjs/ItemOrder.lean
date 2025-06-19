@@ -63,13 +63,13 @@ lemma yjs_lt_p1_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
         let ⟨ _, ih ⟩ := ih h1 hlt_h (YjsPtr.itemPtr (YjsItem.item l r1 id1 c1)) r2
         tauto
 
-lemma yjs_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
+@[simp] lemma yjs_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLt P h x y -> P.val x := by
     intros x y hlt
     let ⟨ h, _ ⟩ := @yjs_lt_p1_aux A P h x y
     tauto
 
-lemma conflict_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
+@[simp] lemma conflict_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   ConflictLt P h x y -> P.val x := by
     intros x y hlt
     let ⟨ _, h ⟩ := @yjs_lt_p1_aux A P h x y
@@ -105,13 +105,13 @@ lemma yjs_lt_p2_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
       | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
         apply yjs_lt_p1 hlt2
 
-lemma yjs_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
+@[simp] lemma yjs_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLt P h x y -> P.val y := by
     intros x y hlt
     let ⟨ h, _ ⟩ := @yjs_lt_p2_aux A P h x y
     tauto
 
-lemma conflict_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
+@[simp] lemma conflict_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   ConflictLt P h x y -> P.val y := by
     intros x y hlt
     let ⟨ _, h ⟩ := @yjs_lt_p2_aux A P h x y
