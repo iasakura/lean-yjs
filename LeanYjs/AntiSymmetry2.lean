@@ -122,7 +122,7 @@ theorem yjs_lt_anti_symm {A} {P : ClosedPredicate A} :
   | ltTrans h1' h2' x t y hltxy hltyz =>
     have hltxy' : YjsLt P (max h1' (h2' + 1) + 1) x t := by
       apply yjs_lt_p_trans _ _ y _ <;> try assumption
-      
+
   | ltConflict h1' x' y' hltx'y' =>
     cases hltyx with
     | ltConflict h2' x'' y'' hlty'x''y'' =>

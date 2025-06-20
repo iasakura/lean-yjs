@@ -15,8 +15,9 @@ import LeanYjs.ItemSetInvariant
   obtain ⟨ p, ⟨ hp, hp', hp'', hp''' ⟩ ⟩ := P
   assumption
 
-lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :forall (x y : YjsPtr A), P.val x -> P.val y ->
-  (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x) :=
+lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
+  ∀ (x y : YjsPtr A), P.val x -> P.val y ->
+    (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x) :=
   fun (x : YjsPtr A) (y : YjsPtr A) (hx : P.val x) (hy : P.val y) =>
   match x with
   | YjsPtr.first =>
@@ -227,8 +228,8 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                               apply yjs_lt_p_trans _ _ yr _ <;> try assumption
                               apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
                               apply OriginLt.lt_right
-termination_by x y => x.size + y.size
-decreasing_by
-  all_goals rw [<-heqx, <-heqy]
-  all_goals simp [YjsPtr.size, YjsItem.size]
-  all_goals omega
+-- termination_by x y => x.size + y.size
+-- decreasing_by
+--   all_goals rw [<-heqx, <-heqy]
+--   all_goals simp [YjsPtr.size, YjsItem.size]
+--   all_goals omega

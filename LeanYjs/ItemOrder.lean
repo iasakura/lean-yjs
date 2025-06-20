@@ -131,17 +131,43 @@ def YjsLeq {A : Type} (P : @ClosedPredicate A) (h : Nat) (x y : YjsPtr A) : Prop
 def YjsLeq' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLeq A P h x y
 
-def YjsConflict {A : Type} (P : @ClosedPredicate A) (x y : YjsItem A) : Prop :=
-  YjsLt' P x.origin y ∧ YjsLt' P y x.rightOrigin ∧
-  YjsLt' P y.origin x ∧ YjsLt' P x y.rightOrigin
+def ConflictLt' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
+  ∃ h, ConflictLt P h x y
 
-lemma yjs_lt_cases A P h (x y : YjsItem A) :
+lemma yjs_lt_cases A P h (x y : YjsPtr A) :
   YjsLt P h x y ->
-    YjsLeq' P x.origin y ∨
-    YjsLeq' P x y.rightOrigin ∨
-    (YjsConflict P x y ∧
-      ((YjsLt' P y.origin x.origin) ∨ x.origin = x.origin ∧ x.id < y.id)) := by
-  sorry
+    (x = YjsPtr.first ∧ (y = YjsPtr.last ∨ ∃ i, y = YjsPtr.itemPtr i)) ∨
+    (y = YjsPtr.last ∧ (x = YjsPtr.first ∨ ∃ i, x = YjsPtr.itemPtr i)) ∨
+    (∃ x', x = YjsPtr.itemPtr x' ∧ YjsLeq' P x'.rightOrigin y) ∨
+    (∃ y', y = YjsPtr.itemPtr y' ∧ YjsLeq' P x y'.origin) ∨
+    ConflictLt' P x y := by
+  intros hlt
+  cases hlt with
+  | ltConflict h x y hlt =>
+    right; right; right; right
+    apply Exists.intro h; assumption
+  | ltOriginOrder x y px py hlt =>
+    cases hlt with
+    | lt_left o r id c =>
+      right; right; right; left
+      simp [YjsItem.origin]
+      exists 0; left; simp
+    | lt_right o r id c =>
+      right; right; left
+      simp [YjsItem.rightOrigin]
+      exists 0; left; simp
+    | lt_first_last =>
+      left; simp
+    | lt_first =>
+      left; simp
+    | lt_last =>
+      right; left; simp
+  | ltOrigin h x o r id c hval hlt =>
+    right; right; right; left; simp
+    exists h; right; simp [YjsItem.origin]; assumption
+  | ltRightOrigin h o r id c x hval hlt =>
+    right; right; left; simp
+    exists h; right; simp [YjsItem.rightOrigin]; assumption
 
 -- inductive LtSequence {A : Type} (P : @ClosedPredicate A) : YjsPtr A -> YjsPtr A -> List (YjsPtr A) -> Prop where
 --   | base : forall x, LtSequence P x x []
