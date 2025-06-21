@@ -8,95 +8,49 @@ import LeanYjs.Totality
 
 lemma yjs_lt_origin_lt_anti_symm {A} {P : ClosedPredicate A} :
   ItemSetInvariant P ->
-  ∀ (x y : YjsPtr A), P.val x -> P.val y -> OriginLt _ x y -> OriginLt _ y x -> False := by
+  ∀ (x y : YjsPtr A), P.val x -> P.val y -> OriginLt _ x y -> OriginLt _ y x ->
+  ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
   intros inv x y hpx hpy hltxy hltyx
   cases hltxy with
   | lt_left _ r id c =>
     cases hltyx with
     | lt_right =>
-      apply inv.origin_not_leq _ _ _ _ hpy 0
-      left
-      eq_refl
+      obtain hlt := inv.origin_not_leq _ _ _ _ hpy
+      exists x, x
+      constructor
+      . simp [YjsPtr.size, YjsItem.size]; omega
+      constructor <;> assumption
     | lt_last =>
       have hpr : P.val r := by
         obtain ⟨ P, hP ⟩ := P
         apply hP.closedRight; assumption
-      apply inv.origin_not_leq _ _ _ _ hpy
-      cases r with
-      | last =>
-        left
-        eq_refl
-      | first =>
-        right
-        apply YjsLt.ltOriginOrder <;> try assumption
-        apply OriginLt.lt_first_last
-      | itemPtr item =>
-        right
-        apply YjsLt.ltOriginOrder <;> try assumption
-        apply OriginLt.lt_last
+      obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpy
+      apply not_last_lt_ptr inv at hlt
+      cases hlt
   | lt_right o _ id c =>
     cases hltyx with
     | lt_left =>
-      apply inv.origin_not_leq _ _ _ _ hpx 0
-      left
-      eq_refl
+      obtain hlt := inv.origin_not_leq _ _ _ _ hpx
+      exists y, y
+      constructor
+      . simp [YjsPtr.size, YjsItem.size]; omega
+      constructor <;> assumption
     | lt_first =>
-      have hpo : P.val o := by
-        obtain ⟨ P, hP ⟩ := P
-        apply hP.closedLeft; assumption
-      apply inv.origin_not_leq _ _ _ _ hpx
-      cases o with
-      | first =>
-        left
-        eq_refl
-      | last =>
-        right
-        apply YjsLt.ltOriginOrder <;> try assumption
-        apply OriginLt.lt_first_last
-      | itemPtr item =>
-        right
-        apply YjsLt.ltOriginOrder <;> try assumption
-        apply OriginLt.lt_first
+      obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpx
+      apply not_ptr_lt_first inv at hlt
+      cases hlt
   | lt_first x =>
     cases hltyx with
     | lt_right o r id c =>
-      apply inv.origin_not_leq _ _ _ _ hpy 0
-      cases o with
-      | first =>
-        left
-        eq_refl
-      | last =>
-        right
-        apply YjsLt.ltOriginOrder <;> try assumption
-        simp
-        apply OriginLt.lt_first_last
-      | itemPtr item =>
-        right
-        apply YjsLt.ltOriginOrder <;> try assumption
-        simp at *
-        obtain ⟨ P, hP ⟩ := P
-        apply hP.closedLeft; assumption
-        apply OriginLt.lt_first
+      obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpy
+      apply not_ptr_lt_first inv at hlt
+      cases hlt
   | lt_last x =>
     cases hltyx with
     | lt_left o r id c =>
-      apply inv.origin_not_leq _ _ _ _ hpx 0
-      cases r with
-      | last =>
-        left
-        eq_refl
-      | first =>
-        right
-        apply YjsLt.ltOriginOrder <;> try assumption
-        simp
-        apply OriginLt.lt_first_last
-      | itemPtr item =>
-        right
-        apply YjsLt.ltOriginOrder <;> try assumption
-        simp at *
-        obtain ⟨ P, hP ⟩ := P
-        apply hP.closedRight; assumption
-        apply OriginLt.lt_last
+      obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpx
+      apply not_last_lt_ptr inv at hlt
+      cases hlt
   | lt_first_last =>
     cases hltyx
 
