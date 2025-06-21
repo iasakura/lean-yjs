@@ -14,10 +14,7 @@ variable (P : ClosedPredicate A)
 
 structure ItemSetInvariant where
   origin_not_leq : ∀ (o r c id), P.val (YjsItem.item o r id c) ->
-    ∀ (x : YjsPtr A) (y : YjsPtr A),
-    YjsLeq' P x o ->
-    YjsLeq' P r y ->
-    ¬ YjsLeq' P y x
+    YjsLt' P o r
   origin_nearest_reachable : ∀ (o r c id x),
     P.val (YjsItem.item o r id c) ->
     OriginReachable A (YjsItem.item o r id c) x ->
@@ -49,77 +46,55 @@ structure ItemSetInvariant where
 
 lemma not_ptr_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
   intros hinv h o
-  apply @Nat.strongRecOn' (P := fun h => ∀ (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first)
-  intros n ih o hlt
+  generalize hsize : o.size = size
+  revert o h
+  apply @Nat.strongRecOn' (P := fun s => ∀ h (o : YjsPtr A), o.size = s -> ¬ @YjsLt A P h o YjsPtr.first) size
+  intros n ih h o hsize hlt
   cases hlt with
   | ltConflict h _ _ hlt =>
     cases hlt
   | ltOriginOrder o _ po pf hlt =>
     cases hlt with
     | lt_right o' _ id  c =>
-      apply hinv.origin_not_leq _ _ _ _ po o' YjsPtr.first
-      exists 0; left; simp
-      exists 0; left; simp
-      cases o' with
-      | last =>
-        exists 0
-        right
-        obtain ⟨ P, hP ⟩ := P
-        apply YjsLt.ltOriginOrder <;> try assumption
-        . apply hP.baseLast
-        . apply OriginLt.lt_first_last
-      | first =>
-        exists 0
-        left
-        simp
-      | itemPtr item =>
-        exists 0
-        right
-        obtain ⟨ P, hP ⟩ := P
-        apply YjsLt.ltOriginOrder <;> try assumption
-        . simp at *
-          apply hP.closedLeft; assumption
-        . apply OriginLt.lt_first
-  | ltRightOrigin o _ r id c po hp hlt =>
-    apply ih _ _ r hlt
-    omega
+      have ⟨ h', hlt ⟩ : YjsLt' P o' YjsPtr.first := by
+        apply hinv.origin_not_leq; assumption
+      have hsize' : o'.size < n := by
+        simp [YjsPtr.size, YjsItem.size] at *
+        omega
+      apply ih o'.size hsize' h' o' <;> try assumption
+      simp
+  | ltRightOrigin h o r id c po hp hlt =>
+    have hsize' : r.size < n := by
+      simp [YjsPtr.size, YjsItem.size] at *
+      omega
+    apply ih _ hsize' h r <;> try assumption
+    simp
 
 lemma not_last_lt_ptr {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
   intros hinv h o
-  apply @Nat.strongRecOn' (P := fun h => ∀ (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o)
-  intros n ih o hlt
+  generalize hsize : o.size = size
+  revert o h
+  apply @Nat.strongRecOn' (P := fun size => ∀ (h : ℕ) (o : YjsPtr A), o.size = size → ¬YjsLt P h YjsPtr.last o) size
+  intros n ih h o hsize hlt
   cases hlt with
   | ltConflict h _ _ hlt =>
     cases hlt
   | ltOriginOrder _ _ _ hpo hlt =>
     cases hlt with
     | lt_left o' r id c =>
-      apply hinv.origin_not_leq _ _ _ _ hpo YjsPtr.last r
-      . exists 0; left; simp
-      . exists 0; left; simp
-      . cases r with
-        | last =>
-          exists 0
-          left
-          simp
-        | first =>
-          exists 0
-          right
-          obtain ⟨ P, hP ⟩ := P
-          apply YjsLt.ltOriginOrder <;> try assumption
-          . apply hP.baseFirst
-          . apply OriginLt.lt_first_last
-        | itemPtr item =>
-          exists 0
-          right
-          obtain ⟨ P, hP ⟩ := P
-          apply YjsLt.ltOriginOrder <;> try assumption
-          . simp at *
-            apply hP.closedRight; assumption
-          . apply OriginLt.lt_last
+      have ⟨ h', hlt ⟩ : YjsLt' P YjsPtr.last r := by
+        apply hinv.origin_not_leq; assumption
+      have hsize' : r.size < n := by
+        simp [YjsPtr.size, YjsItem.size] at *
+        omega
+      apply ih r.size hsize' h' r <;> try assumption
+      simp
   | ltOrigin h x o r id c hpo hlt =>
-    apply ih _ _ o hlt
-    omega
+    have hsize' : o.size < n := by
+      simp [YjsPtr.size, YjsItem.size] at *
+      omega
+    apply ih _ hsize' h o <;> try assumption
+    simp
 
 lemma not_last_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.first := by
   intros hinv h
