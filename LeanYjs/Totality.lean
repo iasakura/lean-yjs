@@ -15,61 +15,101 @@ import LeanYjs.ItemSetInvariant
   obtain ⟨ p, ⟨ hp, hp', hp'', hp''' ⟩ ⟩ := P
   assumption
 
+lemma yjs_origin_leq_lt {A : Type} {P : ClosedPredicate A} :
+  ∀ (x : YjsPtr A) (y : YjsItem A) h, P.val x → P.val y →
+    YjsLeq P h x y.origin -> ∃ h, YjsLt P h x y := by
+  intros x y h hx hy hleq
+  have hpyo : P.val y.origin := by
+    apply origin_p_valid; assumption
+  cases hleq with
+  | inl heq =>
+    rw [heq]
+    constructor
+    apply YjsLt.ltOriginOrder <;> try assumption
+    obtain ⟨ o, r, id, c ⟩ := y
+    apply OriginLt.lt_left
+  | inr hlt =>
+    obtain ⟨ o, r, id, c ⟩ := y
+    constructor
+    apply YjsLt.ltOrigin <;> try assumption
+
+lemma yjs_right_origin_leq_lt {A : Type} {P : ClosedPredicate A} :
+  ∀ (x : YjsItem A) (y : YjsPtr A) h, P.val x → P.val y →
+    YjsLeq P h x.rightOrigin y -> ∃ h, YjsLt P h x y := by
+  intros x y h hx hy hleq
+  have hpxo : P.val x.rightOrigin := by
+    apply right_origin_p_valid; assumption
+  cases hleq with
+  | inl heq =>
+    rw [<-heq]
+    constructor
+    apply YjsLt.ltOriginOrder <;> try assumption
+    obtain ⟨ o, r, id, c ⟩ := x
+    apply OriginLt.lt_right
+  | inr hlt =>
+    obtain ⟨ o, r, id, c ⟩ := x
+    constructor
+    apply YjsLt.ltRightOrigin <;> try assumption
+
 lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
   ∀ (x y : YjsPtr A), P.val x -> P.val y ->
-    (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x) :=
-  fun (x : YjsPtr A) (y : YjsPtr A) (hx : P.val x) (hy : P.val y) =>
-  match x with
-  | YjsPtr.first =>
-    match y with
-    | YjsPtr.first => by
+    (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x) := by
+  intros x y hx hy
+  generalize heqxy : x.size + y.size = size
+  revert x y
+  apply Nat.strongRecOn' (P := fun s => ∀ (x y : YjsPtr A), P.val x → P.val y → x.size + y.size = s → (∃ h, YjsLeq P h x y) ∨ ∃ h, YjsLt P h y x) size
+  intros n ih x y hx hy hpeq
+  cases x with
+  | first =>
+    cases y with
+    | first =>
       left
       exists 0
       left
       simp
-    | YjsPtr.last => by
+    | last =>
       left
       exists 0
       right
       apply YjsLt.ltOriginOrder <;> try assumption
       apply OriginLt.lt_first_last
-    | YjsPtr.itemPtr item => by
+    | itemPtr item =>
       left
       exists 0
       right
       apply YjsLt.ltOriginOrder <;> try assumption
       apply OriginLt.lt_first
-  | YjsPtr.last =>
-    match y with
-    | YjsPtr.first => by
+  | last =>
+    cases y with
+    | first =>
       right
       exists 0
       apply YjsLt.ltOriginOrder <;> try assumption
       apply OriginLt.lt_first_last
-    | YjsPtr.last => by
+    | last =>
       left
       exists 0
       left
       simp
-    | YjsPtr.itemPtr item => by
+    | itemPtr item =>
       right
       exists 0
       apply YjsLt.ltOriginOrder <;> try assumption
       apply OriginLt.lt_last
-  | YjsPtr.itemPtr x =>
-    match y with
-    | YjsPtr.first => by
+  | itemPtr x =>
+    cases y with
+    | first =>
       right
       exists 0
       apply YjsLt.ltOriginOrder <;> try assumption
       apply OriginLt.lt_first
-    | YjsPtr.last => by
+    | last =>
       left
       exists 0
       right
       apply YjsLt.ltOriginOrder <;> try assumption
       apply OriginLt.lt_last
-    | YjsPtr.itemPtr y => by
+    | itemPtr y =>
       generalize heqx : x = x'
       obtain ⟨ xo, xr, xid, xc ⟩ := x
       generalize heqy : y = y'
@@ -83,11 +123,13 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
         apply right_origin_p_valid (YjsItem.item xo xr xid xc) hx
       have hyr : P.val yr := by
         apply right_origin_p_valid (YjsItem.item yo yr yid yc) hy
-      have hdec : (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + yo.size < (YjsPtr.itemPtr x').size + (YjsPtr.itemPtr y').size := by
-        rw [<-heqx, <-heqy]
+      have hdec : (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + yo.size < n := by
+        rw [<-hpeq]
         simp [YjsPtr.size, YjsItem.size]
         omega
-      obtain hleq := yjs_lt_total _ _ hx hyo (inv := inv)
+      have hleq  : (∃ h', YjsLeq P h' (YjsItem.item xo xr xid xc) yo) ∨ (∃ h', YjsLt P h' yo (YjsItem.item xo xr xid xc)) := by
+        apply ih ((YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + yo.size) <;> try assumption
+        simp
       cases hleq with
       | inl hleq =>
         obtain ⟨ h, hleq ⟩ := hleq
@@ -98,50 +140,60 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
           right
           rw [<-heqx, <-heqy]
           assumption
-        apply yjs_leq_p_trans1 inv _ _ _ _ 0 hleq _
-        apply YjsLt.ltOriginOrder <;> try assumption
-        apply OriginLt.lt_left
+        apply yjs_origin_leq_lt <;> assumption
       | inr hltyox =>
-        have hdec : yr.size + (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size < (YjsPtr.itemPtr x').size + (YjsPtr.itemPtr y').size := by
-          rw [<-heqx, <-heqy]
+        have hdec : yr.size + (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size < n := by
+          rw [<-hpeq]
           simp [YjsPtr.size, YjsItem.size]
           omega
-        obtain hleq := yjs_lt_total _ _ hyr hx (inv := inv)
+        have hleq : (∃ h, YjsLeq P h yr (YjsPtr.itemPtr (YjsItem.item xo xr xid xc))) ∨ ∃ h, YjsLt P h (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) yr := by
+          apply ih (yr.size + (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size) <;> try assumption
+          simp
         cases hleq with
         | inl hleq =>
           obtain ⟨ h, hleq ⟩ := hleq
           right
           rw [<-heqx, <-heqy]
-          apply yjs_leq_p_trans2 inv _ _ _ 0 _ _ hleq
-          apply YjsLt.ltOriginOrder <;> try assumption
-          apply OriginLt.lt_right
+          apply yjs_right_origin_leq_lt <;> assumption
         | inr hltxyr =>
-          obtain hleq := yjs_lt_total _ _ hy hxo (inv := inv)
+          have hleq : (∃ h, YjsLeq P h (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)) xo) ∨
+  ∃ h, YjsLt P h xo (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)) := by
+            apply ih ((YjsPtr.itemPtr (YjsItem.item yo yr yid yc)).size + xo.size) _ _ _ hy hxo _ <;> try assumption
+            . simp [YjsPtr.size, YjsItem.size] at *
+              omega
+            . simp
           cases hleq with
           | inl hleq =>
             obtain ⟨ h, hleq ⟩ := hleq
             right
             rw [<-heqx, <-heqy]
-            apply yjs_leq_p_trans1 inv _ _ _ _ 0 hleq _
-            apply YjsLt.ltOriginOrder <;> try assumption
-            apply OriginLt.lt_left
+            apply yjs_origin_leq_lt <;> assumption
           | inr hltxoy =>
-            obtain hleq := yjs_lt_total _ _ hxr hy (inv := inv)
+            have hleq : (∃ h, YjsLeq P h xr (YjsPtr.itemPtr (YjsItem.item yo yr yid yc))) ∨
+  ∃ h, YjsLt P h (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)) xr := by
+              apply ih (xr.size + (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)).size) <;> try assumption
+              . simp [YjsPtr.size, YjsItem.size] at *
+                omega
+              . simp
             cases hleq with
             | inl hleq =>
               obtain ⟨ h, hleq ⟩ := hleq
               left
               rw [<-heqx, <-heqy]
-              apply yjs_leq_p_trans inv _ _ _ 0 _ _ hleq
+              obtain ⟨ h', hlt ⟩ := yjs_right_origin_leq_lt _ _ _ hx hy hleq
+              constructor
               right
-              apply YjsLt.ltOriginOrder <;> try assumption
-              apply OriginLt.lt_right
+              apply hlt
             | inr hltyxr =>
               obtain ⟨ h1, hlt_yo_x ⟩ := hltyox
               obtain ⟨ h2, hlt_x_yo ⟩ := hltxoy
               obtain ⟨ h3, hlt_x_yr ⟩ := hltxyr
               obtain ⟨ h4, hlt_y_xr ⟩ := hltyxr
-              obtain hleq := yjs_lt_total _ _ hxo hyo (inv := inv)
+              have hleq : (∃ h, YjsLeq P h xo yo) ∨ ∃ h, YjsLt P h yo xo := by
+                apply ih (xo.size + yo.size) _ _ _ hxo hyo _
+                . simp [YjsPtr.size, YjsItem.size] at *
+                  omega
+                . simp
               cases hleq with
               | inr hlt =>
                 obtain ⟨ h5, hlt_yo_xr ⟩ := hlt
@@ -196,40 +248,39 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                         cases inv.same_id_ordered (YjsItem.item xo xr xid xc) (YjsItem.item yo yr xid yc) hx hy hneq heq with
                         | inl hlt =>
                           obtain ⟨ h, hlt ⟩ := hlt
+                          have ⟨ h', hlt ⟩ : ∃ h', YjsLt P h' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) (YjsPtr.itemPtr (YjsItem.item yo yr xid yc)) := by
+                            apply yjs_origin_leq_lt <;> try assumption
+                            right; assumption
                           left
-                          exists (max h 0 + 1)
+                          constructor
                           right
-                          apply yjs_lt_p_trans _ _ yo _<;> try assumption
-                          apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
-                          apply OriginLt.lt_left
+                          apply hlt
                         | inr hlt =>
                           cases hlt with
                           | inl hlt =>
                             obtain ⟨ h, hlt ⟩ := hlt
+                            have ⟨ h', hlt ⟩ : ∃ h', YjsLt P h' (YjsPtr.itemPtr (YjsItem.item yo yr xid yc)) (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) := by
+                              apply yjs_origin_leq_lt <;> try assumption
+                              right; assumption
                             right
-                            exists (max h 0 + 1)
-                            apply yjs_lt_p_trans _ _ xo _ <;> try assumption
-                            apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
-                            apply OriginLt.lt_left
+                            constructor
+                            apply hlt
                           | inr hlt =>
                             cases hlt with
                             | inl hlt =>
                               obtain ⟨ h, hlt ⟩ := hlt
+                              have ⟨ h, hlt ⟩ : ∃ h', YjsLt P h' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) (YjsPtr.itemPtr (YjsItem.item yo yr xid yc)) := by
+                                apply yjs_right_origin_leq_lt _ _ _ hx hy _ <;> try assumption
+                                right; assumption
                               left
-                              exists (max 0 h + 1)
+                              constructor
                               right
-                              apply yjs_lt_p_trans _ _ xr _ <;> try assumption
-                              apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
-                              apply OriginLt.lt_right
+                              apply hlt
                             | inr hlt =>
                               obtain ⟨ h, hlt ⟩ := hlt
+                              have ⟨ h, hlt ⟩ : ∃ h, YjsLt P h (YjsItem.item yo yr xid yc) (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) := by
+                                apply yjs_right_origin_leq_lt _ _ _ hy hx _ <;> try assumption
+                                right; assumption
                               right
-                              exists (max 0 h + 1)
-                              apply yjs_lt_p_trans _ _ yr _ <;> try assumption
-                              apply YjsLt.ltOriginOrder _ _ _ _ <;> try assumption
-                              apply OriginLt.lt_right
--- termination_by x y => x.size + y.size
--- decreasing_by
---   all_goals rw [<-heqx, <-heqy]
---   all_goals simp [YjsPtr.size, YjsItem.size]
---   all_goals omega
+                              constructor
+                              assumption
