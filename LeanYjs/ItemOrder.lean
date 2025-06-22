@@ -69,11 +69,17 @@ lemma yjs_lt_p1_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
         let ⟨ ih, _ ⟩ := ih h1 hlt_h (YjsPtr.itemPtr (YjsItem.item l r1 id1 c1)) r2
         apply ih hlt1
 
-lemma yjs_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
+@[simp] lemma yjs_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLt P h x y -> P.val x := by
     intros x y hlt
     let ⟨ h, _ ⟩ := @yjs_lt_p1_aux A P h x y
     tauto
+
+lemma yjs_lt'_p1 {A : Type} {P : @ClosedPredicate A} : forall {x y : YjsPtr A},
+  YjsLt' P x y -> P.val x := by
+    intros x y hlt
+    obtain ⟨ h, hlt ⟩ := hlt
+    apply yjs_lt_p1; assumption
 
 lemma conflict_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   ConflictLt P h x y -> P.val x := by
@@ -119,6 +125,12 @@ lemma yjs_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : Yj
     let ⟨ h, _ ⟩ := @yjs_lt_p2_aux A P h x y
     tauto
 
+lemma yjs_lt'_p2 {A : Type} {P : @ClosedPredicate A} : forall {x y : YjsPtr A},
+  YjsLt' P x y -> P.val y := by
+    intros x y hlt
+    obtain ⟨ h, hlt ⟩ := hlt
+    apply yjs_lt_p2; assumption
+
 lemma conflict_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
   ConflictLt P h x y -> P.val y := by
     intros x y hlt
@@ -147,6 +159,18 @@ def YjsLeq' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
 
 def ConflictLt' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
   ∃ h, ConflictLt P h x y
+
+lemma yjs_leq'_p1 {A : Type} {P : @ClosedPredicate A} : forall {x y : YjsPtr A},
+  YjsLeq' P x y -> P.val y -> P.val x := by
+    intros x y hleq hpy
+    obtain ⟨ h, hleq ⟩ := hleq
+    apply yjs_leq_p1 hleq hpy
+
+lemma yjs_leq'_p2 {A : Type} {P : @ClosedPredicate A} : forall {x y : YjsPtr A},
+  YjsLeq' P x y -> P.val x -> P.val y := by
+    intros x y hleq hpy
+    obtain ⟨ h, hleq ⟩ := hleq
+    apply yjs_leq_p2 hleq hpy
 
 lemma yjs_lt_cases A P h (x y : YjsPtr A) :
   YjsLt P h x y ->
@@ -182,6 +206,17 @@ lemma yjs_lt_cases A P h (x y : YjsPtr A) :
   | ltRightOrigin h o r id c x hval hlt =>
     right; right; left; simp
     exists h; right; simp [YjsItem.rightOrigin]; assumption
+
+lemma yjs_lt'_cases A P (x y : YjsPtr A) :
+  YjsLt' P x y ->
+    (x = YjsPtr.first ∧ (y = YjsPtr.last ∨ ∃ i, y = YjsPtr.itemPtr i)) ∨
+    (y = YjsPtr.last ∧ (x = YjsPtr.first ∨ ∃ i, x = YjsPtr.itemPtr i)) ∨
+    (∃ x', x = YjsPtr.itemPtr x' ∧ YjsLeq' P x'.rightOrigin y) ∨
+    (∃ y', y = YjsPtr.itemPtr y' ∧ YjsLeq' P x y'.origin) ∨
+    ConflictLt' P x y := by
+  intros hlt
+  obtain ⟨ h, hlt ⟩ := hlt
+  apply yjs_lt_cases A P h x y hlt
 
 -- inductive LtSequence {A : Type} (P : @ClosedPredicate A) : YjsPtr A -> YjsPtr A -> List (YjsPtr A) -> Prop where
 --   | base : forall x, LtSequence P x x []
