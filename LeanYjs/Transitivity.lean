@@ -97,7 +97,7 @@ lemma conflict_lt_trans {A} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
     | inr hltzox =>
       sorry
 
-lemma yjs_lt_transitivity {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
+lemma yjs_lt_trans {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
   ∀ (x y z : YjsPtr A), P.val x -> P.val y -> P.val z ->
   YjsLt' P x y -> YjsLt' P y z -> YjsLt' P x z := by
   intros x y z hx hy hz hxy hyz
@@ -313,3 +313,68 @@ lemma yjs_lt_transitivity {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvar
     . obtain ⟨ _, hxyconflict ⟩ := hxyconflict
       obtain ⟨ _, hyzconflict ⟩ := hyzconflict
       apply conflict_lt_trans _ _ _ hxyconflict hyzconflict; assumption
+
+lemma yjs_leq_p_trans1 {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+  @YjsLeq A P h1 x y -> @YjsLt A P h2 y z -> ∃ h, @YjsLt A P h x z := by
+  intros hleq hlt
+  have hpy : P.val y := by
+    apply yjs_lt_p1; assumption
+  have hpz : P.val z := by
+    apply yjs_lt_p2; assumption
+  have hpx : P.val x := by
+    apply yjs_leq_p1 <;> assumption
+  cases hleq with
+  | inl heq =>
+    rw [heq]
+    exists h2
+  | inr hlt =>
+    apply yjs_lt_trans (y := y) <;> try assumption
+    constructor; assumption
+    constructor; assumption
+
+lemma yjs_leq_p_trans2 {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+  @YjsLt A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLt A P h x z := by
+  intros hlt hleq
+  have hpx : P.val x := by
+    apply yjs_lt_p1 <;> assumption
+  have hpy : P.val y := by
+    apply yjs_lt_p2; assumption
+  have hpz : P.val z := by
+    apply yjs_leq_p2 <;> assumption
+  cases hleq with
+  | inl heq =>
+    rw [<-heq]
+    exists h1
+  | inr hlt =>
+    apply yjs_lt_trans (y := y) <;> try assumption
+    constructor; assumption
+    constructor; assumption
+
+lemma yjs_leq_p_trans {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+  @YjsLeq A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLeq A P h x z := by
+  intros hleq1 hleq2
+  cases hleq1 with
+  | inl heq =>
+    rw [heq]
+    exists h2
+  | inr hlt =>
+    cases hleq2 with
+    | inl heq =>
+      rw [<-heq]
+      exists h1
+      right
+      assumption
+    | inr hlt =>
+      have hpx : P.val x := by
+        apply yjs_lt_p1 <;> assumption
+      have hpy : P.val y := by
+        apply yjs_lt_p2; assumption
+      have hpz : P.val z := by
+        apply yjs_lt_p2; assumption
+      have ⟨ _, hlt ⟩ : YjsLt' P x z := by
+        apply yjs_lt_trans (y := y) <;> try assumption
+        constructor; assumption
+        constructor; assumption
+      constructor
+      right
+      assumption

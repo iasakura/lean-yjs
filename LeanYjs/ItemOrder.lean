@@ -128,6 +128,20 @@ lemma conflict_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y
 def YjsLeq {A : Type} (P : @ClosedPredicate A) (h : Nat) (x y : YjsPtr A) : Prop :=
   x = y ∨ YjsLt P h x y
 
+lemma yjs_leq_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
+  YjsLeq P h x y -> P.val y -> P.val x := by
+    intros x y hleq hpy
+    cases hleq with
+    | inl rfl => subst rfl; assumption
+    | inr hlt => apply yjs_lt_p1 hlt
+
+lemma yjs_leq_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
+  YjsLeq P h x y -> P.val x -> P.val y := by
+    intros x y hleq hpy
+    cases hleq with
+    | inl rfl => subst rfl; assumption
+    | inr hlt => apply yjs_lt_p2 hlt
+
 def YjsLeq' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLeq A P h x y
 
