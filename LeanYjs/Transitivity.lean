@@ -4,27 +4,98 @@ import LeanYjs.ItemOriginOrder
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
+import LeanYjs.Totality
 
 variable {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
 
--- lemma yjs_lt_item (x : YjsItem A) (y : YjsPtr A) :
---   YjsLt P h x y -> (∃ y', y = YjsPtr.itemPtr y') ∨ y = YjsPtr.last := by
---   intros hlt
---   revert x y
---   apply Nat.strongRecOn' (P := fun h => ∀ (x : YjsItem A) (y : YjsPtr A), YjsLt P h (YjsPtr.itemPtr x) y → (∃ y', y = YjsPtr.itemPtr y') ∨ y = YjsPtr.last) h
---   intros n ih x y hlt
---   cases hlt with
---   | ltConflict h x y hlt =>
---     cases hlt with
---     | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 =>
---       left; constructor; eq_refl
---     | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
---       left; constructor; eq_refl
---   | ltOriginOrder x y hpx hpy hlt =>
---     cases hlt with
---     | lt_left o r id c =>
---       left; constructor; eq_refl
---     | lt_right o r id c
+lemma conflict_lt_x_origin_lt_y {A} {P : ClosedPredicate A} (x : YjsItem A) y :
+  ConflictLt P h x y -> YjsLt' P x.origin y := by
+  intros hlt
+  cases hlt with
+  | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+    constructor; assumption
+  | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
+    constructor
+    simp [YjsItem.origin] at *
+    apply YjsLt.ltOriginOrder <;> try assumption
+    . apply yjs_lt_p1 at hlt1
+      apply P.property.closedLeft
+      assumption
+    . apply yjs_lt_p1 at hlt2
+      assumption
+    apply OriginLt.lt_left
+
+lemma conflict_lt_y_origin_lt_x {A} {P : ClosedPredicate A} x (y : YjsItem A) :
+  ConflictLt P h x y -> YjsLt' P y.origin x := by
+  intros hlt
+  cases hlt with
+  | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+    constructor
+    apply YjsLt.ltOrigin
+    . apply yjs_lt_p1; assumption
+    . assumption
+  | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
+    constructor
+    simp [YjsItem.origin] at *
+    apply YjsLt.ltOriginOrder <;> try assumption
+    . apply yjs_lt_p1 at hlt1
+      apply P.property.closedLeft
+      assumption
+    . apply yjs_lt_p1 at hlt1
+      assumption
+    apply OriginLt.lt_left
+
+lemma conflict_lt_y_lt_x_right_origin {A} {P : ClosedPredicate A} (x : YjsItem A) y :
+  ConflictLt P h x y -> YjsLt' P y x.rightOrigin := by
+  intros hlt
+  cases hlt with
+  | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+    constructor; assumption
+  | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
+    constructor; assumption
+
+lemma conflict_lt_x_lt_y_right_origin {A} {P : ClosedPredicate A} x (y : YjsItem A) :
+  ConflictLt P h x y -> YjsLt' P x y.rightOrigin := by
+  intros hlt
+  cases hlt with
+  | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+    constructor; assumption
+  | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
+    constructor; assumption
+
+lemma conflict_lt_trans {A} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
+  ∀ (x y z : YjsPtr A), ConflictLt P h1 x y -> ConflictLt P h2 y z -> YjsLt' P x z := by
+  intros x y z hxy hyz
+  have hP : P.val x := by
+    apply conflict_lt_p1; assumption
+  have hy : P.val y := by
+    apply conflict_lt_p2; assumption
+  have hz : P.val z := by
+    apply conflict_lt_p2; assumption
+  have ⟨ ⟨ xo, xr, xid, xc ⟩, heqx ⟩ : ∃ x' : YjsItem A, x = YjsPtr.itemPtr x' := by
+    cases hxy <;> (constructor; eq_refl)
+  have ⟨ ⟨ zo, zr, zid, zc ⟩, heqz ⟩ : ∃ z' : YjsItem A, z = YjsPtr.itemPtr z' := by
+    cases hyz <;> (constructor; eq_refl)
+  subst heqx heqz
+  have hltxrz :
+    YjsLeq' P xr (YjsItem.item zo zr zid zc) ∨ YjsLt' P (YjsItem.item zo zr zid zc) xr := by
+    apply yjs_lt_total <;> try assumption
+    apply P.property.closedRight; assumption
+  have hltxzo :
+    YjsLeq' P (YjsItem.item xo xr xid xc) zo ∨ YjsLt' P zo (YjsItem.item xo xr xid xc) := by
+    apply yjs_lt_total <;> try assumption
+    apply P.property.closedLeft; assumption
+  cases hltxrz with
+  | inl hltxrz =>
+    obtain ⟨ _, hltxrz ⟩ := hltxrz
+    apply yjs_right_origin_leq_lt <;> assumption
+  | inr hltzxr =>
+    cases hltxzo with
+    | inl hltxzo =>
+      obtain ⟨ _, hltxzo ⟩ := hltxzo
+      apply yjs_origin_leq_lt <;> assumption
+    | inr hltzox =>
+      sorry
 
 lemma yjs_lt_transitivity {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
   ∀ (x y z : YjsPtr A), P.val x -> P.val y -> P.val z ->
@@ -190,17 +261,8 @@ lemma yjs_lt_transitivity {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvar
         constructor
         apply YjsLt.ltOrigin <;> try assumption
     . obtain ⟨ _, hyzconflict ⟩ := hyzconflict
-      have ⟨ _, hlt' ⟩ : YjsLt' ⟨ P, hP ⟩ y'.origin z := by
-        cases hyzconflict with
-        | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 =>
-          simp [YjsItem.origin] at *
-          constructor; assumption
-        | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
-          simp [YjsItem.origin] at *
-          constructor
-          apply YjsLt.ltOriginOrder <;> try assumption
-          apply hP.closedLeft; assumption
-          apply OriginLt.lt_left
+      apply conflict_lt_x_origin_lt_y at hyzconflict
+      obtain ⟨ _, hlt' ⟩ := hyzconflict
       cases hleq with
       | inl heq =>
         subst heq
@@ -212,4 +274,42 @@ lemma yjs_lt_transitivity {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvar
           omega
         . obtain ⟨ o, r, id, c ⟩ := y'
           apply hP.closedLeft; assumption
-  .
+  . rcases hyzcases with
+    ⟨ y', hyeq, hyz, hleq' ⟩
+    | ⟨ z', hzeq, hyz, hleq' ⟩
+    | hyzconflict
+    . subst hyeq
+      obtain ⟨ o, r, id, c ⟩ := y'
+      simp [YjsItem.rightOrigin] at hleq'
+      obtain ⟨ h', hxyconflict ⟩ := hxyconflict
+      apply conflict_lt_x_lt_y_right_origin at hxyconflict
+      obtain ⟨ _, hltxy ⟩ := hxyconflict
+      cases hleq' with
+      | inl heq =>
+        subst heq
+        constructor; assumption
+      | inr hlt' =>
+        apply ih (x.size + r.size + z.size) _ x r z _ _ _ _ hltxy _ hlt' <;> try assumption
+        simp
+        simp [YjsItem.size, YjsPtr.size] at hsize
+        omega
+        apply hP.closedRight; assumption
+    . subst hzeq
+      suffices YjsLt' ⟨ P, hP ⟩  x z'.origin by
+        obtain ⟨ _', this ⟩ := this
+        obtain ⟨ o, r, id, c ⟩ := z'
+        constructor
+        apply YjsLt.ltOrigin <;> try assumption
+      cases hleq' with
+      | inl heq =>
+        subst heq
+        constructor; assumption
+      | inr hlt' =>
+        obtain ⟨ o, r, id, c ⟩ := z'
+        apply ih (x.size + y.size + o.size) _ x y o _ _ _ _ hxy _ hlt' (refl _) <;> try assumption
+        . simp [YjsItem.origin, YjsItem.size, YjsPtr.size] at *
+          omega
+        . apply hP.closedLeft; assumption
+    . obtain ⟨ _, hxyconflict ⟩ := hxyconflict
+      obtain ⟨ _, hyzconflict ⟩ := hyzconflict
+      apply conflict_lt_trans _ _ _ hxyconflict hyzconflict; assumption
