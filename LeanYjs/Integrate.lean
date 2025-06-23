@@ -22,40 +22,38 @@ def getExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError (Yjs
   | some item => return item
   | none => Except.error IntegrateError.notFound
 
-inductive LoopCommand (A : Type) where
-| Continue : A -> LoopCommand A
-| Break : A -> LoopCommand A
-
-def fold_range {M : Type -> Type} [Monad M] {A : Type} (a b : Nat) (f : A → Nat → M (LoopCommand (M A))) (acc : M A) : M A := do
-  if a ≥ b then acc
-  else
-    let acc <- acc
-    let cmd <- f acc a
-    match cmd with
-    | LoopCommand.Continue acc => fold_range (a + 1) b f acc
-    | LoopCommand.Break acc => acc
-  termination_by (b - a)
-
 def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
   let leftIdx <- findIdx (YjsItem.origin newItem) arr
   let rightIdx <- findIdx (YjsItem.rightOrigin newItem) arr
-  let (_, i) <- fold_range (Int.toNat (leftIdx + 1)) (Int.toNat rightIdx) (acc := Except.ok (false, leftIdx + 1)) (fun acc i => do
-    let (scanning, leftIdx) := acc
-    let oItem <- getExcept arr i
-    let oLeftIdx <- findIdx oItem.origin arr
-    let oRightIdx <- findIdx oItem.rightOrigin arr
+  let leftIdx := Int.toNat leftIdx
+  let rightIdx := Int.toNat rightIdx
+
+  let mut scanning := false
+  let mut destIdx := leftIdx + 1
+  for i in [leftIdx+1:rightIdx] do
+    let other <- getExcept arr i
+
+    if !scanning then
+      destIdx := i
+
+    let oLeftIdx <- findIdx other.origin arr
+    let oRightIdx <- findIdx other.rightOrigin arr
+
     if oLeftIdx < leftIdx then
-      return LoopCommand.Break (return (true, i))
+      break
     else if oLeftIdx == leftIdx then
-      if decide (YjsItem.id newItem > YjsItem.id oItem) then
-        return (LoopCommand.Continue (return (false, i + 1)))
+      if newItem.id > other.id then
+        scanning := false
+        continue
       else if oRightIdx == rightIdx then
-        return (LoopCommand.Break (return (false, i + 1)))
+        break
       else
-        return (LoopCommand.Continue (return (true, i + 1)))
+        scanning := true
+        continue
     else
-      return ((LoopCommand.Continue (return (scanning, i + 1)))))
-  return (Array.insertIdxIfInBounds arr (Int.toNat i) newItem)
+      continue
+
+  return (Array.insertIdxIfInBounds arr (Int.toNat destIdx) newItem)
 
 inductive ArrayPairwise {α : Type} (f : α -> α -> Prop) : Array α -> Prop where
 | empty : ArrayPairwise f #[] -- empty array is pairwise
