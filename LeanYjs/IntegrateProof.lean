@@ -33,9 +33,48 @@ lemma ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
     f x) = f x := by
   eq_refl
 
-lemma for_in_list_loop_invariant (m : Type -> Type) [Monad m] (ls : List α) (init : β) (body : α -> β -> m (ForInStep β)) (I : m β -> Prop) :
-  (∀ (x : α) (y : β), I (pure y) -> body x y) -> I (pure init) -> I (forIn ls init body) := by
-  sorry
+lemma for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (body : α -> β -> Except ε (ForInStep β)) (I : Option α -> ForInStep β -> Prop) :
+  I ls.head? (ForInStep.yield init) ->
+  (∀ x (y : β) res i (hlt : i < ls.length),
+    x = ls.get (Fin.mk i hlt) ->
+    I x (ForInStep.yield y) ->
+    body x y = Except.ok res ->
+    I ls[i + 1]? res) ->
+  ∀ res, forIn ls init body = Except.ok res ->
+  ∃ x res', res'.value = res ∧ I x res' := by
+  intros hinit hbody res hforin
+  induction ls generalizing init with
+  | nil =>
+    cases hforin
+    constructor; constructor; constructor <;> try assumption
+    simp
+  | cons x xs ih =>
+    simp at hforin
+    generalize heq : body x init = res at hforin
+    cases res with
+    | error e =>
+      cases hforin
+    | ok res =>
+      rw [ok_bind res] at hforin
+      cases res with
+      | yield y =>
+        simp at hforin
+        apply ih y <;> try assumption
+        . apply hbody (i := 0) at heq <;> try first | simpa | assumption
+          simp at *
+          rw [List.head?_eq_getElem?]
+          assumption
+        . intros x' y' res' xin' hy hbody'
+          apply hbody <;> try assumption
+          simp
+          assumption
+      | done y =>
+        simp at hforin
+        cases hforin
+        apply hbody (i := 0) at heq <;> try first | simpa | assumption
+        simp at heq
+        constructor; constructor; constructor <;> try assumption
+        simp
 
 theorem integrate_sound (A: Type) [BEq A] (P : ClosedPredicate A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrayPairwise (fun (x y : YjsItem A) => YjsLt' P x y) arr
@@ -44,17 +83,59 @@ theorem integrate_sound (A: Type) [BEq A] (P : ClosedPredicate A) (inv : ItemSet
   intros hsorted hintegrate
   unfold integrate at hintegrate
 
-  generalize findIdx newItem.origin arr = leftIdx at hintegrate
+  generalize heqleft : findIdx newItem.origin arr = leftIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
   rw [ok_bind] at hintegrate
 
-  generalize findIdx newItem.rightOrigin arr = rightIdx at hintegrate
+  generalize heqright : findIdx newItem.rightOrigin arr = rightIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ rightIdx ⟩ := rightIdx; cases hintegrate
   rw [ok_bind] at hintegrate
 
   simp at hintegrate
 
+  generalize hloop :
+    @forIn (Except IntegrateError) (List ℕ) ℕ instForInOfForIn' (MProd ℕ Bool) Except.instMonad
+    (List.range' (leftIdx.toNat + 1) (rightIdx.toNat - (leftIdx.toNat + 1)) 1) ⟨leftIdx.toNat + 1, false⟩ (fun i r => do
+      let other ← getExcept arr i
+      if r.snd = false then do
+          let oLeftIdx ← findIdx other.origin arr
+          let oRightIdx ← findIdx other.rightOrigin arr
+          if oLeftIdx < max leftIdx 0 then pure (ForInStep.done ⟨i, r.snd⟩)
+            else
+              if oLeftIdx = max leftIdx 0 then
+                if other.id < newItem.id then pure (ForInStep.yield ⟨i, false⟩)
+                else
+                  if oRightIdx = max rightIdx 0 then pure (ForInStep.done ⟨i, r.snd⟩) else pure (ForInStep.yield ⟨i, true⟩)
+              else pure (ForInStep.yield ⟨i, r.snd⟩)
+        else do
+          let oLeftIdx ← findIdx other.origin arr
+          let oRightIdx ← findIdx other.rightOrigin arr
+          if oLeftIdx < max leftIdx 0 then pure (ForInStep.done ⟨r.fst, r.snd⟩)
+            else
+              if oLeftIdx = max leftIdx 0 then
+                if other.id < newItem.id then pure (ForInStep.yield ⟨r.fst, false⟩)
+                else
+                  if oRightIdx = max rightIdx 0 then pure (ForInStep.done ⟨r.fst, r.snd⟩)
+                  else pure (ForInStep.yield ⟨r.fst, true⟩)
+              else pure (ForInStep.yield (⟨r.fst, r.snd⟩ : MProd ℕ Bool))) = l at hintegrate
 
+  obtain ⟨ _ ⟩ | ⟨ res ⟩ := l; cases hintegrate
+  apply for_in_list_loop_invariant (I := fun x state =>
+    let breaked := match state with
+    | ForInStep.done _ => true
+    | ForInStep.yield _ => false
+    let current := x.orElse (fun () => rightIdx.toNat)
+    let ⟨ dest, scanning ⟩ := state.value
+    (∀ i, i < dest -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P other newItem) ∧
+    (∀ i, dest ≤ i -> i < current -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P newItem other.rightOrigin ->  YjsLt' P other newItem) ∧
+    True
+  ) at hloop
+
+
+  simp at hintegrate
+  rw [<-hintegrate]
+  -- Here, we prove that the array is still pairwise ordered after the integration.
+  -- So, what we need is arr[res.first] < newItem < arr[res.first + 1] (and also, 0 <= res.first <= arr.size)
 
 theorem integrate_commutative (A: Type) [BEq A] (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   integrate a arr1 = Except.ok arr2
