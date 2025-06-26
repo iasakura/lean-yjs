@@ -157,6 +157,14 @@ lemma yjs_leq_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : Y
 def YjsLeq' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLeq A P h x y
 
+def yjs_leq'_imp_eq_or_yjs_lt' {A : Type} {P : @ClosedPredicate A} {x y : YjsPtr A} :
+  YjsLeq' P x y -> x = y ∨ YjsLt' P x y := by
+    intros hleq
+    obtain ⟨ h, hleq ⟩ := hleq
+    cases hleq with
+    | inl rfl => left; assumption
+    | inr hlt => right; constructor; assumption
+
 def ConflictLt' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
   ∃ h, ConflictLt P h x y
 

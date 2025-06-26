@@ -76,6 +76,16 @@ lemma for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (b
         constructor; constructor; constructor <;> try assumption
         simp
 
+def loop_invariant (P : ClosedPredicate A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (rightIdx : ℕ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :=
+  let breaked := match state with
+  | ForInStep.done _ => true
+  | ForInStep.yield _ => false
+  let current := x.orElse (fun () => rightIdx)
+  let ⟨ dest, scanning ⟩ := state.value
+  (∀ i, i < dest -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P other newItem) ∧
+  (scanning -> ∀ i, dest ≤ i -> i < current -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P newItem other.rightOrigin ->  YjsLt' P other newItem) ∧
+  (scanning -> ∃ (destItem : YjsItem A), arr[dest]? = some destItem ∧ destItem.origin = newItem.origin)
+
 theorem integrate_sound (A: Type) [BEq A] (P : ClosedPredicate A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrayPairwise (fun (x y : YjsItem A) => YjsLt' P x y) arr
   -> integrate newItem arr = Except.ok newArr
@@ -120,17 +130,7 @@ theorem integrate_sound (A: Type) [BEq A] (P : ClosedPredicate A) (inv : ItemSet
               else pure (ForInStep.yield (⟨r.fst, r.snd⟩ : MProd ℕ Bool))) = l at hintegrate
 
   obtain ⟨ _ ⟩ | ⟨ res ⟩ := l; cases hintegrate
-  apply for_in_list_loop_invariant (I := fun x state =>
-    let breaked := match state with
-    | ForInStep.done _ => true
-    | ForInStep.yield _ => false
-    let current := x.orElse (fun () => rightIdx.toNat)
-    let ⟨ dest, scanning ⟩ := state.value
-    (∀ i, i < dest -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P other newItem) ∧
-    (∀ i, dest ≤ i -> i < current -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P newItem other.rightOrigin ->  YjsLt' P other newItem) ∧
-    True
-  ) at hloop
-
+  apply for_in_list_loop_invariant (I := fun x state => loop_invariant P arr newItem rightIdx.toNat x state) at hloop
 
   simp at hintegrate
   rw [<-hintegrate]
