@@ -10,17 +10,17 @@ variable {A : Type} [BEq A]
 
 -- Defines a subset of YjsItem which are possible DAG of a history of insertions.
 
-variable (P : ClosedPredicate A)
+variable (P : ItemSet A)
 
 structure ItemSetInvariant where
-  origin_not_leq : ∀ (o r c id), P.val (YjsItem.item o r id c) ->
+  origin_not_leq : ∀ (o r c id), P (YjsItem.item o r id c) ->
     YjsLt' P o r
   origin_nearest_reachable : ∀ (o r c id x),
-    P.val (YjsItem.item o r id c) ->
+    P (YjsItem.item o r id c) ->
     OriginReachable A (YjsItem.item o r id c) x ->
     (∃ h, YjsLeq P h x o) ∨ (∃ h, YjsLeq P h r x)
   same_id_ordered : ∀ (x y : YjsItem A),
-    P.val x -> P.val y ->
+    P x -> P y ->
     x ≠ y ->
     x.id = y.id ->
     YjsLt' P x y.origin ∨
@@ -28,23 +28,19 @@ structure ItemSetInvariant where
     YjsLt' P x.rightOrigin y ∨
     YjsLt' P y.rightOrigin x
 
-@[simp] lemma origin_p_valid {A} {P : ClosedPredicate A} : forall (x : YjsItem A), P.val x -> P.val x.origin := by
-  intros x px
-  obtain ⟨ p, ⟨ hp, hp', hp'', hp''' ⟩ ⟩ := P
-  simp at *
+@[simp] lemma origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.origin := by
+  intros hclosed x px
   obtain ⟨ o, r, id, c ⟩ := x
   simp [YjsItem.origin] at *
-  tauto
+  apply hclosed.closedLeft <;> assumption
 
-@[simp] lemma right_origin_p_valid {A} {P : ClosedPredicate A} : forall (x : YjsItem A), P.val x -> P.val x.rightOrigin := by
-  intros x px
-  obtain ⟨ p, ⟨ hp, hp', hp'', hp''' ⟩ ⟩ := P
-  simp at *
+@[simp] lemma right_origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.rightOrigin := by
+  intros hclosed x px
   obtain ⟨ o, r, id, c ⟩ := x
   simp [YjsItem.rightOrigin] at *
-  tauto
+  apply hclosed.closedRight <;> assumption
 
-lemma not_ptr_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
+lemma not_ptr_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
   intros hinv h o
   generalize hsize : o.size = size
   revert o h
@@ -70,7 +66,7 @@ lemma not_ptr_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h
     apply ih _ hsize' h r <;> try assumption
     simp
 
-lemma not_last_lt_ptr {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
+lemma not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
   intros hinv h o
   generalize hsize : o.size = size
   revert o h
@@ -96,7 +92,7 @@ lemma not_last_lt_ptr {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h 
     apply ih _ hsize' h o <;> try assumption
     simp
 
-lemma not_last_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.first := by
+lemma not_last_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.first := by
   intros hinv h
   apply @Nat.strongRecOn' (P := fun h => ¬ @YjsLt A P h YjsPtr.last YjsPtr.first)
   intros n ih hlt
@@ -107,7 +103,7 @@ lemma not_last_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ 
     cases hlt
 
 
-lemma not_first_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.first YjsPtr.first := by
+lemma not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.first YjsPtr.first := by
   intros hinv h hlt
   have h: OriginLt A YjsPtr.first YjsPtr.first := by
     cases hlt with
@@ -117,7 +113,7 @@ lemma not_first_lt_first {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀
       assumption
   cases h with
 
-lemma not_last_lt_last {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.last := by
+lemma not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.last := by
   intros hinv h hlt
   have h: OriginLt A YjsPtr.last YjsPtr.last := by
     cases hlt with
@@ -127,10 +123,10 @@ lemma not_last_lt_last {A} {P : ClosedPredicate A} : ItemSetInvariant P -> ∀ h
       assumption
   cases h with
 
--- lemma origin_lt_p1 {A} {P : @ClosedPredicate A} {x y : YjsPtr A} (h : OriginLt _ x y) : P.val x := by
+-- lemma origin_lt_p1 {A} {P : @ItemSet A} {x y : YjsPtr A} (h : OriginLt _ x y) : P x := by
 --   sorry
 
--- lemma origin_lt_p2 {A} {P : @ClosedPredicate A} {x y : YjsPtr A} (h : OriginLt _ x y) : P.val y := by
+-- lemma origin_lt_p2 {A} {P : @ItemSet A} {x y : YjsPtr A} (h : OriginLt _ x y) : P y := by
 --   cases h with
 --   | ltOrigin  y hpx hpy hlt
 --     assumption

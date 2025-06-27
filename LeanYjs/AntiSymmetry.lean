@@ -7,11 +7,12 @@ import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality
 import LeanYjs.Transitivity
 
-lemma yjs_lt_origin_lt_anti_symm {A} {P : ClosedPredicate A} :
+lemma yjs_lt_origin_lt_anti_symm {A} {P : ItemSet A} :
+  IsClosedItemSet P ->
   ItemSetInvariant P ->
-  ∀ (x y : YjsPtr A), P.val x -> P.val y -> OriginLt _ x y -> OriginLt _ y x ->
+  ∀ (x y : YjsPtr A), P x -> P y -> OriginLt _ x y -> OriginLt _ y x ->
   ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
-  intros inv x y hpx hpy hltxy hltyx
+  intros hP inv x y hpx hpy hltxy hltyx
   cases hltxy with
   | lt_left _ r id c =>
     cases hltyx with
@@ -22,8 +23,7 @@ lemma yjs_lt_origin_lt_anti_symm {A} {P : ClosedPredicate A} :
       . simp [YjsPtr.size, YjsItem.size]; omega
       constructor <;> assumption
     | lt_last =>
-      have hpr : P.val r := by
-        obtain ⟨ P, hP ⟩ := P
+      have hpr : P r := by
         apply hP.closedRight; assumption
       obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpy
       apply not_last_lt_ptr inv at hlt
@@ -55,7 +55,7 @@ lemma yjs_lt_origin_lt_anti_symm {A} {P : ClosedPredicate A} :
   | lt_first_last =>
     cases hltyx
 
-lemma yjs_lt_conflict_lt_decreases {A} {P : ClosedPredicate A} :
+lemma yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
   ItemSetInvariant P ->
   ∀ (x y : YjsPtr A), ConflictLt' P x y -> ConflictLt' P y x ->
   ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
@@ -86,23 +86,24 @@ lemma yjs_lt_conflict_lt_decreases {A} {P : ClosedPredicate A} :
       unfold ActorId at *
       omega
 
-lemma yjs_leq_right_origin_decreases {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :
+lemma yjs_leq_right_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :
+  IsClosedItemSet P ->
   YjsLeq' P x.rightOrigin y →
   YjsLt' P y x →
   ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
-  intros hxrleq hxy
-  have hpx : P.val x := by
+  intros hP hxrleq hxy
+  have hpx : P x := by
     apply yjs_lt'_p2 hxy
-  have hpy : P.val y := by
+  have hpy : P y := by
     apply yjs_lt'_p1 hxy
   obtain ⟨ o, r, id, c ⟩ := x
   have hyxr : YjsLt' P y r := by
     apply yjs_lt_trans (y := (YjsItem.item o r id c)) <;> try assumption
-    . apply P.property.closedRight
+    . apply hP.closedRight
       apply yjs_lt'_p2
       assumption
     . constructor; apply YjsLt.ltOriginOrder <;> try assumption
-      apply P.property.closedRight; assumption
+      apply hP.closedRight; assumption
       apply OriginLt.lt_right
   have hrylt : YjsLt' P r y := by
     obtain ⟨ h, hxrleq ⟩ := hxrleq
@@ -117,23 +118,24 @@ lemma yjs_leq_right_origin_decreases {A} {P : ClosedPredicate A} (inv : ItemSetI
   . simp [YjsPtr.size, YjsItem.size]; omega
   constructor <;> assumption
 
-lemma yjs_leq_origin_decreases {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x : YjsPtr A) (y : YjsItem A) :
+lemma yjs_leq_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsPtr A) (y : YjsItem A) :
+  IsClosedItemSet P ->
   YjsLeq' P x y.origin →
   YjsLt' P y x →
   ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
-  intros hxrleq hxy
-  have hpx : P.val x := by
+  intros hP hxrleq hxy
+  have hpx : P x := by
     apply yjs_lt'_p2 hxy
-  have hpy : P.val y := by
+  have hpy : P y := by
     apply yjs_lt'_p1 hxy
   obtain ⟨ o, r, id, c ⟩ := y
   have hyxr : YjsLt' P o x := by
     apply yjs_lt_trans (y := (YjsItem.item o r id c)) <;> try assumption
-    . apply P.property.closedLeft
+    . apply hP.closedLeft
       apply yjs_lt'_p1
       assumption
     . constructor; apply YjsLt.ltOriginOrder <;> try assumption
-      apply P.property.closedLeft; assumption
+      apply hP.closedLeft; assumption
       apply OriginLt.lt_left
   have hrylt : YjsLt' P x o := by
     obtain ⟨ h, hxrleq ⟩ := hxrleq
@@ -148,19 +150,20 @@ lemma yjs_leq_origin_decreases {A} {P : ClosedPredicate A} (inv : ItemSetInvaria
   . simp [YjsPtr.size, YjsItem.size]; omega
   constructor <;> assumption
 
-theorem yjs_lt_anti_symm {A} {P : ClosedPredicate A} :
+theorem yjs_lt_anti_symm {A} {P : ItemSet A} :
+  IsClosedItemSet P ->
   ItemSetInvariant P ->
   ∀ (x y : YjsPtr A), YjsLt' P x y -> YjsLt' P y x -> False := by
-  intros inv x y hltxy hltyx
+  intros hP inv x y hltxy hltyx
   generalize hsize : x.size + y.size = size
   revert x y
   apply Nat.strongRecOn' (P := fun size =>
     ∀ (x y : YjsPtr A), YjsLt' P x y → YjsLt' P y x → x.size + y.size = size → False)
   intros size ih x y hltxy hltyx hsize
 
-  have hpx : P.val x := by
+  have hpx : P x := by
     apply yjs_lt'_p1 hltxy
-  have hpy : P.val y := by
+  have hpy : P y := by
     apply yjs_lt'_p2 hltxy
 
   obtain hltxy' := yjs_lt'_cases _ _ _ _ hltxy
@@ -180,13 +183,13 @@ theorem yjs_lt_anti_symm {A} {P : ClosedPredicate A} :
     assumption
   . subst hxeq
     obtain ⟨ x', y', hsize', hltxy', hltyx' ⟩ :=
-      yjs_leq_right_origin_decreases inv x y hxrleq hltyx
+      yjs_leq_right_origin_decreases inv x y hP hxrleq hltyx
     apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp [hsize'])
     simp [YjsPtr.size, YjsItem.size] at hsize
     omega
   . subst hyeq
     obtain ⟨ x', y', hsize', hltxy', hltyx ⟩ :=
-      yjs_leq_origin_decreases inv x y hyoleq hltyx
+      yjs_leq_origin_decreases inv x y hP hyoleq hltyx
     apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx (by simp [hsize'])
     simp [YjsPtr.size, YjsItem.size] at hsize
     omega
@@ -207,13 +210,13 @@ theorem yjs_lt_anti_symm {A} {P : ClosedPredicate A} :
       assumption
     . subst hyeq
       obtain ⟨ x', y', hsize', hltxy', hltyx' ⟩ :=
-        yjs_leq_right_origin_decreases inv y x hyrleq hltxy
+        yjs_leq_right_origin_decreases inv y x hP hyrleq hltxy
       apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp [hsize'])
       simp [YjsPtr.size, YjsItem.size] at hsize
       omega
     . subst hxeq
       obtain ⟨ x', y', hsize', hltxy', hltyx ⟩ :=
-        yjs_leq_origin_decreases inv y x hxoleq hltxy
+        yjs_leq_origin_decreases inv y x hP hxoleq hltxy
       apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx (by simp [hsize])
       simp [YjsPtr.size, YjsItem.size] at hsize
       omega

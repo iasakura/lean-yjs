@@ -9,22 +9,23 @@ import LeanYjs.AntiSymmetry
 import Mathlib.Order.Defs.Unbundled
 
 variable {A : Type}
-variable (P : ClosedPredicate A)
+variable (P : ItemSet A)
 
 theorem no_cross_origin (x y : YjsItem A) :
+  IsClosedItemSet P ->
   ItemSetInvariant P ->
   YjsLt' P x y ->
   YjsLeq' P y.origin x.origin ∨ YjsLeq' P x y.origin := by
-  intros hinv hxy
+  intros hP hinv hxy
   generalize hsize : x.size + y.size = hsize
   revert x y
   apply Nat.strongRec' (p := fun hsize => ∀ (x y : YjsItem A),
     YjsLt' P (YjsPtr.itemPtr x) (YjsPtr.itemPtr y) →
       x.size + y.size = hsize → YjsLeq' P y.origin x.origin ∨ YjsLeq' P (YjsPtr.itemPtr x) y.origin)
   intros n ih x y hlt hsize
-  have hpx : P.val x := by
+  have hpx : P x := by
     apply yjs_lt'_p1; assumption
-  have hpy : P.val y := by
+  have hpy : P y := by
     apply yjs_lt'_p2; assumption
   apply yjs_lt'_cases at hlt
   rcases hlt with
@@ -75,9 +76,9 @@ theorem no_cross_origin (x y : YjsItem A) :
             have hltorigin : YjsLt' P y.origin y := by
               obtain ⟨ yo, yr, yid, yc ⟩ := y
               constructor; apply YjsLt.ltOriginOrder <;> try assumption
-              . apply P.property.closedLeft; assumption
+              . apply hP.closedLeft; assumption
               . apply OriginLt.lt_left
-            cases yjs_lt_anti_symm hinv y.origin y hltorigin hlt
+            cases yjs_lt_anti_symm hP hinv y.origin y hltorigin hlt
           | inl heq =>
             obtain ⟨ yo, yr, yid, yc ⟩ := y
             simp [YjsItem.origin] at heq
@@ -103,27 +104,27 @@ theorem no_cross_origin (x y : YjsItem A) :
               have hlt : YjsLt' P xr.origin xr := by
                 obtain ⟨ xro, xrr, xrid, xrc ⟩ := xr
                 constructor; apply YjsLt.ltOriginOrder <;> try assumption
-                . apply P.property.closedLeft
-                  apply P.property.closedRight
+                . apply hP.closedLeft
+                  apply hP.closedRight
                   assumption
-                . apply P.property.closedRight
+                . apply hP.closedRight
                   assumption
                 apply OriginLt.lt_left
               apply yjs_leq'_imp_eq_or_yjs_lt' at hleq
               cases hleq with
               | inl heq =>
                 rw [heq] at hlt
-                cases yjs_lt_anti_symm hinv _ _ hlt hlt
+                cases yjs_lt_anti_symm hP hinv _ _ hlt hlt
               | inr hlt' =>
-                cases yjs_lt_anti_symm hinv _ _ hlt hlt'
-          apply yjs_leq_p_trans hinv _ _ _ _ _ hleq
+                cases yjs_lt_anti_symm hP hinv _ _ hlt hlt'
+          apply yjs_leq_p_trans hinv _ _ _ _ _ hP hleq
           assumption
         | inr hlt =>
           obtain ⟨ _, hlt ⟩ := hlt
           right
           have ⟨ _, hlt' ⟩ : YjsLt' P (YjsPtr.itemPtr (YjsItem.item xo (YjsPtr.itemPtr xr) xid xc)) xr := by
             constructor; apply YjsLt.ltOriginOrder <;> try assumption
-            . apply P.property.closedRight; assumption
+            . apply hP.closedRight; assumption
             . apply OriginLt.lt_right
           apply yjs_leq_p_trans (inv := hinv) (y := xr) <;> try assumption
           right

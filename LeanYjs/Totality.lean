@@ -5,22 +5,23 @@ import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
 
-@[simp] lemma first_p_valid {A} {P : ClosedPredicate A} : P.val YjsPtr.first := by
-  unfold ClosedPredicate at *
-  obtain ⟨ p, ⟨ hp, hp', hp'', hp''' ⟩ ⟩ := P
-  assumption
+@[simp] lemma first_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> P YjsPtr.first := by
+  intros hclosed
+  unfold ItemSet at *
+  apply hclosed.baseFirst
 
-@[simp] lemma last_p_valid {A} {P : ClosedPredicate A} : P.val YjsPtr.last := by
-  unfold ClosedPredicate at *
-  obtain ⟨ p, ⟨ hp, hp', hp'', hp''' ⟩ ⟩ := P
-  assumption
+@[simp] lemma last_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> P YjsPtr.last := by
+  intros hclosed
+  unfold ItemSet at *
+  apply hclosed.baseLast
 
-lemma yjs_origin_leq_lt {A : Type} {P : ClosedPredicate A} :
-  ∀ (x : YjsPtr A) (y : YjsItem A) h, P.val x → P.val y →
+lemma yjs_origin_leq_lt {A : Type} {P : ItemSet A} :
+  IsClosedItemSet P ->
+  ∀ (x : YjsPtr A) (y : YjsItem A) h, P x → P y →
     YjsLeq P h x y.origin -> ∃ h, YjsLt P h x y := by
-  intros x y h hx hy hleq
-  have hpyo : P.val y.origin := by
-    apply origin_p_valid; assumption
+  intros hclosed x y h hx hy hleq
+  have hpyo : P y.origin := by
+    apply origin_p_valid <;> assumption
   cases hleq with
   | inl heq =>
     rw [heq]
@@ -33,12 +34,13 @@ lemma yjs_origin_leq_lt {A : Type} {P : ClosedPredicate A} :
     constructor
     apply YjsLt.ltOrigin <;> try assumption
 
-lemma yjs_right_origin_leq_lt {A : Type} {P : ClosedPredicate A} :
-  ∀ (x : YjsItem A) (y : YjsPtr A) h, P.val x → P.val y →
+lemma yjs_right_origin_leq_lt {A : Type} {P : ItemSet A} :
+  IsClosedItemSet P ->
+  ∀ (x : YjsItem A) (y : YjsPtr A) h, P x → P y →
     YjsLeq P h x.rightOrigin y -> ∃ h, YjsLt P h x y := by
-  intros x y h hx hy hleq
-  have hpxo : P.val x.rightOrigin := by
-    apply right_origin_p_valid; assumption
+  intros hclosed x y h hx hy hleq
+  have hpxo : P x.rightOrigin := by
+    apply right_origin_p_valid <;> assumption
   cases hleq with
   | inl heq =>
     rw [<-heq]
@@ -51,13 +53,14 @@ lemma yjs_right_origin_leq_lt {A : Type} {P : ClosedPredicate A} :
     constructor
     apply YjsLt.ltRightOrigin <;> try assumption
 
-lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
-  ∀ (x y : YjsPtr A), P.val x -> P.val y ->
+lemma yjs_lt_total {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
+  IsClosedItemSet P ->
+  ∀ (x y : YjsPtr A), P x -> P y ->
     (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x) := by
-  intros x y hx hy
+  intros hclosed x y hx hy
   generalize heqxy : x.size + y.size = size
   revert x y
-  apply Nat.strongRecOn' (P := fun s => ∀ (x y : YjsPtr A), P.val x → P.val y → x.size + y.size = s → (∃ h, YjsLeq P h x y) ∨ ∃ h, YjsLt P h y x) size
+  apply Nat.strongRecOn' (P := fun s => ∀ (x y : YjsPtr A), P x → P y → x.size + y.size = s → (∃ h, YjsLeq P h x y) ∨ ∃ h, YjsLt P h y x) size
   intros n ih x y hx hy hpeq
   cases x with
   | first =>
@@ -114,20 +117,20 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
       obtain ⟨ xo, xr, xid, xc ⟩ := x
       generalize heqy : y = y'
       obtain ⟨ yo, yr, yid, yc ⟩ := y
-      unfold ClosedPredicate at *
-      have hxo : P.val xo := by
-        apply origin_p_valid (YjsItem.item xo xr xid xc) hx
-      have hyo : P.val yo := by
-        apply origin_p_valid (YjsItem.item yo yr yid yc) hy
-      have hxr : P.val xr := by
-        apply right_origin_p_valid (YjsItem.item xo xr xid xc) hx
-      have hyr : P.val yr := by
-        apply right_origin_p_valid (YjsItem.item yo yr yid yc) hy
+      unfold ItemSet at *
+      have hxo : P xo := by
+        apply origin_p_valid hclosed (YjsItem.item xo xr xid xc) hx
+      have hyo : P yo := by
+        apply origin_p_valid hclosed (YjsItem.item yo yr yid yc) hy
+      have hxr : P xr := by
+        apply right_origin_p_valid hclosed (YjsItem.item xo xr xid xc) hx
+      have hyr : P yr := by
+        apply right_origin_p_valid hclosed (YjsItem.item yo yr yid yc) hy
       have hdec : (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + yo.size < n := by
         rw [<-hpeq]
         simp [YjsPtr.size, YjsItem.size]
         omega
-      have hleq  : (∃ h', YjsLeq P h' (YjsItem.item xo xr xid xc) yo) ∨ (∃ h', YjsLt P h' yo (YjsItem.item xo xr xid xc)) := by
+      have hleq : (∃ h', YjsLeq P h' (YjsItem.item xo xr xid xc) yo) ∨ (∃ h', YjsLt P h' yo (YjsItem.item xo xr xid xc)) := by
         apply ih ((YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + yo.size) <;> try assumption
         simp
       cases hleq with
@@ -180,7 +183,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
               obtain ⟨ h, hleq ⟩ := hleq
               left
               rw [<-heqx, <-heqy]
-              obtain ⟨ h', hlt ⟩ := yjs_right_origin_leq_lt _ _ _ hx hy hleq
+              obtain ⟨ h', hlt ⟩ := yjs_right_origin_leq_lt hclosed _ _ _ hx hy hleq
               constructor
               right
               apply hlt
@@ -270,7 +273,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                             | inl hlt =>
                               obtain ⟨ h, hlt ⟩ := hlt
                               have ⟨ h, hlt ⟩ : ∃ h', YjsLt P h' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) (YjsPtr.itemPtr (YjsItem.item yo yr xid yc)) := by
-                                apply yjs_right_origin_leq_lt _ _ _ hx hy _ <;> try assumption
+                                apply yjs_right_origin_leq_lt _ _ _ _ hx hy _ <;> try assumption
                                 right; assumption
                               left
                               constructor
@@ -279,7 +282,7 @@ lemma yjs_lt_total {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
                             | inr hlt =>
                               obtain ⟨ h, hlt ⟩ := hlt
                               have ⟨ h, hlt ⟩ : ∃ h, YjsLt P h (YjsItem.item yo yr xid yc) (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) := by
-                                apply yjs_right_origin_leq_lt _ _ _ hy hx _ <;> try assumption
+                                apply yjs_right_origin_leq_lt _ _ _ _ hy hx _ <;> try assumption
                                 right; assumption
                               right
                               constructor

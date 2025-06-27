@@ -19,7 +19,70 @@ def ArrSet (arr : Array (YjsItem A)) : YjsPtr A -> Prop :=
   | YjsPtr.last => True
 
 def ArrSetClosed (arr : Array (YjsItem A)) : Prop :=
-  IsClosedItemPredicate _ (ArrSet arr)
+  IsClosedItemSet (ArrSet arr)
+
+omit [BEq A] in lemma arr_set_closed_push (arr : Array (YjsItem A)) (item : YjsItem A) :
+  ArrSetClosed arr ->
+  ArrSet arr item.origin ->
+  ArrSet arr item.rightOrigin ->
+  ArrSetClosed (Array.push arr item) := by
+  intros hclosed horigin hright
+  constructor <;> simp [ArrSet]
+  . intros o r id c hor
+    cases o with
+    | itemPtr item' =>
+      simp
+      cases hor with
+      | inl hitem =>
+        left
+        apply hclosed.closedLeft at hitem
+        assumption
+      | inr heq =>
+        subst heq
+        left
+        assumption
+    | first =>
+      simp
+    | last =>
+      simp
+  . intros o r id c hor
+    cases r with
+    | itemPtr item' =>
+      simp
+      cases hor with
+      | inl hitem =>
+        left
+        apply hclosed.closedRight at hitem
+        assumption
+      | inr heq =>
+        subst heq
+        left
+        assumption
+    | first =>
+      simp
+    | last =>
+      simp
+
+lemma item_set_invariant_push (arr : Array (YjsItem A)) (item : YjsItem A) :
+  ItemSetInvariant (ArrSet arr) ->
+  ArrSetClosed arr ->
+  YjsLt' (ArrSet arr) item.origin item.rightOrigin ->
+  ItemSetInvariant (ArrSet (Array.push arr item)) := by
+  intros hinv hclosed horigin
+  constructor
+  . intros o r c id hitem
+    simp [ArrSet] at hitem
+    cases hitem with
+    | inl hin =>
+      apply hinv.origin_not_leq at hin
+  . intros x y hxy
+    apply yjs_lt'_imp_eq_or_yjs_lt' at hxy
+    cases hxy with
+    | inl heq =>
+      subst heq
+      simp [ArrSet]
+    | inr hlt =>
+      apply yjs_lt'_p1 hlt; assumption
 
 inductive ArrayPairwise {α : Type} (f : α -> α -> Prop) : Array α -> Prop where
 | empty : ArrayPairwise f #[] -- empty array is pairwise
@@ -41,11 +104,12 @@ lemma for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (b
     body x y = Except.ok res ->
     I ls[i + 1]? res) ->
   ∀ res, forIn ls init body = Except.ok res ->
-  ∃ x res', res'.value = res ∧ I x res' := by
+  ∃ x res', res'.value = res ∧ I x res' ∧ (res' = ForInStep.done res ∨ x = none) := by
   intros hinit hbody res hforin
   induction ls generalizing init with
   | nil =>
     cases hforin
+    exists none, ForInStep.yield res
     constructor; constructor; constructor <;> try assumption
     simp
   | cons x xs ih =>
@@ -73,20 +137,25 @@ lemma for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (b
         cases hforin
         apply hbody (i := 0) at heq <;> try first | simpa | assumption
         simp at heq
+        exists xs[0]?, ForInStep.done res
         constructor; constructor; constructor <;> try assumption
         simp
 
-def loop_invariant (P : ClosedPredicate A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (rightIdx : ℕ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :=
-  let breaked := match state with
+def loop_invariant (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (rightIdx : ℕ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :=
+  let isDone := match state with
   | ForInStep.done _ => true
   | ForInStep.yield _ => false
-  let current := x.orElse (fun () => rightIdx)
+  -- when x is none, we are done so current is rightIdx
+  let current := x.getD rightIdx
+  -- when break, loop invariant is not satisfied, so we use last value of current
+  let lastChecked := if isDone then current - 1 else current
   let ⟨ dest, scanning ⟩ := state.value
   (∀ i, i < dest -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P other newItem) ∧
-  (scanning -> ∀ i, dest ≤ i -> i < current -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P newItem other.rightOrigin ->  YjsLt' P other newItem) ∧
-  (scanning -> ∃ (destItem : YjsItem A), arr[dest]? = some destItem ∧ destItem.origin = newItem.origin)
+  (∀ i, dest ≤ i -> i < lastChecked -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P newItem other.rightOrigin ->  YjsLt' P other newItem) ∧
+  (scanning -> ∃ (destItem : YjsItem A), arr[dest]? = some destItem ∧ destItem.origin = newItem.origin) ∧
+  (isDone -> ∃ item : YjsItem A, arr[current]? = some item ∧ YjsLt' P item newItem)
 
-theorem integrate_sound (A: Type) [BEq A] (P : ClosedPredicate A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
+theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrayPairwise (fun (x y : YjsItem A) => YjsLt' P x y) arr
   -> integrate newItem arr = Except.ok newArr
   -> ArrayPairwise (fun (x y : YjsItem A) => YjsLt' P x y) newArr := by

@@ -11,13 +11,13 @@ def max4 (x y z w : Nat) : Nat :=
   max (max x y) (max z w)
 
 mutual
-  inductive YjsLt {A : Type} (P : @ClosedPredicate A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
+  inductive YjsLt {A : Type} (P : ItemSet A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
     | ltConflict h i1 i2 : ConflictLt P h i1 i2 -> YjsLt P (h + 1) i1 i2
-    | ltOriginOrder i1 i2 : P.val i1 -> P.val i2 -> OriginLt _ i1 i2 -> YjsLt P 0 i1 i2
-    | ltOrigin h x o r id c : P.val (YjsItem.item o r id c) -> YjsLt P h x o -> YjsLt P (h + 1) x (YjsItem.item o r id c)
-    | ltRightOrigin h o r id c x : P.val (YjsItem.item o r id c) -> YjsLt P h r x -> YjsLt P (h + 1) (YjsItem.item o r id c) x
+    | ltOriginOrder i1 i2 : P i1 -> P i2 -> OriginLt A i1 i2 -> YjsLt P 0 i1 i2
+    | ltOrigin h x o r id c : P (YjsItem.item o r id c) -> YjsLt P h x o -> YjsLt P (h + 1) x (YjsItem.item o r id c)
+    | ltRightOrigin h o r id c x : P (YjsItem.item o r id c) -> YjsLt P h r x -> YjsLt P (h + 1) (YjsItem.item o r id c) x
 
-  inductive ConflictLt {A : Type} (P : @ClosedPredicate A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
+  inductive ConflictLt {A : Type} (P : ItemSet A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
     | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 :
       YjsLt P h1 l2 l1
       -> YjsLt P h2 (YjsItem.item l1 r1 id1 c1) r2
@@ -31,12 +31,12 @@ mutual
       -> ConflictLt P (max h1 h2 + 1) (YjsItem.item l r1 id1 c1) (YjsItem.item l r2 id2 c2)
 end
 
-def YjsLt' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
+def YjsLt' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLt A P h x y
 
-lemma yjs_lt_p1_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
-  (YjsLt P h x y -> P.val x) ∧ (ConflictLt P h x y -> P.val x) := by
-    apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P.val x) ∧ (ConflictLt P h x y -> P.val x))
+lemma yjs_lt_p1_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+  (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) := by
+    apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x))
     intros n ih x y
     constructor
     . intro hlt
@@ -69,27 +69,27 @@ lemma yjs_lt_p1_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
         let ⟨ ih, _ ⟩ := ih h1 hlt_h (YjsPtr.itemPtr (YjsItem.item l r1 id1 c1)) r2
         apply ih hlt1
 
-@[simp] lemma yjs_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
-  YjsLt P h x y -> P.val x := by
+@[simp] lemma yjs_lt_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+  YjsLt P h x y -> P x := by
     intros x y hlt
     let ⟨ h, _ ⟩ := @yjs_lt_p1_aux A P h x y
     tauto
 
-lemma yjs_lt'_p1 {A : Type} {P : @ClosedPredicate A} : forall {x y : YjsPtr A},
-  YjsLt' P x y -> P.val x := by
+lemma yjs_lt'_p1 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
+  YjsLt' P x y -> P x := by
     intros x y hlt
     obtain ⟨ h, hlt ⟩ := hlt
     apply yjs_lt_p1; assumption
 
-lemma conflict_lt_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
-  ConflictLt P h x y -> P.val x := by
+lemma conflict_lt_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+  ConflictLt P h x y -> P x := by
     intros x y hlt
     let ⟨ _, h ⟩ := @yjs_lt_p1_aux A P h x y
     tauto
 
-lemma yjs_lt_p2_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
-  (YjsLt P h x y -> P.val y) ∧ (ConflictLt P h x y -> P.val y) := by
-    apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P.val y) ∧ (ConflictLt P h x y -> P.val y))
+lemma yjs_lt_p2_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+  (YjsLt P h x y -> P y) ∧ (ConflictLt P h x y -> P y) := by
+    apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P y) ∧ (ConflictLt P h x y -> P y))
     intros n ih x y
     constructor
     . intro hlt
@@ -119,45 +119,45 @@ lemma yjs_lt_p2_aux {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y 
       | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
         apply yjs_lt_p1 hlt2
 
-lemma yjs_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
-  YjsLt P h x y -> P.val y := by
+lemma yjs_lt_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+  YjsLt P h x y -> P y := by
     intros x y hlt
     let ⟨ h, _ ⟩ := @yjs_lt_p2_aux A P h x y
     tauto
 
-lemma yjs_lt'_p2 {A : Type} {P : @ClosedPredicate A} : forall {x y : YjsPtr A},
-  YjsLt' P x y -> P.val y := by
+lemma yjs_lt'_p2 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
+  YjsLt' P x y -> P y := by
     intros x y hlt
     obtain ⟨ h, hlt ⟩ := hlt
     apply yjs_lt_p2; assumption
 
-lemma conflict_lt_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
-  ConflictLt P h x y -> P.val y := by
+lemma conflict_lt_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+  ConflictLt P h x y -> P y := by
     intros x y hlt
     let ⟨ _, h ⟩ := @yjs_lt_p2_aux A P h x y
     tauto
 
-def YjsLeq {A : Type} (P : @ClosedPredicate A) (h : Nat) (x y : YjsPtr A) : Prop :=
+def YjsLeq {A : Type} (P : @ItemSet A) (h : Nat) (x y : YjsPtr A) : Prop :=
   x = y ∨ YjsLt P h x y
 
-lemma yjs_leq_p1 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
-  YjsLeq P h x y -> P.val y -> P.val x := by
+lemma yjs_leq_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+  YjsLeq P h x y -> P y -> P x := by
     intros x y hleq hpy
     cases hleq with
     | inl rfl => subst rfl; assumption
     | inr hlt => apply yjs_lt_p1 hlt
 
-lemma yjs_leq_p2 {A : Type} {P : @ClosedPredicate A} {h : Nat} : forall {x y : YjsPtr A},
-  YjsLeq P h x y -> P.val x -> P.val y := by
+lemma yjs_leq_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+  YjsLeq P h x y -> P x -> P y := by
     intros x y hleq hpy
     cases hleq with
     | inl rfl => subst rfl; assumption
     | inr hlt => apply yjs_lt_p2 hlt
 
-def YjsLeq' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
+def YjsLeq' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLeq A P h x y
 
-def yjs_leq'_imp_eq_or_yjs_lt' {A : Type} {P : @ClosedPredicate A} {x y : YjsPtr A} :
+def yjs_leq'_imp_eq_or_yjs_lt' {A : Type} {P : @ItemSet A} {x y : YjsPtr A} :
   YjsLeq' P x y -> x = y ∨ YjsLt' P x y := by
     intros hleq
     obtain ⟨ h, hleq ⟩ := hleq
@@ -165,17 +165,17 @@ def yjs_leq'_imp_eq_or_yjs_lt' {A : Type} {P : @ClosedPredicate A} {x y : YjsPtr
     | inl rfl => left; assumption
     | inr hlt => right; constructor; assumption
 
-def ConflictLt' {A} (P : ClosedPredicate A) (x y : YjsPtr A) : Prop :=
+def ConflictLt' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, ConflictLt P h x y
 
-lemma yjs_leq'_p1 {A : Type} {P : @ClosedPredicate A} : forall {x y : YjsPtr A},
-  YjsLeq' P x y -> P.val y -> P.val x := by
+lemma yjs_leq'_p1 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
+  YjsLeq' P x y -> P y -> P x := by
     intros x y hleq hpy
     obtain ⟨ h, hleq ⟩ := hleq
     apply yjs_leq_p1 hleq hpy
 
-lemma yjs_leq'_p2 {A : Type} {P : @ClosedPredicate A} : forall {x y : YjsPtr A},
-  YjsLeq' P x y -> P.val x -> P.val y := by
+lemma yjs_leq'_p2 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
+  YjsLeq' P x y -> P x -> P y := by
     intros x y hleq hpy
     obtain ⟨ h, hleq ⟩ := hleq
     apply yjs_leq_p2 hleq hpy
@@ -226,12 +226,12 @@ lemma yjs_lt'_cases A P (x y : YjsPtr A) :
   obtain ⟨ h, hlt ⟩ := hlt
   apply yjs_lt_cases A P h x y hlt
 
--- inductive LtSequence {A : Type} (P : @ClosedPredicate A) : YjsPtr A -> YjsPtr A -> List (YjsPtr A) -> Prop where
+-- inductive LtSequence {A : Type} (P : @ItemSet A) : YjsPtr A -> YjsPtr A -> List (YjsPtr A) -> Prop where
 --   | base : forall x, LtSequence P x x []
 --   | step1 : forall x y z is h, ConflictLt P h x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
 --   | step2 : forall x y z is, OriginLt _ x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
 
--- lemma LtSequenceConcat {A : Type} {P : @ClosedPredicate A} {x y z : YjsPtr A} {is1 is2 : List (YjsPtr A)} :
+-- lemma LtSequenceConcat {A : Type} {P : @ItemSet A} {x y z : YjsPtr A} {is1 is2 : List (YjsPtr A)} :
 --   LtSequence P x y is1 -> LtSequence P y z is2 -> LtSequence P x z (is1 ++ is2) := by
 --     intro lt1
 --     induction lt1 with
@@ -249,7 +249,7 @@ lemma yjs_lt'_cases A P (x y : YjsPtr A) :
 --       apply ih
 --       assumption
 
--- lemma YjsLtSequence (A : Type) (P : ClosedPredicate A): forall (x y : YjsPtr A) h, YjsLt P h x y ->
+-- lemma YjsLtSequence (A : Type) (P : ItemSet A): forall (x y : YjsPtr A) h, YjsLt P h x y ->
 --   ∃ is : List (YjsPtr A), LtSequence P x y is := by
 --     intros x y h
 --     apply Nat.strongRecOn' (P := fun h => ∀ x y, YjsLt P h x y -> ∃ is : List (YjsPtr A), LtSequence P x y is)

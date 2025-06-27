@@ -21,7 +21,7 @@ inductive OriginReachableStep : YjsPtr A -> YjsPtr A -> Prop where
 
 def OriginReachable := TransGen (r := @OriginReachableStep A)
 
--- inductive OriginLt (P : @ClosedPredicate A): YjsPtr A -> YjsPtr A -> Prop where
+-- inductive OriginLt (P : @ItemSet A): YjsPtr A -> YjsPtr A -> Prop where
 --   | ltOrigin x y : P.val x -> P.val y -> OriginLtStep A x y -> OriginLt P x y
 --   /-
 --     if t is reachable, then t isn't between o and r

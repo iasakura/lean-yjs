@@ -6,11 +6,12 @@ import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality
 
-variable {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
+variable {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P}
 
-lemma conflict_lt_x_origin_lt_y {A} {P : ClosedPredicate A} (x : YjsItem A) y :
+lemma conflict_lt_x_origin_lt_y {A} {P : ItemSet A} (x : YjsItem A) y :
+  IsClosedItemSet P ->
   ConflictLt P h x y -> YjsLt' P x.origin y := by
-  intros hlt
+  intros hclosed hlt
   cases hlt with
   | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
     constructor; assumption
@@ -19,15 +20,16 @@ lemma conflict_lt_x_origin_lt_y {A} {P : ClosedPredicate A} (x : YjsItem A) y :
     simp [YjsItem.origin] at *
     apply YjsLt.ltOriginOrder <;> try assumption
     . apply yjs_lt_p1 at hlt1
-      apply P.property.closedLeft
+      apply hclosed.closedLeft
       assumption
     . apply yjs_lt_p1 at hlt2
       assumption
     apply OriginLt.lt_left
 
-lemma conflict_lt_y_origin_lt_x {A} {P : ClosedPredicate A} x (y : YjsItem A) :
+lemma conflict_lt_y_origin_lt_x {A} {P : ItemSet A} x (y : YjsItem A) :
+  IsClosedItemSet P ->
   ConflictLt P h x y -> YjsLt' P y.origin x := by
-  intros hlt
+  intros hclosed hlt
   cases hlt with
   | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
     constructor
@@ -39,13 +41,13 @@ lemma conflict_lt_y_origin_lt_x {A} {P : ClosedPredicate A} x (y : YjsItem A) :
     simp [YjsItem.origin] at *
     apply YjsLt.ltOriginOrder <;> try assumption
     . apply yjs_lt_p1 at hlt1
-      apply P.property.closedLeft
+      apply hclosed.closedLeft
       assumption
     . apply yjs_lt_p1 at hlt1
       assumption
     apply OriginLt.lt_left
 
-lemma conflict_lt_y_lt_x_right_origin {A} {P : ClosedPredicate A} (x : YjsItem A) y :
+lemma conflict_lt_y_lt_x_right_origin {A} {P : ItemSet A} (x : YjsItem A) y :
   ConflictLt P h x y -> YjsLt' P y x.rightOrigin := by
   intros hlt
   cases hlt with
@@ -54,7 +56,7 @@ lemma conflict_lt_y_lt_x_right_origin {A} {P : ClosedPredicate A} (x : YjsItem A
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor; assumption
 
-lemma conflict_lt_x_lt_y_right_origin {A} {P : ClosedPredicate A} x (y : YjsItem A) :
+lemma conflict_lt_x_lt_y_right_origin {A} {P : ItemSet A} x (y : YjsItem A) :
   ConflictLt P h x y -> YjsLt' P x y.rightOrigin := by
   intros hlt
   cases hlt with
@@ -63,14 +65,15 @@ lemma conflict_lt_x_lt_y_right_origin {A} {P : ClosedPredicate A} x (y : YjsItem
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor; assumption
 
-lemma conflict_lt_trans {A} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
+lemma conflict_lt_trans {A} {P : ItemSet A} {inv : ItemSetInvariant P} :
+  IsClosedItemSet P ->
   ∀ (x y z : YjsPtr A), ConflictLt P h1 x y -> ConflictLt P h2 y z -> YjsLt' P x z := by
-  intros x y z hxy hyz
-  have hP : P.val x := by
+  intros hclosed x y z hxy hyz
+  have hP : P x := by
     apply conflict_lt_p1; assumption
-  have hy : P.val y := by
+  have hy : P y := by
     apply conflict_lt_p2; assumption
-  have hz : P.val z := by
+  have hz : P z := by
     apply conflict_lt_p2; assumption
   have ⟨ ⟨ xo, xr, xid, xc ⟩, heqx ⟩ : ∃ x' : YjsItem A, x = YjsPtr.itemPtr x' := by
     cases hxy <;> (constructor; eq_refl)
@@ -80,11 +83,11 @@ lemma conflict_lt_trans {A} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
   have hltxrz :
     YjsLeq' P xr (YjsItem.item zo zr zid zc) ∨ YjsLt' P (YjsItem.item zo zr zid zc) xr := by
     apply yjs_lt_total <;> try assumption
-    apply P.property.closedRight; assumption
+    apply hclosed.closedRight; assumption
   have hltxzo :
     YjsLeq' P (YjsItem.item xo xr xid xc) zo ∨ YjsLt' P zo (YjsItem.item xo xr xid xc) := by
     apply yjs_lt_total <;> try assumption
-    apply P.property.closedLeft; assumption
+    apply hclosed.closedLeft; assumption
   cases hltxrz with
   | inl hltxrz =>
     obtain ⟨ _, hltxrz ⟩ := hltxrz
@@ -97,20 +100,19 @@ lemma conflict_lt_trans {A} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
     | inr hltzox =>
       sorry
 
-lemma yjs_lt_trans {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P} :
-  ∀ (x y z : YjsPtr A), P.val x -> P.val y -> P.val z ->
+lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
+  IsClosedItemSet P ->
+  ∀ (x y z : YjsPtr A), P x -> P y -> P z ->
   YjsLt' P x y -> YjsLt' P y z -> YjsLt' P x z := by
-  intros x y z hx hy hz hxy hyz
+  intros hP x y z hx hy hz hxy hyz
   unfold YjsLt' at *
-  obtain ⟨ P, hP ⟩ := P
   obtain ⟨ h0, hxy ⟩ := hxy
   obtain ⟨ h1, hyz ⟩ := hyz
   generalize hsize : x.size + y.size + z.size = total_size
   revert x y z h0 h1
-  simp
   apply @Nat.strongRecOn' (P := fun ts => ∀ x y z,
     P x → P y → P z →
-    ∀ h0, YjsLt ⟨ P, hP ⟩ h0 x y → ∀ h1, YjsLt ⟨ P, hP ⟩ h1 y z → x.size + y.size + z.size = ts → ∃ h, YjsLt ⟨P, hP⟩ h x z) total_size
+    ∀ h0, YjsLt P h0 x y → ∀ h1, YjsLt P h1 y z → x.size + y.size + z.size = ts → ∃ h, YjsLt P h x z) total_size
   intros total_size ih x y z hx hy hz h0 hxy h1 hyz hsize
   -- first, we prove the corner cases x = first or y = first/last, or z = last
   rcases yjs_lt_cases _ _ _ _ _ hxy with
@@ -207,7 +209,7 @@ lemma yjs_lt_trans {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
       simp [YjsItem.origin] at hleq
       cases hyeq
       simp [YjsItem.rightOrigin] at hleq'
-      have ⟨ hor, horlt ⟩ : YjsLt' ⟨ P, hP ⟩ o r := by
+      have ⟨ hor, horlt ⟩ : YjsLt' P o r := by
         apply inv.origin_not_leq <;> assumption
       cases hleq with
       | inl heq =>
@@ -232,7 +234,7 @@ lemma yjs_lt_trans {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
           omega
           apply hP.closedLeft; assumption
         | inr hlt' =>
-          have ⟨ h', hoz ⟩ : YjsLt' ⟨ P, hP ⟩ o z := by
+          have ⟨ h', hoz ⟩ : YjsLt' P o z := by
             apply ih (o.size + r.size + z.size) _ o r z _ _ _ _ horlt _ hlt' <;> try assumption
             simp
             simp [YjsItem.size, YjsPtr.size] at hsize
@@ -261,7 +263,7 @@ lemma yjs_lt_trans {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
         constructor
         apply YjsLt.ltOrigin <;> try assumption
     . obtain ⟨ _, hyzconflict ⟩ := hyzconflict
-      apply conflict_lt_x_origin_lt_y at hyzconflict
+      apply conflict_lt_x_origin_lt_y _ _ hP at hyzconflict
       obtain ⟨ _, hlt' ⟩ := hyzconflict
       cases hleq with
       | inl heq =>
@@ -295,7 +297,7 @@ lemma yjs_lt_trans {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
         omega
         apply hP.closedRight; assumption
     . subst hzeq
-      suffices YjsLt' ⟨ P, hP ⟩  x z'.origin by
+      suffices YjsLt' P  x z'.origin by
         obtain ⟨ _', this ⟩ := this
         obtain ⟨ o, r, id, c ⟩ := z'
         constructor
@@ -312,16 +314,16 @@ lemma yjs_lt_trans {A : Type} {P : ClosedPredicate A} {inv : ItemSetInvariant P}
         . apply hP.closedLeft; assumption
     . obtain ⟨ _, hxyconflict ⟩ := hxyconflict
       obtain ⟨ _, hyzconflict ⟩ := hyzconflict
-      apply conflict_lt_trans _ _ _ hxyconflict hyzconflict; assumption
+      apply conflict_lt_trans hP _ _ _ hxyconflict hyzconflict; assumption
 
-lemma yjs_leq_p_trans1 {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
-  @YjsLeq A P h1 x y -> @YjsLt A P h2 y z -> ∃ h, @YjsLt A P h x z := by
-  intros hleq hlt
-  have hpy : P.val y := by
+lemma yjs_leq_p_trans1 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+  IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLt A P h2 y z -> ∃ h, @YjsLt A P h x z := by
+  intros hclosed hleq hlt
+  have hpy : P y := by
     apply yjs_lt_p1; assumption
-  have hpz : P.val z := by
+  have hpz : P z := by
     apply yjs_lt_p2; assumption
-  have hpx : P.val x := by
+  have hpx : P x := by
     apply yjs_leq_p1 <;> assumption
   cases hleq with
   | inl heq =>
@@ -332,27 +334,27 @@ lemma yjs_leq_p_trans1 {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x
     constructor; assumption
     constructor; assumption
 
-lemma yjs_leq_p_trans2 {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
-  @YjsLt A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLt A P h x z := by
-  intros hlt hleq
-  have hpx : P.val x := by
+lemma yjs_leq_p_trans2 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+  IsClosedItemSet P -> @YjsLt A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLt A P h x z := by
+  intros hclosed hlt hleq
+  have hpx : P x := by
     apply yjs_lt_p1 <;> assumption
-  have hpy : P.val y := by
+  have hpy : P y := by
     apply yjs_lt_p2; assumption
-  have hpz : P.val z := by
+  have hpz : P z := by
     apply yjs_leq_p2 <;> assumption
   cases hleq with
   | inl heq =>
     rw [<-heq]
     exists h1
   | inr hlt =>
-    apply yjs_lt_trans (y := y) <;> try assumption
+    apply yjs_lt_trans hclosed (y := y) <;> try assumption
     constructor; assumption
     constructor; assumption
 
-lemma yjs_leq_p_trans {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
-  @YjsLeq A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLeq A P h x z := by
-  intros hleq1 hleq2
+lemma yjs_leq_p_trans {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+  IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLeq A P h x z := by
+  intros hclosed hleq1 hleq2
   cases hleq1 with
   | inl heq =>
     rw [heq]
@@ -365,11 +367,11 @@ lemma yjs_leq_p_trans {A} {P : ClosedPredicate A} (inv : ItemSetInvariant P) (x 
       right
       assumption
     | inr hlt =>
-      have hpx : P.val x := by
+      have hpx : P x := by
         apply yjs_lt_p1 <;> assumption
-      have hpy : P.val y := by
+      have hpy : P y := by
         apply yjs_lt_p2; assumption
-      have hpz : P.val z := by
+      have hpz : P z := by
         apply yjs_lt_p2; assumption
       have ⟨ _, hlt ⟩ : YjsLt' P x z := by
         apply yjs_lt_trans (y := y) <;> try assumption
