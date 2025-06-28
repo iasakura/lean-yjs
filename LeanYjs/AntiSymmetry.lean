@@ -1,59 +1,10 @@
 import LeanYjs.ActorId
 import LeanYjs.Item
 import LeanYjs.ItemOrder
-import LeanYjs.ItemOriginOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality
 import LeanYjs.Transitivity
-
-lemma yjs_lt_origin_lt_anti_symm {A} {P : ItemSet A} :
-  IsClosedItemSet P ->
-  ItemSetInvariant P ->
-  ∀ (x y : YjsPtr A), P x -> P y -> OriginLt _ x y -> OriginLt _ y x ->
-  ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
-  intros hP inv x y hpx hpy hltxy hltyx
-  cases hltxy with
-  | lt_left _ r id c =>
-    cases hltyx with
-    | lt_right =>
-      obtain hlt := inv.origin_not_leq _ _ _ _ hpy
-      exists x, x
-      constructor
-      . simp [YjsPtr.size, YjsItem.size]; omega
-      constructor <;> assumption
-    | lt_last =>
-      have hpr : P r := by
-        apply hP.closedRight; assumption
-      obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpy
-      apply not_last_lt_ptr inv at hlt
-      cases hlt
-  | lt_right o _ id c =>
-    cases hltyx with
-    | lt_left =>
-      obtain hlt := inv.origin_not_leq _ _ _ _ hpx
-      exists y, y
-      constructor
-      . simp [YjsPtr.size, YjsItem.size]; omega
-      constructor <;> assumption
-    | lt_first =>
-      obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpx
-      apply not_ptr_lt_first inv at hlt
-      cases hlt
-  | lt_first x =>
-    cases hltyx with
-    | lt_right o r id c =>
-      obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpy
-      apply not_ptr_lt_first inv at hlt
-      cases hlt
-  | lt_last x =>
-    cases hltyx with
-    | lt_left o r id c =>
-      obtain ⟨ h, hlt ⟩ := inv.origin_not_leq _ _ _ _ hpx
-      apply not_last_lt_ptr inv at hlt
-      cases hlt
-  | lt_first_last =>
-    cases hltyx
 
 lemma yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
   ItemSetInvariant P ->
@@ -102,16 +53,15 @@ lemma yjs_leq_right_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant
     . apply hP.closedRight
       apply yjs_lt'_p2
       assumption
-    . constructor; apply YjsLt.ltOriginOrder <;> try assumption
+    . constructor; apply YjsLt.ltRightOrigin <;> try assumption
+      left
       apply hP.closedRight; assumption
-      apply OriginLt.lt_right
   have hrylt : YjsLt' P r y := by
     obtain ⟨ h, hxrleq ⟩ := hxrleq
     cases hxrleq with
-    | inl heq =>
-      subst heq
+    | leqSame =>
       assumption
-    | inr hlt =>
+    | leqLt h _ _ hlt =>
       constructor; assumption
   exists r, y
   constructor
@@ -134,16 +84,15 @@ lemma yjs_leq_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x
     . apply hP.closedLeft
       apply yjs_lt'_p1
       assumption
-    . constructor; apply YjsLt.ltOriginOrder <;> try assumption
+    . constructor; apply YjsLt.ltOrigin <;> try assumption
+      left
       apply hP.closedLeft; assumption
-      apply OriginLt.lt_left
   have hrylt : YjsLt' P x o := by
     obtain ⟨ h, hxrleq ⟩ := hxrleq
     cases hxrleq with
-    | inl heq =>
-      subst heq
+    | leqSame heq =>
       assumption
-    | inr hlt =>
+    | leqLt h _ _ hlt =>
       constructor; assumption
   exists x, o
   constructor

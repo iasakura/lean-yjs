@@ -1,6 +1,5 @@
 import LeanYjs.Item
 import LeanYjs.ItemSet
-import LeanYjs.ItemOriginOrder
 import LeanYjs.ActorId
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSetInvariant
@@ -27,7 +26,7 @@ omit [BEq A] in lemma arr_set_closed_push (arr : Array (YjsItem A)) (item : YjsI
   ArrSet arr item.rightOrigin ->
   ArrSetClosed (Array.push arr item) := by
   intros hclosed horigin hright
-  constructor <;> simp [ArrSet]
+  constructor <;> try simp [ArrSet, IsClosedItemSet]
   . intros o r id c hor
     cases o with
     | itemPtr item' =>
@@ -62,6 +61,26 @@ omit [BEq A] in lemma arr_set_closed_push (arr : Array (YjsItem A)) (item : YjsI
       simp
     | last =>
       simp
+
+lemma yjs_lt_mono (P Q : ItemSet A) (x y : YjsItem A) :
+  IsClosedItemSet P ->
+  IsClosedItemSet Q ->
+  ItemSetInvariant P ->
+  ItemSetInvariant Q ->
+  (∀ a, P a -> Q a) ->
+  YjsLt' P x y ->
+  YjsLt' Q x y := by
+  intros hclosedP hclosedQ hinvP hinvQ hsubset hlt
+  apply yjs_lt'_cases at hlt
+  rcases hlt with
+  cases hlt with
+  | inl heq =>
+    subst heq
+    simp [YjsLt', ItemSetInvariant] at *
+    assumption
+  | inr hlt' =>
+    apply yjs_lt'_p1 hlt'
+    assumption
 
 lemma item_set_invariant_push (arr : Array (YjsItem A)) (item : YjsItem A) :
   ItemSetInvariant (ArrSet arr) ->

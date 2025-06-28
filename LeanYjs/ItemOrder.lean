@@ -1,21 +1,36 @@
 import LeanYjs.Item
 import LeanYjs.ItemSet
 import LeanYjs.ActorId
-import LeanYjs.ItemOriginOrder
 
 import Mathlib.Tactic.ApplyAt
-import Mathlib.Tactic.Tauto
 import Mathlib.Data.Nat.Basic
 
 def max4 (x y z w : Nat) : Nat :=
   max (max x y) (max z w)
 
+inductive OriginLt {A} : YjsPtr A -> YjsPtr A -> Prop where
+  | lt_first : forall item, OriginLt YjsPtr.first (YjsPtr.itemPtr item)
+  | lt_last : forall item, OriginLt (YjsPtr.itemPtr item) YjsPtr.last
+  | lt_first_last : OriginLt YjsPtr.first YjsPtr.last
+
+inductive OriginReachableStep {A} : YjsPtr A -> YjsPtr A -> Prop where
+  | reachable : forall o r id c, OriginReachableStep (YjsItem.item o r id c) o
+  | reachable_right : forall o r id c, OriginReachableStep (YjsItem.item o r id c) r
+
+inductive OriginReachable {A} : YjsPtr A -> YjsPtr A -> Prop where
+  | reachable_single : forall x y, OriginReachableStep x y -> OriginReachable x y
+  | reachable_head : forall x y z, OriginReachableStep x y -> OriginReachable y z -> OriginReachable x z
+
 mutual
   inductive YjsLt {A : Type} (P : ItemSet A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
     | ltConflict h i1 i2 : ConflictLt P h i1 i2 -> YjsLt P (h + 1) i1 i2
-    | ltOriginOrder i1 i2 : P i1 -> P i2 -> OriginLt A i1 i2 -> YjsLt P 0 i1 i2
-    | ltOrigin h x o r id c : P (YjsItem.item o r id c) -> YjsLt P h x o -> YjsLt P (h + 1) x (YjsItem.item o r id c)
-    | ltRightOrigin h o r id c x : P (YjsItem.item o r id c) -> YjsLt P h r x -> YjsLt P (h + 1) (YjsItem.item o r id c) x
+    | ltOriginOrder i1 i2 : P i1 -> P i2 -> OriginLt i1 i2 -> YjsLt P 0 i1 i2
+    | ltOrigin h x o r id c : P (YjsItem.item o r id c) -> YjsLeq P h x o -> YjsLt P (h + 1) x (YjsItem.item o r id c)
+    | ltRightOrigin h o r id c x : P (YjsItem.item o r id c) -> YjsLeq P h r x -> YjsLt P (h + 1) (YjsItem.item o r id c) x
+
+  inductive YjsLeq {A : Type} (P : ItemSet A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
+    | leqSame x : P x -> YjsLeq P h x x
+    | leqLt h x y : YjsLt P h x y -> YjsLeq P (h + 1) x y
 
   inductive ConflictLt {A : Type} (P : ItemSet A) : Nat -> YjsPtr A -> YjsPtr A -> Prop where
     | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 :
@@ -35,8 +50,8 @@ def YjsLt' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLt A P h x y
 
 lemma yjs_lt_p1_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
-  (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) := by
-    apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x))
+  (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) ∧ (YjsLeq P h x y -> P x) := by
+    apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) ∧ (YjsLeq P h x y -> P x))
     intros n ih x y
     constructor
     . intro hlt
@@ -44,30 +59,38 @@ lemma yjs_lt_p1_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr
       | ltConflict h x y hlt =>
         have hlt_h : h < h + 1 := by
           omega
-        let ⟨ _, h ⟩ := ih h hlt_h x y
+        let ⟨ _, h, _ ⟩ := ih h hlt_h x y
         apply h ; assumption
       | ltOriginOrder x y _ =>
         assumption
       | ltOrigin h x o r id c hval hlt =>
         have hlt_h : h < h + 1 := by
           omega
-        let ⟨ ih, _ ⟩ := ih h hlt_h x o
+        let ⟨ _, _, ih ⟩ := ih h hlt_h x o
         apply ih; assumption
       | ltRightOrigin h o r id c x hval hlt =>
         assumption
-    . intro hlt
-      cases hlt with
-      | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 =>
-        have hlt_h : h2 < max4 h1 h2 h3 h4 + 1 := by
-          unfold max4
-          omega
-        let ⟨ ih, _ ⟩ := ih h2 hlt_h (YjsPtr.itemPtr (YjsItem.item l1 r1 id1 c1)) r2
-        apply ih hlt2
-      | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
-        have hlt_h : h1 < max h1 h2 + 1 := by
-          omega
-        let ⟨ ih, _ ⟩ := ih h1 hlt_h (YjsPtr.itemPtr (YjsItem.item l r1 id1 c1)) r2
-        apply ih hlt1
+    . constructor
+      . intro hlt
+        cases hlt with
+        | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 =>
+          have hlt_h : h2 < max4 h1 h2 h3 h4 + 1 := by
+            unfold max4
+            omega
+          let ⟨ ih, _ ⟩ := ih h2 hlt_h (YjsPtr.itemPtr (YjsItem.item l1 r1 id1 c1)) r2
+          apply ih hlt2
+        | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
+          have hlt_h : h1 < max h1 h2 + 1 := by
+            omega
+          let ⟨ ih, _ ⟩ := ih h1 hlt_h (YjsPtr.itemPtr (YjsItem.item l r1 id1 c1)) r2
+          apply ih hlt1
+      . intros hlt
+        cases hlt with
+        | leqSame hpx x =>
+          assumption
+        | leqLt h x y hlt =>
+          obtain ⟨ ih, _, _ ⟩ := ih h (by omega) x y
+          apply ih; assumption
 
 @[simp] lemma yjs_lt_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLt P h x y -> P x := by
@@ -88,8 +111,8 @@ lemma conflict_lt_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPt
     tauto
 
 lemma yjs_lt_p2_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
-  (YjsLt P h x y -> P y) ∧ (ConflictLt P h x y -> P y) := by
-    apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P y) ∧ (ConflictLt P h x y -> P y))
+  (YjsLt P h x y -> P y) ∧ (ConflictLt P h x y -> P y) ∧ (YjsLeq P h x y -> P y) := by
+    apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P y) ∧ (ConflictLt P h x y -> P y) ∧ (YjsLeq P h x y -> P y))
     intros n ih x y
     constructor
     . intro hlt
@@ -97,7 +120,7 @@ lemma yjs_lt_p2_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr
       | ltConflict h x y hlt =>
         have hlt_h : h < h + 1 := by
           omega
-        let ⟨ _, h ⟩ := ih h hlt_h x y
+        let ⟨ _, h, _ ⟩ := ih h hlt_h x y
         apply h ; assumption
       | ltOriginOrder x y _ =>
         assumption
@@ -106,18 +129,26 @@ lemma yjs_lt_p2_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr
       | ltRightOrigin h o r id c x hval hlt =>
         have hlt_h : h < h + 1 := by
           omega
-        let ⟨ ih, _ ⟩ := ih h hlt_h r y
-        apply ih hlt
-    . intro hlt
-      cases hlt with
-      | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 =>
-        have hlt_h : h3 < max4 h1 h2 h3 h4 + 1 := by
-          unfold max4
-          omega
-        let ⟨ _, ih ⟩ := ih h3 hlt_h l1 (YjsPtr.itemPtr (YjsItem.item l2 r2 id2 c2))
-        tauto
-      | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
-        apply yjs_lt_p1 hlt2
+        let ⟨ _, _, ih ⟩ := ih h hlt_h r y
+        apply ih; assumption
+    . constructor
+      . intro hlt
+        cases hlt with
+        | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 =>
+          have hlt_h : h3 < max4 h1 h2 h3 h4 + 1 := by
+            unfold max4
+            omega
+          let ⟨ ih, _ ⟩ := ih h3 hlt_h l1 (YjsPtr.itemPtr (YjsItem.item l2 r2 id2 c2))
+          apply ih hlt3
+        | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
+          apply yjs_lt_p1; assumption
+      . intros hlt
+        cases hlt with
+        | leqSame hpx x =>
+          assumption
+        | leqLt h x y hlt =>
+          obtain ⟨ ih, _, _ ⟩ := ih h (by omega) x y
+          apply ih; assumption
 
 lemma yjs_lt_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLt P h x y -> P y := by
@@ -137,22 +168,19 @@ lemma conflict_lt_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPt
     let ⟨ _, h ⟩ := @yjs_lt_p2_aux A P h x y
     tauto
 
-def YjsLeq {A : Type} (P : @ItemSet A) (h : Nat) (x y : YjsPtr A) : Prop :=
-  x = y ∨ YjsLt P h x y
-
 lemma yjs_leq_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLeq P h x y -> P y -> P x := by
     intros x y hleq hpy
     cases hleq with
-    | inl rfl => subst rfl; assumption
-    | inr hlt => apply yjs_lt_p1 hlt
+    | leqSame => assumption
+    | leqLt _ _ _  hlt => apply yjs_lt_p1 hlt
 
 lemma yjs_leq_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLeq P h x y -> P x -> P y := by
     intros x y hleq hpy
     cases hleq with
-    | inl rfl => subst rfl; assumption
-    | inr hlt => apply yjs_lt_p2 hlt
+    | leqSame => assumption
+    | leqLt _ _ _ hlt => apply yjs_lt_p2 hlt
 
 def YjsLeq' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLeq A P h x y
@@ -162,8 +190,8 @@ def yjs_leq'_imp_eq_or_yjs_lt' {A : Type} {P : @ItemSet A} {x y : YjsPtr A} :
     intros hleq
     obtain ⟨ h, hleq ⟩ := hleq
     cases hleq with
-    | inl rfl => left; assumption
-    | inr hlt => right; constructor; assumption
+    | leqSame _ => left; rfl
+    | leqLt _ _ _ hlt => right; constructor; assumption
 
 def ConflictLt' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, ConflictLt P h x y
@@ -194,14 +222,6 @@ lemma yjs_lt_cases A P h (x y : YjsPtr A) :
     apply Exists.intro h; assumption
   | ltOriginOrder x y px py hlt =>
     cases hlt with
-    | lt_left o r id c =>
-      right; right; right; left
-      simp [YjsItem.origin]
-      exists 0; left; simp
-    | lt_right o r id c =>
-      right; right; left
-      simp [YjsItem.rightOrigin]
-      exists 0; left; simp
     | lt_first_last =>
       left; simp
     | lt_first =>
@@ -210,10 +230,10 @@ lemma yjs_lt_cases A P h (x y : YjsPtr A) :
       right; left; simp
   | ltOrigin h x o r id c hval hlt =>
     right; right; right; left; simp
-    exists h; right; simp [YjsItem.origin]; assumption
+    constructor; assumption
   | ltRightOrigin h o r id c x hval hlt =>
     right; right; left; simp
-    exists h; right; simp [YjsItem.rightOrigin]; assumption
+    constructor; assumption
 
 lemma yjs_lt'_cases A P (x y : YjsPtr A) :
   YjsLt' P x y ->

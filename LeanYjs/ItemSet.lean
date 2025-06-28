@@ -1,8 +1,7 @@
 import LeanYjs.Item
-import LeanYjs.ItemOriginOrder
 import LeanYjs.ActorId
 
-import Mathlib.Tactic.Set
+import Mathlib.Data.Set.Basic
 
 variable (A : Type) [BEq A]
 

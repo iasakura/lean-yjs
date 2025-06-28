@@ -1,6 +1,5 @@
 import LeanYjs.Item
 import LeanYjs.ActorId
-import LeanYjs.ItemOriginOrder
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
@@ -48,9 +47,7 @@ theorem no_cross_origin (x y : YjsItem A) :
       simp [YjsItem.rightOrigin] at hleq'
       have ⟨ _, hleq' ⟩ := hleq'
       cases hleq' with
-      | inl hleq =>
-        cases hleq
-      | inr hlt' =>
+      | leqLt h _ _ hlt' =>
         apply (not_last_lt_ptr hinv) at hlt'
         cases hlt'
     | itemPtr xr =>
@@ -59,11 +56,11 @@ theorem no_cross_origin (x y : YjsItem A) :
       cases hleq' with
       | inl hleq =>
         cases hleq
-        have hreachable : OriginReachable A (YjsPtr.itemPtr (YjsItem.item xo (YjsPtr.itemPtr y) xid xc)) y.origin := by
-          apply @Relation.TransGen.tail (b := YjsPtr.itemPtr y)
-          . apply @Relation.TransGen.single
-            apply OriginReachableStep.reachable_right
+        have hreachable : OriginReachable (YjsPtr.itemPtr (YjsItem.item xo (YjsPtr.itemPtr y) xid xc)) y.origin := by
+          apply OriginReachable.reachable_head (y := YjsPtr.itemPtr y)
+          . apply OriginReachableStep.reachable_right
           . obtain ⟨ yo, yr, yid, yc ⟩ := y
+            apply OriginReachable.reachable_single
             apply OriginReachableStep.reachable
         cases hinv.origin_nearest_reachable (x := y.origin) _ _ _ _ hpx hreachable with
         | inl hleq =>
@@ -75,9 +72,9 @@ theorem no_cross_origin (x y : YjsItem A) :
           | inr hlt =>
             have hltorigin : YjsLt' P y.origin y := by
               obtain ⟨ yo, yr, yid, yc ⟩ := y
-              constructor; apply YjsLt.ltOriginOrder <;> try assumption
+              constructor; apply YjsLt.ltOrigin <;> try assumption
+              apply YjsLeq.leqSame
               . apply hP.closedLeft; assumption
-              . apply OriginLt.lt_left
             cases yjs_lt_anti_symm hP hinv y.origin y hltorigin hlt
           | inl heq =>
             obtain ⟨ yo, yr, yid, yc ⟩ := y
@@ -91,25 +88,25 @@ theorem no_cross_origin (x y : YjsItem A) :
         | inl hleq =>
           obtain ⟨ h, hleq ⟩ := hleq
           left
-          have hreachable : OriginReachable A (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) xr.origin := by
-            apply Relation.TransGen.tail
-            apply Relation.TransGen.single
+          have hreachable : OriginReachable (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) xr.origin := by
+            apply OriginReachable.reachable_head
             apply OriginReachableStep.reachable_right
-            obtain ⟨ xro, xrr, xrid, xrc ⟩ := xr
-            apply OriginReachableStep.reachable
+            . apply OriginReachable.reachable_single
+              obtain ⟨ xro, xrr, xrid, xrc ⟩ := xr
+              apply OriginReachableStep.reachable
           have ⟨ _, hlt ⟩ : YjsLeq' P xr.origin xo := by
             cases hinv.origin_nearest_reachable _ _ _ _ _ hpx hreachable with
             | inl hleq => assumption
             | inr hleq =>
               have hlt : YjsLt' P xr.origin xr := by
                 obtain ⟨ xro, xrr, xrid, xrc ⟩ := xr
-                constructor; apply YjsLt.ltOriginOrder <;> try assumption
-                . apply hP.closedLeft
-                  apply hP.closedRight
-                  assumption
+                constructor; apply YjsLt.ltOrigin <;> try assumption
                 . apply hP.closedRight
                   assumption
-                apply OriginLt.lt_left
+                . apply YjsLeq.leqSame
+                  apply hP.closedLeft
+                  apply hP.closedRight
+                  assumption
               apply yjs_leq'_imp_eq_or_yjs_lt' at hleq
               cases hleq with
               | inl heq =>
@@ -122,13 +119,12 @@ theorem no_cross_origin (x y : YjsItem A) :
         | inr hlt =>
           obtain ⟨ _, hlt ⟩ := hlt
           right
-          have ⟨ _, hlt' ⟩ : YjsLt' P (YjsPtr.itemPtr (YjsItem.item xo (YjsPtr.itemPtr xr) xid xc)) xr := by
-            constructor; apply YjsLt.ltOriginOrder <;> try assumption
-            . apply hP.closedRight; assumption
-            . apply OriginLt.lt_right
-          apply yjs_leq_p_trans (inv := hinv) (y := xr) <;> try assumption
-          right
-          assumption
+          have ⟨ h', hlt' ⟩ : YjsLt' P (YjsPtr.itemPtr (YjsItem.item xo (YjsPtr.itemPtr xr) xid xc)) xr := by
+            constructor; apply YjsLt.ltRightOrigin <;> try assumption
+            . apply YjsLeq.leqSame
+              apply hP.closedRight; assumption
+          apply yjs_leq_p_trans (h1 := h' + 1) (inv := hinv) (y := xr) <;> try assumption
+          apply YjsLeq.leqLt; assumption
   . cases hy
     right; assumption
   . obtain ⟨ _, hconflict ⟩ := hconflict
@@ -142,4 +138,4 @@ theorem no_cross_origin (x y : YjsItem A) :
       left
       exists 0
       left
-      eq_refl
+      apply hP.closedLeft; assumption

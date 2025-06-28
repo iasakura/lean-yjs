@@ -1,6 +1,5 @@
 import LeanYjs.Item
 import LeanYjs.ActorId
-import LeanYjs.ItemOriginOrder
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
@@ -18,13 +17,13 @@ lemma conflict_lt_x_origin_lt_y {A} {P : ItemSet A} (x : YjsItem A) y :
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor
     simp [YjsItem.origin] at *
-    apply YjsLt.ltOriginOrder <;> try assumption
-    . apply yjs_lt_p1 at hlt1
-      apply hclosed.closedLeft
-      assumption
+    apply YjsLt.ltOrigin <;> try assumption
     . apply yjs_lt_p1 at hlt2
       assumption
-    apply OriginLt.lt_left
+    . apply YjsLeq.leqSame
+      apply yjs_lt_p1 at hlt2
+      apply hclosed.closedLeft at hlt2
+      assumption
 
 lemma conflict_lt_y_origin_lt_x {A} {P : ItemSet A} x (y : YjsItem A) :
   IsClosedItemSet P ->
@@ -35,17 +34,17 @@ lemma conflict_lt_y_origin_lt_x {A} {P : ItemSet A} x (y : YjsItem A) :
     constructor
     apply YjsLt.ltOrigin
     . apply yjs_lt_p1; assumption
-    . assumption
+    . right; assumption
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor
     simp [YjsItem.origin] at *
-    apply YjsLt.ltOriginOrder <;> try assumption
-    . apply yjs_lt_p1 at hlt1
-      apply hclosed.closedLeft
-      assumption
+    apply YjsLt.ltOrigin <;> try assumption
     . apply yjs_lt_p1 at hlt1
       assumption
-    apply OriginLt.lt_left
+    . apply YjsLeq.leqSame
+      apply yjs_lt_p1 at hlt1
+      apply hclosed.closedLeft at hlt1
+      assumption
 
 lemma conflict_lt_y_lt_x_right_origin {A} {P : ItemSet A} (x : YjsItem A) y :
   ConflictLt P h x y -> YjsLt' P y x.rightOrigin := by
@@ -91,12 +90,14 @@ lemma conflict_lt_trans {A} {P : ItemSet A} {inv : ItemSetInvariant P} :
   cases hltxrz with
   | inl hltxrz =>
     obtain ⟨ _, hltxrz ⟩ := hltxrz
-    apply yjs_right_origin_leq_lt <;> assumption
+    constructor
+    apply YjsLt.ltRightOrigin <;> assumption
   | inr hltzxr =>
     cases hltxzo with
     | inl hltxzo =>
       obtain ⟨ _, hltxzo ⟩ := hltxzo
-      apply yjs_origin_leq_lt <;> assumption
+      constructor
+      apply YjsLt.ltOrigin <;> assumption
     | inr hltzox =>
       sorry
 
@@ -180,18 +181,18 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
   -- then, we prove the main parts
   rcases hxycases with
   ⟨ x', hxeq, hleq ⟩
-  | ⟨ y', hyeq, hxy, hleq  ⟩
+  | ⟨ y', hyeq, h, hleq  ⟩
   | hxyconflict
   . subst hxeq
     obtain ⟨ o, r, id, c ⟩ := x'
     simp [YjsItem.rightOrigin] at hleq
     obtain ⟨ h', hleq ⟩ := hleq
     cases hleq with
-    | inl heq =>
-      subst heq
+    | leqSame =>
       constructor
-      apply YjsLt.ltRightOrigin <;> assumption
-    | inr hlt =>
+      apply YjsLt.ltRightOrigin (h1 + 1) <;> try assumption
+      right; assumption
+    | leqLt h _ _ hlt =>
       have hsize : r.size + y.size + z.size < total_size := by
         simp [YjsItem.size, YjsPtr.size] at hsize
         omega
@@ -199,7 +200,8 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
         apply hP.closedRight; assumption
       obtain ⟨ h, hlt ⟩ := ih (r.size + y.size + z.size) hsize r y z hpr hy hz _ hlt _ hyz (refl _)
       constructor
-      apply YjsLt.ltRightOrigin <;> assumption
+      apply YjsLt.ltRightOrigin (h + 1) <;> try assumption
+      right; assumption
   . subst hyeq
     rcases hyzcases with
     ⟨ y', hyeq, hyz, hleq' ⟩
@@ -212,28 +214,25 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
       have ⟨ hor, horlt ⟩ : YjsLt' P o r := by
         apply inv.origin_not_leq <;> assumption
       cases hleq with
-      | inl heq =>
-        subst heq
+      | leqSame =>
         cases hleq' with
-        | inl heq' =>
-          subst heq'
+        | leqSame =>
           constructor; assumption
-        | inr hlt' =>
-          apply ih (x.size + r.size + z.size) _ x r z _ _ _ _ horlt _ hlt' <;> try assumption
+        | leqLt h _ _ hlt' =>
+          apply ih (o.size + r.size + z.size) _ o r z _ _ _ _ horlt _ hlt' <;> try assumption
           simp
           simp [YjsItem.size, YjsPtr.size] at hsize
           omega
           apply hP.closedRight; assumption
-      | inr hlt =>
+      | leqLt h _ _ hlt =>
         cases hleq' with
-        | inl heq' =>
-          subst heq'
-          apply ih (x.size + o.size + r.size) _ x o r _ _ _ _ hlt _ horlt <;> try assumption
+        | leqSame =>
+          apply ih (x.size + o.size + z.size) _ x o z _ _ _ _ hlt _ horlt <;> try assumption
           simp
           simp [YjsItem.size, YjsPtr.size] at hsize
           omega
           apply hP.closedLeft; assumption
-        | inr hlt' =>
+        | leqLt h _ _ hlt' =>
           have ⟨ h', hoz ⟩ : YjsLt' P o z := by
             apply ih (o.size + r.size + z.size) _ o r z _ _ _ _ horlt _ hlt' <;> try assumption
             simp
@@ -249,11 +248,11 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
     . subst hzeq
       obtain ⟨ o, r, id, c ⟩ := z'
       cases hleq' with
-      | inl heq =>
-        subst heq
+      | leqSame =>
         constructor
-        apply YjsLt.ltOrigin <;> try assumption
-      | inr hlt' =>
+        apply YjsLt.ltOrigin (h0 + 1) _ _ _ _ <;> try assumption
+        right; assumption
+      | leqLt h _ _ hlt' =>
         have hsize : x.size + (YjsPtr.itemPtr y').size + o.size < total_size := by
           simp [YjsItem.size, YjsPtr.size] at *
           omega
@@ -261,15 +260,16 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
           apply hP.closedLeft; assumption
         obtain ⟨ h, hlt ⟩ := ih (x.size + (YjsPtr.itemPtr y').size + o.size) hsize x y' o hx hy hpo _ hxy _ hlt' (refl _)
         constructor
-        apply YjsLt.ltOrigin <;> try assumption
+        apply YjsLt.ltOrigin (h + 1) <;> try assumption
+        right; assumption
     . obtain ⟨ _, hyzconflict ⟩ := hyzconflict
       apply conflict_lt_x_origin_lt_y _ _ hP at hyzconflict
       obtain ⟨ _, hlt' ⟩ := hyzconflict
       cases hleq with
-      | inl heq =>
-        subst heq
+      | leqSame =>
         constructor; assumption
-      | inr hlt =>
+
+      | leqLt h _ _ hlt =>
         apply ih (x.size + y'.origin.size + z.size) _ x y'.origin z _ _ _ _ hlt _ hlt' (refl _) <;> try assumption
         . obtain ⟨ o, r, id, c ⟩ := y'
           simp [ YjsItem.origin, YjsItem.size, YjsPtr.size] at *
@@ -287,10 +287,9 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
       apply conflict_lt_x_lt_y_right_origin at hxyconflict
       obtain ⟨ _, hltxy ⟩ := hxyconflict
       cases hleq' with
-      | inl heq =>
-        subst heq
+      | leqSame =>
         constructor; assumption
-      | inr hlt' =>
+      | leqLt h _ _ hlt' =>
         apply ih (x.size + r.size + z.size) _ x r z _ _ _ _ hltxy _ hlt' <;> try assumption
         simp
         simp [YjsItem.size, YjsPtr.size] at hsize
@@ -298,15 +297,15 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
         apply hP.closedRight; assumption
     . subst hzeq
       suffices YjsLt' P  x z'.origin by
-        obtain ⟨ _', this ⟩ := this
+        obtain ⟨ h', this ⟩ := this
         obtain ⟨ o, r, id, c ⟩ := z'
         constructor
-        apply YjsLt.ltOrigin <;> try assumption
+        apply YjsLt.ltOrigin (h' + 1) <;> try assumption
+        right; assumption
       cases hleq' with
-      | inl heq =>
-        subst heq
+      | leqSame =>
         constructor; assumption
-      | inr hlt' =>
+      | leqLt h _ _ hlt' =>
         obtain ⟨ o, r, id, c ⟩ := z'
         apply ih (x.size + y.size + o.size) _ x y o _ _ _ _ hxy _ hlt' (refl _) <;> try assumption
         . simp [YjsItem.origin, YjsItem.size, YjsPtr.size] at *
@@ -326,10 +325,9 @@ lemma yjs_leq_p_trans1 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : Y
   have hpx : P x := by
     apply yjs_leq_p1 <;> assumption
   cases hleq with
-  | inl heq =>
-    rw [heq]
+  | leqSame =>
     exists h2
-  | inr hlt =>
+  | leqLt h _ _ hlt =>
     apply yjs_lt_trans (y := y) <;> try assumption
     constructor; assumption
     constructor; assumption
@@ -344,10 +342,9 @@ lemma yjs_leq_p_trans2 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : Y
   have hpz : P z := by
     apply yjs_leq_p2 <;> assumption
   cases hleq with
-  | inl heq =>
-    rw [<-heq]
+  | leqSame =>
     exists h1
-  | inr hlt =>
+  | leqLt h _ _ hlt =>
     apply yjs_lt_trans hclosed (y := y) <;> try assumption
     constructor; assumption
     constructor; assumption
@@ -356,17 +353,15 @@ lemma yjs_leq_p_trans {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : Yj
   IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLeq A P h x z := by
   intros hclosed hleq1 hleq2
   cases hleq1 with
-  | inl heq =>
-    rw [heq]
+  | leqSame =>
     exists h2
-  | inr hlt =>
+  | leqLt h _ _ hlt =>
     cases hleq2 with
-    | inl heq =>
-      rw [<-heq]
-      exists h1
+    | leqSame =>
+      constructor
       right
       assumption
-    | inr hlt =>
+    | leqLt h _ _ hlt =>
       have hpx : P x := by
         apply yjs_lt_p1 <;> assumption
       have hpy : P y := by

@@ -1,10 +1,7 @@
 import LeanYjs.Item
 import LeanYjs.ItemSet
-import LeanYjs.ItemOriginOrder
 import LeanYjs.ActorId
 import LeanYjs.ItemOrder
-
-import Mathlib.Tactic.Set
 
 variable {A : Type} [BEq A]
 
@@ -17,7 +14,7 @@ structure ItemSetInvariant where
     YjsLt' P o r
   origin_nearest_reachable : ∀ (o r c id x),
     P (YjsItem.item o r id c) ->
-    OriginReachable A (YjsItem.item o r id c) x ->
+    OriginReachable (YjsItem.item o r id c) x ->
     (∃ h, YjsLeq P h x o) ∨ (∃ h, YjsLeq P h r x)
   same_id_ordered : ∀ (x y : YjsItem A),
     P x -> P y ->
@@ -50,21 +47,19 @@ lemma not_ptr_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : Yj
   | ltConflict h _ _ hlt =>
     cases hlt
   | ltOriginOrder o _ po pf hlt =>
+    cases hlt
+  | ltRightOrigin h o r id c po hp hlt =>
     cases hlt with
-    | lt_right o' _ id  c =>
-      have ⟨ h', hlt ⟩ : YjsLt' P o' YjsPtr.first := by
-        apply hinv.origin_not_leq; assumption
-      have hsize' : o'.size < n := by
+    | leqLt h _ _ hlt =>
+      have hsize' : r.size < n := by
         simp [YjsPtr.size, YjsItem.size] at *
         omega
-      apply ih o'.size hsize' h' o' <;> try assumption
+      apply ih _ hsize' h r <;> try assumption
       simp
-  | ltRightOrigin h o r id c po hp hlt =>
-    have hsize' : r.size < n := by
-      simp [YjsPtr.size, YjsItem.size] at *
-      omega
-    apply ih _ hsize' h r <;> try assumption
-    simp
+    | leqSame =>
+      have ⟨ _, hlt ⟩ : YjsLt' P o YjsPtr.first := by
+        apply hinv.origin_not_leq; assumption
+      apply ih (o.size) (by simp [YjsPtr.size, YjsItem.size] at hsize; omega) _ o (refl _) hlt
 
 lemma not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
   intros hinv h o
@@ -76,8 +71,16 @@ lemma not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : Yjs
   | ltConflict h _ _ hlt =>
     cases hlt
   | ltOriginOrder _ _ _ hpo hlt =>
+    cases hlt
+  | ltOrigin h x o r id c hpo hlt =>
     cases hlt with
-    | lt_left o' r id c =>
+    | leqLt h _ _ hlt =>
+      have hsize' : o.size < n := by
+        simp [YjsPtr.size, YjsItem.size] at *
+        omega
+      apply ih _ hsize' h o <;> try assumption
+      simp
+    | leqSame _ =>
       have ⟨ h', hlt ⟩ : YjsLt' P YjsPtr.last r := by
         apply hinv.origin_not_leq; assumption
       have hsize' : r.size < n := by
@@ -85,12 +88,6 @@ lemma not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : Yjs
         omega
       apply ih r.size hsize' h' r <;> try assumption
       simp
-  | ltOrigin h x o r id c hpo hlt =>
-    have hsize' : o.size < n := by
-      simp [YjsPtr.size, YjsItem.size] at *
-      omega
-    apply ih _ hsize' h o <;> try assumption
-    simp
 
 lemma not_last_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.first := by
   intros hinv h
@@ -102,10 +99,9 @@ lemma not_last_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @Y
   | ltOriginOrder _ _ _ _ hlt =>
     cases hlt
 
-
 lemma not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.first YjsPtr.first := by
   intros hinv h hlt
-  have h: OriginLt A YjsPtr.first YjsPtr.first := by
+  have h: @OriginLt A YjsPtr.first YjsPtr.first := by
     cases hlt with
     | ltConflict h _ _ hlt =>
       cases hlt
@@ -115,7 +111,7 @@ lemma not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @
 
 lemma not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.last := by
   intros hinv h hlt
-  have h: OriginLt A YjsPtr.last YjsPtr.last := by
+  have h: @OriginLt A YjsPtr.last YjsPtr.last := by
     cases hlt with
     | ltConflict h _ _ hlt =>
       cases hlt
