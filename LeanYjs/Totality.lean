@@ -257,8 +257,7 @@ lemma yjs_lt_total {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
                           obtain ⟨ h, hlt ⟩ := hlt
                           have ⟨ h', hlt ⟩ : ∃ h', YjsLt P h' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) (YjsPtr.itemPtr (YjsItem.item xo yr xid yc)) := by
                             constructor
-                            apply YjsLt.ltOrigin (h + 1) <;> try assumption
-                            right; assumption
+                            apply YjsLt.ltOrigin h <;> try assumption
                           left
                           constructor
                           right
@@ -269,8 +268,7 @@ lemma yjs_lt_total {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
                             obtain ⟨ h, hlt ⟩ := hlt
                             have ⟨ h', hlt ⟩ : ∃ h', YjsLt P h' (YjsPtr.itemPtr (YjsItem.item xo yr xid yc)) (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) := by
                               constructor
-                              apply YjsLt.ltOrigin (h + 1) <;> try assumption
-                              right; assumption
+                              apply YjsLt.ltOrigin h <;> try assumption
                             right
                             constructor
                             apply hlt
@@ -280,8 +278,7 @@ lemma yjs_lt_total {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
                               obtain ⟨ h, hlt ⟩ := hlt
                               have ⟨ h, hlt ⟩ : ∃ h', YjsLt P h' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) (YjsPtr.itemPtr (YjsItem.item xo yr xid yc)) := by
                                 constructor
-                                apply YjsLt.ltRightOrigin (h + 1) <;> try assumption
-                                right; assumption
+                                apply YjsLt.ltRightOrigin h <;> try assumption
                               left
                               constructor
                               right
@@ -290,8 +287,7 @@ lemma yjs_lt_total {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
                               obtain ⟨ h, hlt ⟩ := hlt
                               have ⟨ h, hlt ⟩ : ∃ h, YjsLt P h (YjsItem.item xo yr xid yc) (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) := by
                                 constructor
-                                apply YjsLt.ltRightOrigin (h + 1) <;> try assumption
-                                right; assumption
+                                apply YjsLt.ltRightOrigin h <;> try assumption
                               right
                               constructor
                               assumption

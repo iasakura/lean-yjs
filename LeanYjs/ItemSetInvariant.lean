@@ -15,15 +15,15 @@ structure ItemSetInvariant where
   origin_nearest_reachable : ∀ (o r c id x),
     P (YjsItem.item o r id c) ->
     OriginReachable (YjsItem.item o r id c) x ->
-    (∃ h, YjsLeq P h x o) ∨ (∃ h, YjsLeq P h r x)
+    (YjsLeq' P x o) ∨ (YjsLeq' P r x)
   same_id_ordered : ∀ (x y : YjsItem A),
     P x -> P y ->
     x ≠ y ->
     x.id = y.id ->
-    YjsLt' P x y.origin ∨
-    YjsLt' P y x.origin ∨
-    YjsLt' P x.rightOrigin y ∨
-    YjsLt' P y.rightOrigin x
+    YjsLeq' P x y.origin ∨
+    YjsLeq' P y x.origin ∨
+    YjsLeq' P x.rightOrigin y ∨
+    YjsLeq' P y.rightOrigin x
 
 @[simp] lemma origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.origin := by
   intros hclosed x px

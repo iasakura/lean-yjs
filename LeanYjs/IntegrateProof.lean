@@ -62,46 +62,244 @@ omit [BEq A] in lemma arr_set_closed_push (arr : Array (YjsItem A)) (item : YjsI
     | last =>
       simp
 
-lemma yjs_lt_mono (P Q : ItemSet A) (x y : YjsItem A) :
+omit [BEq A] lemma yjs_lt_mono (P Q : ItemSet A) (x y : YjsPtr A) :
   IsClosedItemSet P ->
-  IsClosedItemSet Q ->
   ItemSetInvariant P ->
-  ItemSetInvariant Q ->
   (∀ a, P a -> Q a) ->
-  YjsLt' P x y ->
-  YjsLt' Q x y := by
-  intros hclosedP hclosedQ hinvP hinvQ hsubset hlt
-  apply yjs_lt'_cases at hlt
-  rcases hlt with
+  YjsLt P h x y ->
+  YjsLt Q h x y := by
+  intros hclosedP hinvP hsubset
+  intros hlt
+  revert hlt x y
+  apply Nat.strongRec' (p := fun h => ∀ x y, YjsLt P h x y → YjsLt Q h x y)
+  intros n ih x y hlt
   cases hlt with
-  | inl heq =>
-    subst heq
-    simp [YjsLt', ItemSetInvariant] at *
+  | ltOriginOrder _  _ _ _ hlt =>
+    apply YjsLt.ltOriginOrder
+    . apply hsubset ; assumption
+    . apply hsubset ; assumption
+    . assumption
+  | ltConflict _ _ _ hlt =>
+    cases hlt with
+    | ltOriginDiff =>
+      apply YjsLt.ltConflict
+      apply ConflictLt.ltOriginDiff
+      all_goals (apply ih; unfold max4; omega)
+      all_goals (assumption)
+    | ltOriginSame =>
+      apply YjsLt.ltConflict
+      apply ConflictLt.ltOriginSame <;> try assumption
+      all_goals (apply ih; omega)
+      all_goals (assumption)
+  | ltOrigin _ _ _ _ _ _ _ hlt =>
+    apply YjsLt.ltOrigin
+    . apply hsubset ; assumption
+    . cases hlt with
+      | leqSame =>
+        apply YjsLeq.leqSame
+        apply hsubset ; assumption
+      | leqLt =>
+        apply YjsLeq.leqLt
+        apply ih <;> try assumption
+        omega
+  | ltRightOrigin _ _ _ _ _ _ _ hlt =>
+    apply YjsLt.ltRightOrigin
+    . apply hsubset ; assumption
+    . cases hlt with
+      | leqSame =>
+        apply YjsLeq.leqSame
+        apply hsubset ; assumption
+      | leqLt =>
+        apply YjsLeq.leqLt
+        apply ih <;> try assumption
+        omega
+
+lemma yjs_lt'_mono :
+  ∀ (P Q : ItemSet A) (x y : YjsPtr A),
+  IsClosedItemSet P ->
+  ItemSetInvariant P ->
+  (∀ a, P a -> Q a) ->
+  YjsLt' P x y -> YjsLt' Q x y := by
+  intros P Q x y hclosedP hinvP hsubset hlt
+  obtain ⟨ _, hlt ⟩ := hlt
+  constructor
+  apply yjs_lt_mono P Q x y hclosedP hinvP hsubset hlt
+
+lemma yjs_leq'_mono :
+  ∀ (P Q : ItemSet A) (x y : YjsPtr A),
+  IsClosedItemSet P ->
+  ItemSetInvariant P ->
+  (∀ a, P a -> Q a) ->
+  YjsLeq' P x y -> YjsLeq' Q x y := by
+  intros P Q x y hclosedP hinvP hsubset hleq
+  obtain ⟨ _, hleq ⟩ := hleq
+  cases hleq with
+  | leqSame =>
+    exists 0
+    apply YjsLeq.leqSame
+    apply hsubset; assumption
+  | leqLt =>
+    constructor
+    apply YjsLeq.leqLt
+    apply yjs_lt_mono P Q x y hclosedP hinvP hsubset
     assumption
-  | inr hlt' =>
-    apply yjs_lt'_p1 hlt'
-    assumption
+
+lemma push_subset {A} (arr : Array (YjsItem A)) (a : YjsItem A) :
+  ∀ x, ArrSet arr x -> ArrSet (Array.push arr a) x := by
+  intros x hin
+  unfold Array.push
+  unfold ArrSet at *
+  simp
+  cases x <;> (simp at *)
+  left; assumption
+
+lemma reachable_in {A} (arr : Array (YjsItem A)) (a : YjsPtr A) :
+  IsClosedItemSet (ArrSet arr) ->
+  ∀ x, OriginReachable a x -> ArrSet arr a -> ArrSet arr x := by
+  intros hclosed x hreach hin
+  induction hreach with
+  | reachable_head x a y step h ih =>
+    cases step with
+    | reachable =>
+      simp [ArrSet] at hin
+      apply hclosed.closedLeft at hin
+      apply ih
+      assumption
+    | reachable_right =>
+      simp [ArrSet] at hin
+      apply hclosed.closedRight at hin
+      apply ih
+      assumption
+  | reachable_single _ _ hstep =>
+    cases hstep with
+    | reachable =>
+      simp [ArrSet] at hin
+      apply hclosed.closedLeft at hin
+      assumption
+    | reachable_right =>
+      simp [ArrSet] at hin
+      apply hclosed.closedRight at hin
+      assumption
 
 lemma item_set_invariant_push (arr : Array (YjsItem A)) (item : YjsItem A) :
   ItemSetInvariant (ArrSet arr) ->
   ArrSetClosed arr ->
   YjsLt' (ArrSet arr) item.origin item.rightOrigin ->
+  (∀ x, OriginReachable item x -> YjsLeq' (ArrSet arr) x item.origin ∨ YjsLeq' (ArrSet arr) item.rightOrigin x) ->
+  (∀ x : YjsItem A, ArrSet arr x -> x.id = item.id -> YjsLeq' (ArrSet arr) x item.origin ∨ YjsLeq' (ArrSet arr) item.rightOrigin x) ->
   ItemSetInvariant (ArrSet (Array.push arr item)) := by
-  intros hinv hclosed horigin
-  constructor
+  intros hinv hclosed horigin hreach hsameid
+  apply ItemSetInvariant.mk
   . intros o r c id hitem
     simp [ArrSet] at hitem
     cases hitem with
     | inl hin =>
       apply hinv.origin_not_leq at hin
-  . intros x y hxy
-    apply yjs_lt'_imp_eq_or_yjs_lt' at hxy
-    cases hxy with
-    | inl heq =>
+      apply yjs_lt'_mono _ _ _ _  hclosed hinv _ hin
+      . intros a hlt
+        simp [ArrSet] at *
+        cases a <;> simp at *
+        left; assumption
+    | inr heq =>
       subst heq
-      simp [ArrSet]
-    | inr hlt =>
-      apply yjs_lt'_p1 hlt; assumption
+      simp [YjsItem.origin, YjsItem.rightOrigin] at horigin
+      apply yjs_lt'_mono _ _ _ _  hclosed hinv _ horigin
+      . intros a hlt
+        simp [ArrSet] at *
+        cases a <;> simp at *
+        left; assumption
+  . intros o r c id x hin hreachable
+    simp [ArrSet] at hin
+    cases hin with
+    | inl hin =>
+      obtain hor := hinv.origin_nearest_reachable _ _ _ _ _ hin hreachable
+      cases hor with
+      | inl hor =>
+        left
+        apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hor
+        intros
+        apply push_subset; assumption
+      | inr hor =>
+        right
+        apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hor
+        intros
+        apply push_subset; assumption
+    | inr heq =>
+      subst heq
+      simp [YjsItem.origin, YjsItem.rightOrigin] at *
+      cases hreach _ hreachable with
+      | inl hor =>
+        left
+        apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hor
+        intros
+        apply push_subset; assumption
+      | inr hor =>
+        right
+        apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hor
+        intros
+        apply push_subset; assumption
+  . intros x y hinx hiny hineq hid
+    simp [ArrSet] at *
+    cases hinx with
+    | inl hinx =>
+      cases hiny with
+      | inl hiny =>
+        obtain hor := hinv.same_id_ordered _ _ hinx hiny hineq hid
+        cases hor with
+        | inl hleq =>
+          left
+          apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hleq
+          apply push_subset
+        | inr hleq =>
+          right
+          cases hleq with
+          | inl hleq =>
+            left
+            apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hleq
+            apply push_subset
+          | inr hleq =>
+            right
+            cases hleq with
+            | inl hleq =>
+              left
+              apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hleq
+              apply push_subset
+            | inr hleq =>
+              right
+              apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hleq
+              apply push_subset
+      | inr hleq =>
+        subst hleq
+        cases hsameid _ hinx hid with
+        | inl hleq =>
+          left
+          apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hleq
+          apply push_subset
+        | inr hleq =>
+          right
+          right
+          right
+          apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hleq
+          apply push_subset
+    | inr hinx =>
+      subst hinx
+      cases hiny with
+      | inl hiny =>
+        cases hsameid _ hiny (by rw [hid]) with
+        | inl hleq =>
+          right
+          left
+          apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hleq
+          apply push_subset
+        | inr hleq =>
+          right
+          right
+          left
+          apply yjs_leq'_mono _ _ _ _ hclosed hinv _ hleq
+          apply push_subset
+      | inr heqy =>
+        subst heqy
+        cases hineq (refl _)
 
 inductive ArrayPairwise {α : Type} (f : α -> α -> Prop) : Array α -> Prop where
 | empty : ArrayPairwise f #[] -- empty array is pairwise
