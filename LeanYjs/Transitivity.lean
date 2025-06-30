@@ -66,8 +66,15 @@ lemma conflict_lt_x_lt_y_right_origin {A} {P : ItemSet A} x (y : YjsItem A) :
 
 lemma conflict_lt_trans {A} {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
-  ∀ (x y z : YjsPtr A), ConflictLt P h1 x y -> ConflictLt P h2 y z -> YjsLt' P x z := by
-  intros hclosed x y z hxy hyz
+  ∀ (x y z : YjsPtr A),
+  (∀ m < x.size + y.size + z.size,
+  ∀ (x y z : YjsPtr A),
+    P x →
+      P y →
+        P z →
+          ∀ (h0 : ℕ), YjsLt P h0 x y → ∀ (h1 : ℕ), YjsLt P h1 y z → x.size + y.size + z.size = m → ∃ h, YjsLt P h x z) ->
+  ConflictLt P h1 x y -> ConflictLt P h2 y z -> YjsLt' P x z := by
+  intros hclosed x y z ih hxy hyz
   have hP : P x := by
     apply conflict_lt_p1; assumption
   have hy : P y := by
@@ -87,6 +94,31 @@ lemma conflict_lt_trans {A} {P : ItemSet A} {inv : ItemSetInvariant P} :
     YjsLeq' P (YjsItem.item xo xr xid xc) zo ∨ YjsLt' P zo (YjsItem.item xo xr xid xc) := by
     apply yjs_lt_total <;> try assumption
     apply hclosed.closedLeft; assumption
+
+  have hyzr : YjsLt' P y zr := by
+    cases hyz <;> try (constructor; assumption)
+
+  have hxoy : YjsLt' P xo y := by
+    cases hxy <;> try (constructor; assumption)
+    constructor
+    apply YjsLt.ltOrigin <;> try assumption
+    left
+    apply hclosed.closedLeft; assumption
+
+  have hltxzr : YjsLt' P (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) zr := by
+    obtain ⟨ _, hyzr ⟩ := hyzr
+    apply ih (y := y) ((YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + y.size + zr.size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ hP hy (by apply hclosed.closedRight; assumption) <;> try simp
+    . apply YjsLt.ltConflict
+      assumption
+    . assumption
+
+  have hltxoz : YjsLt' P xo (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)) := by
+    obtain ⟨ _, hxoy ⟩ := hxoy
+    apply ih (y := y) (xo.size + y.size + (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)).size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ (by apply hclosed.closedLeft; assumption) hy hz <;> try simp
+    . assumption
+    . apply YjsLt.ltConflict
+      assumption
+
   cases hltxrz with
   | inl hltxrz =>
     obtain ⟨ _, hltxrz ⟩ := hltxrz
@@ -99,7 +131,55 @@ lemma conflict_lt_trans {A} {P : ItemSet A} {inv : ItemSetInvariant P} :
       constructor
       apply YjsLt.ltOrigin <;> assumption
     | inr hltzox =>
-      sorry
+      cases hxy with
+      | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+        cases hyz with
+        | ltOriginDiff h5 h6 h7 h8 l3 l4 r3 r4 id3 id4 c3 c4 hlt5 hlt6 hlt7 hlt8 =>
+          obtain ⟨ _, _ ⟩ := hltzxr
+          obtain ⟨ _, _ ⟩ := hltzox
+          obtain ⟨ _, _ ⟩ := hltxzr
+          obtain ⟨ _, _ ⟩ := hltxoz
+          have hlt : zo.size + l2.size + xo.size <
+            (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size +
+            (YjsPtr.itemPtr (YjsItem.item l2 r2 id2 c2)).size +
+            (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)).size := by
+            simp [YjsItem.size, YjsPtr.size] at *
+            omega
+          obtain ⟨ _, hlt ⟩ := ih (y := l2) (zo.size + l2.size + xo.size) hlt zo xo (by apply hclosed.closedLeft; assumption) (by apply hclosed.closedLeft; assumption) (by apply hclosed.closedLeft; assumption) _ hlt5 _ hlt1 (refl _)
+          constructor
+          apply YjsLt.ltConflict
+          apply ConflictLt.ltOriginDiff <;> try assumption
+        | ltOriginSame h5 h6 l3 r3 id3 id4 c3 c4 hlt5 hlt6 _ =>
+          obtain ⟨ _, _ ⟩ := hltzxr
+          obtain ⟨ _, _ ⟩ := hltzox
+          obtain ⟨ _, _ ⟩ := hltxzr
+          obtain ⟨ _, _ ⟩ := hltxoz
+
+          constructor
+          apply YjsLt.ltConflict
+          apply ConflictLt.ltOriginDiff <;> try assumption
+      | ltOriginSame h1 h2 l1 r1 id1 id2 c1 c2 hlt1 hlt2 _ =>
+        cases hyz with
+        | ltOriginDiff h5 h6 h7 h8 l3 l4 r3 r4 id3 id4 c3 c4 hlt5 hlt6 hlt7 hlt8 =>
+          obtain ⟨ _, _ ⟩ := hltzxr
+          obtain ⟨ _, _ ⟩ := hltzox
+          obtain ⟨ _, _ ⟩ := hltxzr
+          obtain ⟨ _, _ ⟩ := hltxoz
+
+          constructor
+          apply YjsLt.ltConflict
+          apply ConflictLt.ltOriginDiff <;> try assumption
+        | ltOriginSame h5 h6 l3 r3 id3 id4 c3 c4 hlt5 hlt6 _ =>
+          obtain ⟨ _, _ ⟩ := hltzxr
+          obtain ⟨ _, _ ⟩ := hltzox
+          obtain ⟨ _, _ ⟩ := hltxzr
+          obtain ⟨ _, _ ⟩ := hltxoz
+
+          constructor
+          apply YjsLt.ltConflict
+          apply ConflictLt.ltOriginSame <;> try assumption
+          unfold ActorId at *
+          omega
 
 lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
@@ -313,7 +393,8 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
         . apply hP.closedLeft; assumption
     . obtain ⟨ _, hxyconflict ⟩ := hxyconflict
       obtain ⟨ _, hyzconflict ⟩ := hyzconflict
-      apply conflict_lt_trans hP _ _ _ hxyconflict hyzconflict; assumption
+      subst hsize
+      apply conflict_lt_trans hP _ _ _ ih hxyconflict hyzconflict; assumption
 
 lemma yjs_leq_p_trans1 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
   IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLt A P h2 y z -> ∃ h, @YjsLt A P h x z := by
