@@ -95,29 +95,28 @@ theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvarian
   simp at hintegrate
 
   generalize hloop :
-    forIn (m := Except IntegrateError) (β := MProd _ _) (List.range' (leftIdx.toNat + 1) (rightIdx.toNat - (leftIdx.toNat + 1)) 1) ⟨leftIdx.toNat + 1, false⟩
-      (fun i r => do
-      let other ← getExcept arr i
+    forIn (α := ℕ) (m := Except IntegrateError) (β := MProd ℕ Bool) (List.range' 1 ((rightIdx - leftIdx).toNat - 1) 1) ⟨(leftIdx + 1).toNat, false⟩ (fun offset r => do
+      let other ← getExcept arr (leftIdx + ↑offset).toNat
       if r.snd = false then do
           let oLeftIdx ← findIdx other.origin arr
           let oRightIdx ← findIdx other.rightOrigin arr
-          if oLeftIdx < leftIdx ∨ oLeftIdx < 0 then pure (ForInStep.done ⟨i, r.snd⟩)
+          if oLeftIdx < leftIdx then pure (ForInStep.done ⟨(leftIdx + ↑offset).toNat, r.snd⟩)
             else
-              if oLeftIdx = leftIdx ⊔ 0 then
-                if other.id < newItem.id then pure (ForInStep.yield ⟨i, false⟩)
+              if oLeftIdx = leftIdx then
+                if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, false⟩)
                 else
-                  if oRightIdx = rightIdx ⊔ 0 then pure (ForInStep.done ⟨i, r.snd⟩)
-                  else pure (ForInStep.yield ⟨i, true⟩)
-              else pure (ForInStep.yield ⟨i, r.snd⟩)
+                  if oRightIdx = rightIdx then pure (ForInStep.done ⟨(leftIdx + ↑offset).toNat, r.snd⟩)
+                  else pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, true⟩)
+              else pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, r.snd⟩)
         else do
           let oLeftIdx ← findIdx other.origin arr
           let oRightIdx ← findIdx other.rightOrigin arr
-          if oLeftIdx < leftIdx ∨ oLeftIdx < 0 then pure (ForInStep.done ⟨r.fst, r.snd⟩)
+          if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
             else
-              if oLeftIdx = leftIdx ⊔ 0 then
+              if oLeftIdx = leftIdx then
                 if other.id < newItem.id then pure (ForInStep.yield ⟨r.fst, false⟩)
                 else
-                  if oRightIdx = rightIdx ⊔ 0 then pure (ForInStep.done ⟨r.fst, r.snd⟩)
+                  if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
                   else pure (ForInStep.yield ⟨r.fst, true⟩)
               else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
 
@@ -133,9 +132,26 @@ theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvarian
   . intros x state hloop i hlt heq hinv hbody
     rw [List.getElem_range'] at heq; simp at heq
     subst heq
-    generalize hother : getExcept arr (leftIdx.toNat + 1 + i) = other at hbody
+    generalize hother : getExcept arr (leftIdx + ↑(1 + i)).toNat = other at hbody
     obtain ⟨ _ ⟩ | ⟨ other ⟩ := other; cases hbody
     rw [ok_bind] at hbody
+
+    split at hbody
+    all_goals (generalize hoLeftIdx : findIdx other.origin arr = oLeftIdx at hbody)
+    all_goals (obtain ⟨ _ ⟩ | ⟨ oLeftIdx ⟩ := oLeftIdx; cases hbody)
+    all_goals (rw [ok_bind] at hbody)
+
+    all_goals (generalize hoRightIdx : findIdx other.rightOrigin arr = oRightIdx at hbody)
+    all_goals (obtain ⟨ _ ⟩ | ⟨ oRightIdx ⟩ := oRightIdx; cases hbody)
+    all_goals (rw [ok_bind] at hbody)
+
+    simp at hbody
+    rw [Int.toNat_add] at hbody
+    rw [Int.toNat_add] at hbody
+    simp at hbody
+
+    simp at hlt
+
 
 theorem integrate_commutative (A: Type) [BEq A] (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList

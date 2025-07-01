@@ -13,8 +13,8 @@ def findIdx (p : YjsPtr A) (arr : Array (YjsItem A)) : Except IntegrateError Int
     match Array.findIdx? (fun i => i == item) arr with
     | some idx => return idx
     | none => Except.error IntegrateError.notFound
-  | YjsPtr.first => return 0
-  | YjsPtr.last => return (Array.size arr - 1)
+  | YjsPtr.first => return -1
+  | YjsPtr.last => return Array.size arr
 
 def getExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError (YjsItem A) :=
   match arr[idx]? with
@@ -24,12 +24,11 @@ def getExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError (Yjs
 def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
   let leftIdx <- findIdx (YjsItem.origin newItem) arr
   let rightIdx <- findIdx (YjsItem.rightOrigin newItem) arr
-  let leftIdx := Int.toNat leftIdx
-  let rightIdx := Int.toNat rightIdx
 
   let mut scanning := false
-  let mut destIdx := leftIdx + 1
-  for i in [leftIdx+1:rightIdx] do
+  let mut destIdx := (leftIdx + 1).toNat
+  for offset in [1:(rightIdx-leftIdx).toNat] do
+    let i := (leftIdx + offset).toNat
     let other <- getExcept arr i
 
     if !scanning then
