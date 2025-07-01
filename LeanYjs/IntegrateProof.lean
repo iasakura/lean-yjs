@@ -21,7 +21,7 @@ lemma ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
 lemma for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (body : α -> β -> Except ε (ForInStep β)) (I : Option α -> ForInStep β -> Prop) :
   I ls.head? (ForInStep.yield init) ->
   (∀ x (y : β) res i (hlt : i < ls.length),
-    x = ls.get (Fin.mk i hlt) ->
+    x = ls[i] ->
     I x (ForInStep.yield y) ->
     body x y = Except.ok res ->
     I ls[i + 1]? res) ->
@@ -128,7 +128,14 @@ theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvarian
   rw [<-hintegrate]
   -- Here, we prove that the array is still pairwise ordered after the integration.
   -- So, what we need is arr[res.first] < newItem < arr[res.first + 1] (and also, 0 <= res.first <= arr.size)
-  sorry
+  . sorry
+  . sorry
+  . intros x state hloop i hlt heq hinv hbody
+    rw [List.getElem_range'] at heq; simp at heq
+    subst heq
+    generalize hother : getExcept arr (leftIdx.toNat + 1 + i) = other at hbody
+    obtain ⟨ _ ⟩ | ⟨ other ⟩ := other; cases hbody
+    rw [ok_bind] at hbody
 
 theorem integrate_commutative (A: Type) [BEq A] (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
