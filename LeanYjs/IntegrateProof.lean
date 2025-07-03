@@ -72,10 +72,30 @@ def loop_invariant (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem 
   -- when break, loop invariant is not satisfied, so we use last value of current
   let lastChecked := if isDone then current - 1 else current
   let ⟨ dest, scanning ⟩ := state.value
-  (∀ i, i < dest -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P other newItem) ∧
-  (∀ i, dest ≤ i -> i < lastChecked -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P newItem other.rightOrigin ->  YjsLt' P other newItem) ∧
-  (scanning -> ∃ (destItem : YjsItem A), arr[dest]? = some destItem ∧ destItem.origin = newItem.origin) ∧
-  (isDone -> ∃ item : YjsItem A, arr[current]? = some item ∧ YjsLt' P item newItem)
+  ∃ destItem,
+    arr[dest]? = some destItem ∧
+    (∀ i, i < dest -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P other newItem) ∧
+    (∀ i, dest ≤ i -> i < lastChecked ->
+      ∃ item : YjsItem A, some item = arr[i]? ∧
+      (item.origin = newItem.origin ∧ newItem.id < item.id) ∨
+      (YjsLt' P destItem item.origin)) ∧
+    (scanning -> destItem.origin = newItem.origin) ∧
+    (isDone -> ∃ item : YjsItem A, arr[current]? = some item ∧ YjsLt' P item newItem)
+
+-- 補題: itemとの大小関係が保留の区間 [dest, i) について、もしarr[i] < item なら∀j ∈ [dest, i) でarr[j] < item
+-- つまりループの終了条件が満たされたら[dest, i)のすべてでarr[j] < item
+lemma loop_invariant_item_ordered (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (rightIdx : ℕ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :
+  loop_invariant P arr newItem rightIdx (some i) state ->
+  (h_i_size : i < arr.size) ->
+  YjsLt' P arr[i] newItem ->
+  (∀ j, (h_j_dest : state.value.fst ≤ j) -> (h_j_i : j < i) -> YjsLt' P arr[j] newItem) := by
+  intros hinv h_i_size hi_lt j h_j_dest h_j_i
+  generalize hsize : arr[j].size = size
+  revert j
+  generalize h_dest_def : state.value.fst = dest
+  apply Nat.strongRec' (p := fun size => ∀ (j : ℕ), dest ≤ j → ∀ (h_j_i : j < i), arr[j].size = size → YjsLt' P (YjsPtr.itemPtr arr[j]) (YjsPtr.itemPtr newItem))
+  intros n ih j h_j_dest h_j_i heq_n
+  subst heq_n
 
 theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
