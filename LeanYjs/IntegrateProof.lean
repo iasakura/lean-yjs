@@ -63,39 +63,54 @@ lemma for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (b
         constructor; constructor; constructor <;> try assumption
         simp
 
+def stopedIndex (x : Option ℕ) (rightIdx : ℕ) (isDone : Bool) : ℕ :=
+  if isDone then
+    x.getD rightIdx - 1
+  else
+    x.getD rightIdx
+
 def loop_invariant (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (rightIdx : ℕ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :=
-  let isDone := match state with
-  | ForInStep.done _ => true
-  | ForInStep.yield _ => false
   -- when x is none, we are done so current is rightIdx
   let current := x.getD rightIdx
-  -- when break, loop invariant is not satisfied, so we use last value of current
-  let lastChecked := if isDone then current - 1 else current
   let ⟨ dest, scanning ⟩ := state.value
   ∃ destItem,
     arr[dest]? = some destItem ∧
     (∀ i, i < dest -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P other newItem) ∧
-    (∀ i, dest ≤ i -> i < lastChecked ->
+    (∀ i, (h_dest_i : dest ≤ i) -> (h_i_c : i < current) ->
       ∃ item : YjsItem A, some item = arr[i]? ∧
-      (item.origin = newItem.origin ∧ newItem.id < item.id) ∨
-      (YjsLt' P destItem item.origin)) ∧
+        (item.origin = newItem.origin ∧ newItem.id < item.id ∨
+         YjsLt' P destItem item.origin)) ∧
     (scanning -> destItem.origin = newItem.origin) ∧
-    (isDone -> ∃ item : YjsItem A, arr[current]? = some item ∧ YjsLt' P item newItem)
+    (∀item : YjsItem A, getExcept arr current = Except.ok item -> YjsLt' P item newItem)
 
 -- 補題: itemとの大小関係が保留の区間 [dest, i) について、もしarr[i] < item なら∀j ∈ [dest, i) でarr[j] < item
 -- つまりループの終了条件が満たされたら[dest, i)のすべてでarr[j] < item
-lemma loop_invariant_item_ordered (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (rightIdx : ℕ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :
-  loop_invariant P arr newItem rightIdx (some i) state ->
-  (h_i_size : i < arr.size) ->
-  YjsLt' P arr[i] newItem ->
-  (∀ j, (h_j_dest : state.value.fst ≤ j) -> (h_j_i : j < i) -> YjsLt' P arr[j] newItem) := by
+lemma loop_invariant_item_ordered current (arr : Array (YjsItem A)) (newItem : YjsItem A) (rightIdx : ℕ) (state : ForInStep (MProd ℕ Bool)) :
+  loop_invariant P arr newItem rightIdx (some current) state ->
+  (h_i_size : current < arr.size) ->
+  YjsLt' P arr[current] newItem ->
+  (∀ j, (h_j_dest : state.value.fst ≤ j) -> (h_j_i : j < current) -> YjsLt' P arr[j] newItem) := by
   intros hinv h_i_size hi_lt j h_j_dest h_j_i
   generalize hsize : arr[j].size = size
   revert j
   generalize h_dest_def : state.value.fst = dest
-  apply Nat.strongRec' (p := fun size => ∀ (j : ℕ), dest ≤ j → ∀ (h_j_i : j < i), arr[j].size = size → YjsLt' P (YjsPtr.itemPtr arr[j]) (YjsPtr.itemPtr newItem))
+  generalize h_scanning : state.value.snd = scanning
+  apply Nat.strongRec' (p := fun size => ∀ (j : ℕ), dest ≤ j → ∀ (h_j_i : j < current), arr[j].size = size → YjsLt' P (YjsPtr.itemPtr arr[j]) (YjsPtr.itemPtr newItem))
   intros n ih j h_j_dest h_j_i heq_n
   subst heq_n
+  unfold loop_invariant at hinv
+  have heq : state.value = ⟨dest, scanning⟩ := by
+    subst h_dest_def
+    subst h_scanning
+    cases state <;> eq_refl
+  rw [heq] at hinv
+  obtain ⟨ destItem, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hinv
+  simp at h_tbd
+  obtain ⟨ item, heq, h_tbd ⟩ := h_tbd j h_j_dest h_j_i
+  cases h_tbd with
+  | inl h_origin =>
+    obtain ⟨ h_origin_eq, h_id_lt ⟩ := h_origin
+    -- rightOriginで場合分け
 
 theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
