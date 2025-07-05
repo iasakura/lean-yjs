@@ -62,7 +62,77 @@ omit [BEq A] in lemma arr_set_closed_push (arr : List (YjsItem A)) (item : YjsIt
     | last =>
       simp
 
-omit [BEq A] lemma yjs_lt_mono (P Q : ItemSet A) (x y : YjsPtr A) :
+omit [BEq A] in lemma arr_set_item_exists_index (arr arr' : List (YjsItem A)) (item : YjsItem A) :
+  ArrSetClosed arr' ->
+  ArrSet arr item ->
+  (∃ l, l ++ arr = arr') ->
+  ∃ i : Fin arr.length, arr[i] = item := by
+  intros hclosed hitem hsublist
+  induction arr with
+  | nil =>
+    simp [ArrSet] at hitem
+  | cons head arr ih =>
+    simp [ArrSet] at hitem
+    cases hitem with
+    | inl heq =>
+      subst heq
+      have zero_lt_len : 0 < (item :: arr).length := by simp
+      exists Fin.mk 0 zero_lt_len
+    | inr hin =>
+      have hsublist' : ∃ l', l' ++ arr = arr' := by
+        obtain ⟨ l, heq ⟩ := hsublist
+        exists (l ++ [head])
+        rw [List.append_assoc]
+        simp; assumption
+      obtain ⟨ i, hi ⟩ := ih hin hsublist'
+      let i' : Fin ((head :: arr).length) := by
+        simp
+        apply Fin.addNat i 1
+      exists i'
+
+lemma arr_set_closed_exists_index_for_origin :
+  ∀ (arr : List (YjsItem A)) (item : YjsItem A),
+  ArrSetClosed arr ->
+  ArrSet arr item ->
+  item.origin = YjsPtr.first ∨ item.origin = YjsPtr.last ∨ ∃ i : Fin arr.length, arr[i] = item.origin := by
+  intros arr item hclosed hitem
+  obtain ⟨ o, r, id, c ⟩ := item
+  apply hclosed.closedLeft at hitem
+  simp [YjsItem.origin]
+  cases o with
+  | first =>
+    left; simp
+  | last =>
+    right; left; simp
+  | itemPtr o =>
+    right; right
+    obtain ⟨ i, h ⟩ := arr_set_item_exists_index arr arr o hclosed hitem (by exists [])
+    exists i
+    simp
+    assumption
+
+lemma arr_set_closed_exists_index_for_right_origin :
+  ∀ (arr : List (YjsItem A)) (item : YjsItem A),
+  ArrSetClosed arr ->
+  ArrSet arr item ->
+  item.rightOrigin = YjsPtr.first ∨ item.rightOrigin = YjsPtr.last ∨ ∃ i : Fin arr.length, arr[i] = item.rightOrigin := by
+  intros arr item hclosed hitem
+  obtain ⟨ o, r, id, c ⟩ := item
+  apply hclosed.closedRight at hitem
+  simp [YjsItem.rightOrigin]
+  cases r with
+  | first =>
+    left; simp
+  | last =>
+    right; left; simp
+  | itemPtr o =>
+    right; right
+    obtain ⟨ i, h ⟩ := arr_set_item_exists_index arr arr o hclosed hitem (by exists [])
+    exists i
+    simp
+    assumption
+
+omit [BEq A] in lemma yjs_lt_mono (P Q : ItemSet A) (x y : YjsPtr A) :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
   (∀ a, P a -> Q a) ->
@@ -471,3 +541,13 @@ lemma same_yjs_set_unique (xs ys : List (YjsItem A)) :
   . exists []
   . exists []
   . apply hseteq
+
+lemma findIdx_lt_YjsLt' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
+  YjsArrInvariant arr.toList ->
+  findIdx x arr = Except.ok i ->
+  findIdx y arr = Except.ok j ->
+  i < j ->
+  YjsLt' (ArrSet arr.toList) x y := by
+  intros hinv hfindx hfindy hlt
+  obtain ⟨ hclosed, hinv, hsort, huniq ⟩ := hinv
+  sorry
