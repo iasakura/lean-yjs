@@ -5,37 +5,37 @@ import LeanYjs.ItemOrder
 inductive IntegrateError where
 | notFound : IntegrateError
 
-variable {A: Type} [BEq A]
+variable {A: Type} [DecidableEq A]
 
-def findIdx (p : YjsPtr A) (arr : Array (YjsItem A)) : Except IntegrateError Int :=
+def findPtrIdx (p : YjsPtr A) (arr : Array (YjsItem A)) : Except IntegrateError Int :=
   match p with
   | YjsPtr.itemPtr item =>
-    match Array.findIdx? (fun i => i == item) arr with
+    match Array.findIdx? (fun i => i = item) arr with
     | some idx => return idx
     | none => Except.error IntegrateError.notFound
   | YjsPtr.first => return -1
   | YjsPtr.last => return Array.size arr
 
-def getExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError (YjsItem A) :=
+def getElemExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError (YjsItem A) :=
   match arr[idx]? with
   | some item => return item
   | none => Except.error IntegrateError.notFound
 
 def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
-  let leftIdx <- findIdx (YjsItem.origin newItem) arr
-  let rightIdx <- findIdx (YjsItem.rightOrigin newItem) arr
+  let leftIdx <- findPtrIdx (YjsItem.origin newItem) arr
+  let rightIdx <- findPtrIdx (YjsItem.rightOrigin newItem) arr
 
   let mut scanning := false
   let mut destIdx := (leftIdx + 1).toNat
   for offset in [1:(rightIdx-leftIdx).toNat] do
     let i := (leftIdx + offset).toNat
-    let other <- getExcept arr i
+    let other <- getElemExcept arr i
 
     if !scanning then
       destIdx := i
 
-    let oLeftIdx <- findIdx other.origin arr
-    let oRightIdx <- findIdx other.rightOrigin arr
+    let oLeftIdx <- findPtrIdx other.origin arr
+    let oRightIdx <- findPtrIdx other.rightOrigin arr
 
     if oLeftIdx < leftIdx then
       break
@@ -62,10 +62,10 @@ def integrateRecursionAux (newItem : YjsItem A) (arr : Array (YjsItem A))
     return (i, scanning)
   else
     -- 現在の項目を取得
-    let other <- getExcept arr i
+    let other <- getElemExcept arr i
     -- 比較に必要なインデックスを取得
-    let oLeftIdx <- findIdx other.origin arr
-    let oRightIdx <- findIdx other.rightOrigin arr
+    let oLeftIdx <- findPtrIdx other.origin arr
+    let oRightIdx <- findPtrIdx other.rightOrigin arr
     let oLeftIdx := Int.toNat oLeftIdx
 
     -- 条件チェックと再帰呼び出し
@@ -90,8 +90,8 @@ def integrateRecursionAux (newItem : YjsItem A) (arr : Array (YjsItem A))
 -- メイン関数
 def integrateRecursion (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
   -- 必要なインデックスを取得
-  let leftIdx <- findIdx (YjsItem.origin newItem) arr
-  let rightIdx <- findIdx (YjsItem.rightOrigin newItem) arr
+  let leftIdx <- findPtrIdx (YjsItem.origin newItem) arr
+  let rightIdx <- findPtrIdx (YjsItem.rightOrigin newItem) arr
   let leftIdx := Int.toNat leftIdx
   let rightIdx := Int.toNat rightIdx
 

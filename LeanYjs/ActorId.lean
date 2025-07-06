@@ -1,4 +1,5 @@
 def ActorId := Nat
+deriving Repr, DecidableEq
 
 instance : LT ActorId where
   lt x y := Nat.lt x y

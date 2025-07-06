@@ -1,15 +1,17 @@
 import LeanYjs.ActorId
 
-variable (A : Type) [BEq A]
+variable (A : Type) [BEq A] [LawfulBEq A]
 
 mutual
 inductive YjsPtr : Type where
   | itemPtr : YjsItem -> YjsPtr
   | first : YjsPtr
   | last : YjsPtr
+  deriving Repr, DecidableEq
 
 inductive YjsItem : Type where
 | item (origin : YjsPtr) (rightOrigin : YjsPtr) : ActorId -> A -> YjsItem
+deriving Repr, DecidableEq
 end
 
 def YjsItem.origin {A : Type} : YjsItem A -> YjsPtr A
