@@ -241,7 +241,7 @@ theorem loop_invariant_item_ordered {current} offset (arr : Array (YjsItem A)) (
   | inr x =>
     sorry
 
-theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
+theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
   -> integrate newItem arr = Except.ok newArr
   -> YjsArrInvariant newArr.toList := by
@@ -260,7 +260,7 @@ theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvarian
 
   generalize hloop :
     forIn (α := ℕ) (m := Except IntegrateError) (β := MProd ℕ Bool) (List.range' 1 ((rightIdx - leftIdx).toNat - 1) 1) ⟨(leftIdx + 1).toNat, false⟩ (fun offset r => do
-      let other ← getExcept arr (leftIdx + ↑offset).toNat
+      let other ← getElemExcept arr (leftIdx + ↑offset).toNat
       if r.snd = false then do
           let oLeftIdx ← findPtrIdx other.origin arr
           let oRightIdx ← findPtrIdx other.rightOrigin arr
@@ -285,7 +285,7 @@ theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvarian
               else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
 
   obtain ⟨ _ ⟩ | ⟨ res ⟩ := l; cases hintegrate
-  apply for_in_list_loop_invariant (I := fun x state => loop_invariant P arr newItem rightIdx.toNat x state) at hloop
+  apply for_in_list_loop_invariant (I := fun x state => loopInv P arr newItem leftIdx rightIdx.toNat x state) at hloop
 
   simp at hintegrate
   rw [<-hintegrate]
@@ -296,7 +296,7 @@ theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvarian
   . intros x state hloop i hlt heq hinv hbody
     rw [List.getElem_range'] at heq; simp at heq
     subst heq
-    generalize hother : getExcept arr (leftIdx + ↑(1 + i)).toNat = other at hbody
+    generalize hother : getElemExcept arr (leftIdx + ↑(1 + i)).toNat = other at hbody
     obtain ⟨ _ ⟩ | ⟨ other ⟩ := other; cases hbody
     rw [ok_bind] at hbody
 
@@ -316,8 +316,7 @@ theorem integrate_sound (A: Type) [BEq A] (P : ItemSet A) (inv : ItemSetInvarian
 
     simp at hlt
 
-
-theorem integrate_commutative (A: Type) [BEq A] (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
+theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
   -> integrate a arr1 = Except.ok arr2
   -> integrate b arr2 = Except.ok arr3
