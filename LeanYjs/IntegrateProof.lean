@@ -12,13 +12,13 @@ import LeanYjs.YjsArray
 variable {A : Type}
 variable [BEq A]
 
-lemma ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
+theorem ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
   (do
     let x <- Except.ok x
     f x) = f x := by
   eq_refl
 
-lemma for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (body : α -> β -> Except ε (ForInStep β)) (I : Option α -> ForInStep β -> Prop) :
+theorem for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (body : α -> β -> Except ε (ForInStep β)) (I : Option α -> ForInStep β -> Prop) :
   I ls.head? (ForInStep.yield init) ->
   (∀ x (y : β) res i (hlt : i < ls.length),
     x = ls[i] ->
@@ -82,7 +82,7 @@ def loop_invariant (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem 
     (scanning -> destItem.origin = newItem.origin) ∧
     (∀item : YjsItem A, getExcept arr current = Except.ok item -> YjsLt' P item newItem)
 
-omit [BEq A] in lemma not_rightOrigin_first (P : YjsPtr A -> Prop) (item : YjsItem A) :
+omit [BEq A] in theorem not_rightOrigin_first (P : YjsPtr A -> Prop) (item : YjsItem A) :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
   P item ->
@@ -100,7 +100,7 @@ omit [BEq A] in lemma not_rightOrigin_first (P : YjsPtr A -> Prop) (item : YjsIt
 
 -- 補題: itemとの大小関係が保留の区間 [dest, i) について、もしarr[i] < item なら∀j ∈ [dest, i) でarr[j] < item
 -- つまりループの終了条件が満たされたら[dest, i)のすべてでarr[j] < item
-lemma loop_invariant_item_ordered {current} offset (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx rightIdx : ℤ) (state : ForInStep (MProd ℕ Bool)) :
+theorem loop_invariant_item_ordered {current} offset (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx rightIdx : ℤ) (state : ForInStep (MProd ℕ Bool)) :
   IsClosedItemSet (ArrSet (newItem :: arr.toList)) ->
   ItemSetInvariant (ArrSet (newItem :: arr.toList)) ->
   YjsArrInvariant arr.toList ->

@@ -7,7 +7,7 @@ import LeanYjs.Totality
 
 variable {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P}
 
-lemma conflict_lt_x_origin_lt_y {A} {P : ItemSet A} (x : YjsItem A) y :
+theorem conflict_lt_x_origin_lt_y {A} {P : ItemSet A} (x : YjsItem A) y :
   IsClosedItemSet P ->
   ConflictLt P h x y -> YjsLt' P x.origin y := by
   intros hclosed hlt
@@ -25,7 +25,7 @@ lemma conflict_lt_x_origin_lt_y {A} {P : ItemSet A} (x : YjsItem A) y :
       apply hclosed.closedLeft at hlt2
       assumption
 
-lemma conflict_lt_y_origin_lt_x {A} {P : ItemSet A} x (y : YjsItem A) :
+theorem conflict_lt_y_origin_lt_x {A} {P : ItemSet A} x (y : YjsItem A) :
   IsClosedItemSet P ->
   ConflictLt P h x y -> YjsLt' P y.origin x := by
   intros hclosed hlt
@@ -46,7 +46,7 @@ lemma conflict_lt_y_origin_lt_x {A} {P : ItemSet A} x (y : YjsItem A) :
       apply hclosed.closedLeft at hlt1
       assumption
 
-lemma conflict_lt_y_lt_x_right_origin {A} {P : ItemSet A} (x : YjsItem A) y :
+theorem conflict_lt_y_lt_x_right_origin {A} {P : ItemSet A} (x : YjsItem A) y :
   ConflictLt P h x y -> YjsLt' P y x.rightOrigin := by
   intros hlt
   cases hlt with
@@ -55,7 +55,7 @@ lemma conflict_lt_y_lt_x_right_origin {A} {P : ItemSet A} (x : YjsItem A) y :
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor; assumption
 
-lemma conflict_lt_x_lt_y_right_origin {A} {P : ItemSet A} x (y : YjsItem A) :
+theorem conflict_lt_x_lt_y_right_origin {A} {P : ItemSet A} x (y : YjsItem A) :
   ConflictLt P h x y -> YjsLt' P x y.rightOrigin := by
   intros hlt
   cases hlt with
@@ -64,7 +64,7 @@ lemma conflict_lt_x_lt_y_right_origin {A} {P : ItemSet A} x (y : YjsItem A) :
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor; assumption
 
-lemma conflict_lt_trans {A} {P : ItemSet A} {inv : ItemSetInvariant P} :
+theorem conflict_lt_trans {A} {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y z : YjsPtr A),
   (∀ m < x.size + y.size + z.size,
@@ -181,7 +181,7 @@ lemma conflict_lt_trans {A} {P : ItemSet A} {inv : ItemSetInvariant P} :
           unfold ActorId at *
           omega
 
-lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
+theorem yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y z : YjsPtr A), P x -> P y -> P z ->
   YjsLt' P x y -> YjsLt' P y z -> YjsLt' P x z := by
@@ -396,7 +396,7 @@ lemma yjs_lt_trans {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
       subst hsize
       apply conflict_lt_trans hP _ _ _ ih hxyconflict hyzconflict; assumption
 
-lemma yjs_leq_p_trans1 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+theorem yjs_leq_p_trans1 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
   IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLt A P h2 y z -> ∃ h, @YjsLt A P h x z := by
   intros hclosed hleq hlt
   have hpy : P y := by
@@ -413,7 +413,7 @@ lemma yjs_leq_p_trans1 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : Y
     constructor; assumption
     constructor; assumption
 
-lemma yjs_leq_p_trans2 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+theorem yjs_leq_p_trans2 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
   IsClosedItemSet P -> @YjsLt A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLt A P h x z := by
   intros hclosed hlt hleq
   have hpx : P x := by
@@ -430,7 +430,7 @@ lemma yjs_leq_p_trans2 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : Y
     constructor; assumption
     constructor; assumption
 
-lemma yjs_leq_p_trans {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
+theorem yjs_leq_p_trans {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
   IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLeq A P h x z := by
   intros hclosed hleq1 hleq2
   cases hleq1 with

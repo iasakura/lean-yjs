@@ -49,7 +49,7 @@ end
 def YjsLt' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLt A P h x y
 
-lemma yjs_lt_p1_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+theorem yjs_lt_p1_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) ∧ (YjsLeq P h x y -> P x) := by
     apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) ∧ (YjsLeq P h x y -> P x))
     intros n ih x y
@@ -92,25 +92,25 @@ lemma yjs_lt_p1_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr
           obtain ⟨ ih, _, _ ⟩ := ih h (by omega) x y
           apply ih; assumption
 
-@[simp] lemma yjs_lt_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+@[simp] theorem yjs_lt_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLt P h x y -> P x := by
     intros x y hlt
     let ⟨ h, _ ⟩ := @yjs_lt_p1_aux A P h x y
     tauto
 
-lemma yjs_lt'_p1 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
+theorem yjs_lt'_p1 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
   YjsLt' P x y -> P x := by
     intros x y hlt
     obtain ⟨ h, hlt ⟩ := hlt
     apply yjs_lt_p1; assumption
 
-lemma conflict_lt_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+theorem conflict_lt_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   ConflictLt P h x y -> P x := by
     intros x y hlt
     let ⟨ _, h ⟩ := @yjs_lt_p1_aux A P h x y
     tauto
 
-lemma yjs_lt_p2_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+theorem yjs_lt_p2_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   (YjsLt P h x y -> P y) ∧ (ConflictLt P h x y -> P y) ∧ (YjsLeq P h x y -> P y) := by
     apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P y) ∧ (ConflictLt P h x y -> P y) ∧ (YjsLeq P h x y -> P y))
     intros n ih x y
@@ -150,32 +150,32 @@ lemma yjs_lt_p2_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr
           obtain ⟨ ih, _, _ ⟩ := ih h (by omega) x y
           apply ih; assumption
 
-lemma yjs_lt_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+theorem yjs_lt_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLt P h x y -> P y := by
     intros x y hlt
     let ⟨ h, _ ⟩ := @yjs_lt_p2_aux A P h x y
     tauto
 
-lemma yjs_lt'_p2 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
+theorem yjs_lt'_p2 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
   YjsLt' P x y -> P y := by
     intros x y hlt
     obtain ⟨ h, hlt ⟩ := hlt
     apply yjs_lt_p2; assumption
 
-lemma conflict_lt_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+theorem conflict_lt_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   ConflictLt P h x y -> P y := by
     intros x y hlt
     let ⟨ _, h ⟩ := @yjs_lt_p2_aux A P h x y
     tauto
 
-lemma yjs_leq_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+theorem yjs_leq_p1 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLeq P h x y -> P y -> P x := by
     intros x y hleq hpy
     cases hleq with
     | leqSame => assumption
     | leqLt _ _ _  hlt => apply yjs_lt_p1 hlt
 
-lemma yjs_leq_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
+theorem yjs_leq_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   YjsLeq P h x y -> P x -> P y := by
     intros x y hleq hpy
     cases hleq with
@@ -196,19 +196,19 @@ def yjs_leq'_imp_eq_or_yjs_lt' {A : Type} {P : @ItemSet A} {x y : YjsPtr A} :
 def ConflictLt' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, ConflictLt P h x y
 
-lemma yjs_leq'_p1 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
+theorem yjs_leq'_p1 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
   YjsLeq' P x y -> P y -> P x := by
     intros x y hleq hpy
     obtain ⟨ h, hleq ⟩ := hleq
     apply yjs_leq_p1 hleq hpy
 
-lemma yjs_leq'_p2 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
+theorem yjs_leq'_p2 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
   YjsLeq' P x y -> P x -> P y := by
     intros x y hleq hpy
     obtain ⟨ h, hleq ⟩ := hleq
     apply yjs_leq_p2 hleq hpy
 
-lemma yjs_lt_cases A P h (x y : YjsPtr A) :
+theorem yjs_lt_cases A P h (x y : YjsPtr A) :
   YjsLt P h x y ->
     (x = YjsPtr.first ∧ (y = YjsPtr.last ∨ ∃ i, y = YjsPtr.itemPtr i)) ∨
     (y = YjsPtr.last ∧ (x = YjsPtr.first ∨ ∃ i, x = YjsPtr.itemPtr i)) ∨
@@ -235,7 +235,7 @@ lemma yjs_lt_cases A P h (x y : YjsPtr A) :
     right; right; left; simp
     constructor; assumption
 
-lemma yjs_lt'_cases A P (x y : YjsPtr A) :
+theorem yjs_lt'_cases A P (x y : YjsPtr A) :
   YjsLt' P x y ->
     (x = YjsPtr.first ∧ (y = YjsPtr.last ∨ ∃ i, y = YjsPtr.itemPtr i)) ∨
     (y = YjsPtr.last ∧ (x = YjsPtr.first ∨ ∃ i, x = YjsPtr.itemPtr i)) ∨
@@ -251,7 +251,7 @@ lemma yjs_lt'_cases A P (x y : YjsPtr A) :
 --   | step1 : forall x y z is h, ConflictLt P h x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
 --   | step2 : forall x y z is, OriginLt _ x y -> LtSequence P y z is -> LtSequence P x z (y :: is)
 
--- lemma LtSequenceConcat {A : Type} {P : @ItemSet A} {x y z : YjsPtr A} {is1 is2 : List (YjsPtr A)} :
+-- theorem LtSequenceConcat {A : Type} {P : @ItemSet A} {x y z : YjsPtr A} {is1 is2 : List (YjsPtr A)} :
 --   LtSequence P x y is1 -> LtSequence P y z is2 -> LtSequence P x z (is1 ++ is2) := by
 --     intro lt1
 --     induction lt1 with
@@ -269,7 +269,7 @@ lemma yjs_lt'_cases A P (x y : YjsPtr A) :
 --       apply ih
 --       assumption
 
--- lemma YjsLtSequence (A : Type) (P : ItemSet A): forall (x y : YjsPtr A) h, YjsLt P h x y ->
+-- theorem YjsLtSequence (A : Type) (P : ItemSet A): forall (x y : YjsPtr A) h, YjsLt P h x y ->
 --   ∃ is : List (YjsPtr A), LtSequence P x y is := by
 --     intros x y h
 --     apply Nat.strongRecOn' (P := fun h => ∀ x y, YjsLt P h x y -> ∃ is : List (YjsPtr A), LtSequence P x y is)

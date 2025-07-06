@@ -20,7 +20,7 @@ def ArrSet (arr : List (YjsItem A)) : YjsPtr A -> Prop :=
 def ArrSetClosed (arr : List (YjsItem A)) : Prop :=
   IsClosedItemSet (ArrSet arr)
 
-omit [BEq A] in lemma arr_set_closed_push (arr : List (YjsItem A)) (item : YjsItem A) :
+omit [BEq A] in theorem arr_set_closed_push (arr : List (YjsItem A)) (item : YjsItem A) :
   ArrSetClosed arr ->
   ArrSet arr item.origin ->
   ArrSet arr item.rightOrigin ->
@@ -62,7 +62,7 @@ omit [BEq A] in lemma arr_set_closed_push (arr : List (YjsItem A)) (item : YjsIt
     | last =>
       simp
 
-omit [BEq A] in lemma arr_set_item_exists_index (arr arr' : List (YjsItem A)) (item : YjsItem A) :
+omit [BEq A] in theorem arr_set_item_exists_index (arr arr' : List (YjsItem A)) (item : YjsItem A) :
   ArrSetClosed arr' ->
   ArrSet arr item ->
   (∃ l, l ++ arr = arr') ->
@@ -90,7 +90,7 @@ omit [BEq A] in lemma arr_set_item_exists_index (arr arr' : List (YjsItem A)) (i
         apply Fin.addNat i 1
       exists i'
 
-lemma arr_set_closed_exists_index_for_origin :
+theorem arr_set_closed_exists_index_for_origin :
   ∀ (arr : List (YjsItem A)) (item : YjsItem A),
   ArrSetClosed arr ->
   ArrSet arr item ->
@@ -111,7 +111,7 @@ lemma arr_set_closed_exists_index_for_origin :
     simp
     assumption
 
-lemma arr_set_closed_exists_index_for_right_origin :
+theorem arr_set_closed_exists_index_for_right_origin :
   ∀ (arr : List (YjsItem A)) (item : YjsItem A),
   ArrSetClosed arr ->
   ArrSet arr item ->
@@ -132,7 +132,7 @@ lemma arr_set_closed_exists_index_for_right_origin :
     simp
     assumption
 
-omit [BEq A] in lemma yjs_lt_mono (P Q : ItemSet A) (x y : YjsPtr A) :
+omit [BEq A] in theorem yjs_lt_mono (P Q : ItemSet A) (x y : YjsPtr A) :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
   (∀ a, P a -> Q a) ->
@@ -184,7 +184,7 @@ omit [BEq A] in lemma yjs_lt_mono (P Q : ItemSet A) (x y : YjsPtr A) :
         apply ih <;> try assumption
         omega
 
-lemma yjs_lt'_mono :
+theorem yjs_lt'_mono :
   ∀ (P Q : ItemSet A) (x y : YjsPtr A),
   IsClosedItemSet P ->
   ItemSetInvariant P ->
@@ -195,7 +195,7 @@ lemma yjs_lt'_mono :
   constructor
   apply yjs_lt_mono P Q x y hclosedP hinvP hsubset hlt
 
-lemma yjs_leq'_mono :
+theorem yjs_leq'_mono :
   ∀ (P Q : ItemSet A) (x y : YjsPtr A),
   IsClosedItemSet P ->
   ItemSetInvariant P ->
@@ -214,7 +214,7 @@ lemma yjs_leq'_mono :
     apply yjs_lt_mono P Q x y hclosedP hinvP hsubset
     assumption
 
-lemma push_subset {A} (arr : List (YjsItem A)) (a : YjsItem A) :
+theorem push_subset {A} (arr : List (YjsItem A)) (a : YjsItem A) :
   ∀ x, ArrSet arr x -> ArrSet (a :: arr) x := by
   intros x hin
   unfold ArrSet at *
@@ -222,7 +222,7 @@ lemma push_subset {A} (arr : List (YjsItem A)) (a : YjsItem A) :
   cases x <;> (simp at *)
   right; assumption
 
-lemma reachable_in {A} (arr : List (YjsItem A)) (a : YjsPtr A) :
+theorem reachable_in {A} (arr : List (YjsItem A)) (a : YjsPtr A) :
   IsClosedItemSet (ArrSet arr) ->
   ∀ x, OriginReachable a x -> ArrSet arr a -> ArrSet arr x := by
   intros hclosed x hreach hin
@@ -250,7 +250,7 @@ lemma reachable_in {A} (arr : List (YjsItem A)) (a : YjsPtr A) :
       apply hclosed.closedRight at hin
       assumption
 
-lemma item_set_invariant_push (arr : List (YjsItem A)) (item : YjsItem A) :
+theorem item_set_invariant_push (arr : List (YjsItem A)) (item : YjsItem A) :
   ItemSetInvariant (ArrSet arr) ->
   ArrSetClosed arr ->
   YjsLt' (ArrSet arr) item.origin item.rightOrigin ->
@@ -376,7 +376,7 @@ structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
   sorted : List.Pairwise (fun (x y : YjsItem A) => YjsLt' (ArrSet arr) x y) arr
   unique : List.Pairwise (fun x y => x ≠ y) arr
 
-lemma same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
+theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
   YjsArrInvariant xs_all ->
   YjsArrInvariant ys_all ->
   (∀ a, ArrSet xs_all a ↔ ArrSet ys_all a) ->
@@ -531,7 +531,7 @@ lemma same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
             | inr hin =>
               assumption
 
-lemma same_yjs_set_unique (xs ys : List (YjsItem A)) :
+theorem same_yjs_set_unique (xs ys : List (YjsItem A)) :
   YjsArrInvariant xs ->
   YjsArrInvariant ys ->
   (∀ a, ArrSet xs a ↔ ArrSet ys a) ->
@@ -542,7 +542,7 @@ lemma same_yjs_set_unique (xs ys : List (YjsItem A)) :
   . exists []
   . apply hseteq
 
-lemma findIdx_lt_YjsLt' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
+theorem findIdx_lt_YjsLt' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
   YjsArrInvariant arr.toList ->
   findIdx x arr = Except.ok i ->
   findIdx y arr = Except.ok j ->

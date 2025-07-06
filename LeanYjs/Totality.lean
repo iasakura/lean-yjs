@@ -4,17 +4,17 @@ import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
 
-@[simp] lemma first_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> P YjsPtr.first := by
+@[simp] theorem first_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> P YjsPtr.first := by
   intros hclosed
   unfold ItemSet at *
   apply hclosed.baseFirst
 
-@[simp] lemma last_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> P YjsPtr.last := by
+@[simp] theorem last_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> P YjsPtr.last := by
   intros hclosed
   unfold ItemSet at *
   apply hclosed.baseLast
 
--- lemma yjs_origin_leq_lt {A : Type} {P : ItemSet A} :
+-- theorem yjs_origin_leq_lt {A : Type} {P : ItemSet A} :
 --   IsClosedItemSet P ->
 --   ∀ (x : YjsPtr A) (y : YjsItem A) h, P x → P y →
 --     YjsLeq P h x y.origin -> ∃ h, YjsLt P h x y := by
@@ -33,7 +33,7 @@ import LeanYjs.ItemSetInvariant
 --     constructor
 --     apply YjsLt.ltOrigin <;> try assumption
 
--- lemma yjs_right_origin_leq_lt {A : Type} {P : ItemSet A} :
+-- theorem yjs_right_origin_leq_lt {A : Type} {P : ItemSet A} :
 --   IsClosedItemSet P ->
 --   ∀ (x : YjsItem A) (y : YjsPtr A) h, P x → P y →
 --     YjsLeq P h x.rightOrigin y -> ∃ h, YjsLt P h x y := by
@@ -52,7 +52,7 @@ import LeanYjs.ItemSetInvariant
 --     constructor
 --     apply YjsLt.ltRightOrigin <;> try assumption
 
-lemma yjs_lt_total {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
+theorem yjs_lt_total {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y : YjsPtr A), P x -> P y ->
     (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x) := by

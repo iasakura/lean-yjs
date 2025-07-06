@@ -6,7 +6,7 @@ import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality
 import LeanYjs.Transitivity
 
-lemma yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
+theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
   ItemSetInvariant P ->
   ∀ (x y : YjsPtr A), ConflictLt' P x y -> ConflictLt' P y x ->
   ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
@@ -37,7 +37,7 @@ lemma yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
       unfold ActorId at *
       omega
 
-lemma yjs_leq_right_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :
+theorem yjs_leq_right_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :
   IsClosedItemSet P ->
   YjsLeq' P x.rightOrigin y →
   YjsLt' P y x →
@@ -68,7 +68,7 @@ lemma yjs_leq_right_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant
   . simp [YjsPtr.size, YjsItem.size]; omega
   constructor <;> assumption
 
-lemma yjs_leq_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsPtr A) (y : YjsItem A) :
+theorem yjs_leq_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsPtr A) (y : YjsItem A) :
   IsClosedItemSet P ->
   YjsLeq' P x y.origin →
   YjsLt' P y x →

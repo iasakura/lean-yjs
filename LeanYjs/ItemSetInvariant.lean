@@ -25,19 +25,19 @@ structure ItemSetInvariant where
     YjsLeq' P x.rightOrigin y ∨
     YjsLeq' P y.rightOrigin x
 
-@[simp] lemma origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.origin := by
+@[simp] theorem origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.origin := by
   intros hclosed x px
   obtain ⟨ o, r, id, c ⟩ := x
   simp [YjsItem.origin] at *
   apply hclosed.closedLeft <;> assumption
 
-@[simp] lemma right_origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.rightOrigin := by
+@[simp] theorem right_origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.rightOrigin := by
   intros hclosed x px
   obtain ⟨ o, r, id, c ⟩ := x
   simp [YjsItem.rightOrigin] at *
   apply hclosed.closedRight <;> assumption
 
-lemma not_ptr_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
+theorem not_ptr_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
   intros hinv h o
   generalize hsize : o.size = size
   revert o h
@@ -61,7 +61,7 @@ lemma not_ptr_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : Yj
         apply hinv.origin_not_leq; assumption
       apply ih (o.size) (by simp [YjsPtr.size, YjsItem.size] at hsize; omega) _ o (refl _) hlt
 
-lemma not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
+theorem not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
   intros hinv h o
   generalize hsize : o.size = size
   revert o h
@@ -89,7 +89,7 @@ lemma not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : Yjs
       apply ih r.size hsize' h' r <;> try assumption
       simp
 
-lemma not_last_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.first := by
+theorem not_last_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.first := by
   intros hinv h
   apply @Nat.strongRecOn' (P := fun h => ¬ @YjsLt A P h YjsPtr.last YjsPtr.first)
   intros n ih hlt
@@ -99,7 +99,7 @@ lemma not_last_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @Y
   | ltOriginOrder _ _ _ _ hlt =>
     cases hlt
 
-lemma not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.first YjsPtr.first := by
+theorem not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.first YjsPtr.first := by
   intros hinv h hlt
   have h: @OriginLt A YjsPtr.first YjsPtr.first := by
     cases hlt with
@@ -109,7 +109,7 @@ lemma not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @
       assumption
   cases h with
 
-lemma not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.last := by
+theorem not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.last := by
   intros hinv h hlt
   have h: @OriginLt A YjsPtr.last YjsPtr.last := by
     cases hlt with
@@ -119,10 +119,10 @@ lemma not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @Yj
       assumption
   cases h with
 
--- lemma origin_lt_p1 {A} {P : @ItemSet A} {x y : YjsPtr A} (h : OriginLt _ x y) : P x := by
+-- theorem origin_lt_p1 {A} {P : @ItemSet A} {x y : YjsPtr A} (h : OriginLt _ x y) : P x := by
 --   sorry
 
--- lemma origin_lt_p2 {A} {P : @ItemSet A} {x y : YjsPtr A} (h : OriginLt _ x y) : P y := by
+-- theorem origin_lt_p2 {A} {P : @ItemSet A} {x y : YjsPtr A} (h : OriginLt _ x y) : P y := by
 --   cases h with
 --   | ltOrigin  y hpx hpy hlt
 --     assumption
