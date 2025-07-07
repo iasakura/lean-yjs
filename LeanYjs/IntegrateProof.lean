@@ -154,7 +154,7 @@ theorem loop_invariant_item_ordered {current} offset (arr : Array (YjsItem A)) (
       generalize h_ro_eq : arr[j].rightOrigin = ro at heq
       cases ro with
       | first =>
-        apply not_rightOrigin_first _ _ hclosed hinv at h_ro_eq
+        apply not_rightOrigin_first _ arr[j] hclosed hinv at h_ro_eq
         contradiction
         simp [ArrSet]
       | last =>
@@ -193,7 +193,25 @@ theorem loop_invariant_item_ordered {current} offset (arr : Array (YjsItem A)) (
           obtain ⟨ k, _ ⟩ := k
           simp at *
           have hlt : j < k := by
-            sorry
+            have hlt : YjsLt' (ArrSet $ arr.toList) arr[j] arr[k] := by
+              rw [h_ro_in]
+              generalize heq : arr[j] = arrj at *
+              obtain ⟨ o, r, id, c ⟩ := arrj
+              simp [YjsItem.rightOrigin] at h_ro_eq
+              subst h_ro_eq
+              exists 1
+              have harrin : ArrSet arr.toList (YjsItem.item o (YjsPtr.itemPtr ro) id c) := by
+                rw [<-heq]
+                simp [ArrSet]
+              apply YjsLt.ltRightOrigin <;> try assumption
+              apply YjsLeq.leqSame
+              apply harrinv.closed.closedRight <;> assumption
+
+            have hltj : j < arr.size := by
+              omega
+            have hltk : k < arr.size := by
+              omega
+            apply getElem_YjsLt'_index_lt arr j k harrinv hltj hltk hlt
           omega
 
         cases Nat.lt_or_ge k (leftIdx + offset).toNat with
@@ -211,14 +229,14 @@ theorem loop_invariant_item_ordered {current} offset (arr : Array (YjsItem A)) (
             . apply harrinv.item_set_inv
             . intros a; cases a <;> try simp [ArrSet]
               intros; right; assumption
-            -- TODO: YjsLeq'版が必要
-            apply getElem_lt_YjsLt' arr (leftIdx + offset).toNat k harrinv _ (by omega)
+            apply getElem_leq_YjsLeq' arr (leftIdx + offset).toNat k harrinv (by omega) (by omega)
+          apply yjs_leq'_p_trans2 hinv _ _ _ hclosed hi_lt hlt
 
     have ⟨ _, hlt_ro' ⟩ : YjsLt' (ArrSet $ newItem :: arr.toList) arr[j] newItem.rightOrigin := by
       have hlt : j < rightIdx := by
         omega
       have heq : findPtrIdx arr[j] arr = Except.ok j := by
-        sorry
+        apply findPtrIdx_getElem; assumption
       obtain x := findPtrIdx_lt_YjsLt' arr _ _ harrinv heq hrightIdx hlt
       apply yjs_lt'_mono (P := ArrSet arr.toList) (Q := ArrSet $ newItem :: arr.toList) <;> try assumption
       apply harrinv.closed
@@ -315,6 +333,7 @@ theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : Yj
     simp at hbody
 
     simp at hlt
+
 
 theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList

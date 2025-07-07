@@ -173,3 +173,17 @@ theorem yjs_lt_anti_symm {A} {P : ItemSet A} :
         yjs_lt_conflict_lt_decreases inv x y hltxy' hltyx'
       apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp [hsize])
       omega
+
+theorem yjs_lt_of_not_leq {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y : YjsPtr A) :
+  IsClosedItemSet P ->
+  YjsLt' P x y → ¬ YjsLeq' P y x := by
+  intros hP hltxy
+  by_contra hltyx
+  have hlt : YjsLt' P y x := by
+    obtain ⟨ h, hltyx ⟩ := hltyx
+    cases hltyx with
+    | leqSame =>
+      assumption
+    | leqLt h _ _ hlt =>
+      constructor; assumption
+  apply yjs_lt_anti_symm hP inv x y hltxy hlt

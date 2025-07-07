@@ -413,6 +413,13 @@ theorem yjs_leq_p_trans1 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z :
     constructor; assumption
     constructor; assumption
 
+theorem yjs_leq'_p_trans1 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A):
+  IsClosedItemSet P -> YjsLeq' P x y -> YjsLt' P y z -> YjsLt' P x z := by
+  intros hclosed hleq hlt
+  obtain ⟨ _, hleq ⟩ := hleq
+  obtain ⟨ _, hlt ⟩ := hlt
+  apply yjs_leq_p_trans1 <;> assumption
+
 theorem yjs_leq_p_trans2 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
   IsClosedItemSet P -> @YjsLt A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLt A P h x z := by
   intros hclosed hlt hleq
@@ -429,6 +436,13 @@ theorem yjs_leq_p_trans2 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z :
     apply yjs_lt_trans hclosed (y := y) <;> try assumption
     constructor; assumption
     constructor; assumption
+
+theorem yjs_leq'_p_trans2 {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A):
+  IsClosedItemSet P -> YjsLt' P x y -> YjsLeq' P y z -> YjsLt' P x z := by
+  intros hclosed hlt hleq
+  obtain ⟨ _, hlt ⟩ := hlt
+  obtain ⟨ _, hleq ⟩ := hleq
+  apply yjs_leq_p_trans2 <;> assumption
 
 theorem yjs_leq_p_trans {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
   IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLeq A P h x z := by
@@ -456,3 +470,10 @@ theorem yjs_leq_p_trans {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : 
       constructor
       right
       assumption
+
+theorem yjs_leq'_p_trans {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A):
+  IsClosedItemSet P -> YjsLeq' P x y -> YjsLeq' P y z -> YjsLeq' P x z := by
+  intros hclosed hleq1 hleq2
+  obtain ⟨ _, hleq1 ⟩ := hleq1
+  obtain ⟨ _, hleq2 ⟩ := hleq2
+  apply yjs_leq_p_trans inv x y z _ _ hclosed hleq1 hleq2
