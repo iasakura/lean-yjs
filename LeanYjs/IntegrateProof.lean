@@ -44,7 +44,6 @@ theorem for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) 
       rw [ok_bind res] at hforin
       cases res with
       | yield y =>
-        simp at hforin
         apply ih y <;> try assumption
         . apply hbody (i := 0) at heq <;> try first | simpa | assumption
           simp at *
@@ -81,6 +80,9 @@ def loopInv (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (lef
   let current := offsetToIndex leftIdx rightIdx x
   let ⟨ dest, scanning ⟩ := state.value
   let done := isDone state x
+  (match x with
+    | none => True
+    | some x => 0 < x ∧ x < rightIdx - leftIdx) ∧
   ∃ destItem,
     arr[dest]? = some destItem ∧
     (∀ i, i < dest -> ∃ other : YjsItem A, some other = arr[i]? ∧ YjsLt' P other newItem) ∧
@@ -142,7 +144,7 @@ theorem loop_invariant_item_ordered {current} offset (arr : Array (YjsItem A)) (
     subst h_scanning
     cases state <;> eq_refl
   rw [heq] at hloopinv
-  obtain ⟨ destItem, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hloopinv
+  obtain ⟨ hrange, destItem, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hloopinv
   simp [offsetToIndex] at h_tbd hcurrent
   subst hcurrent
   obtain ⟨ item, heq, h_tbd ⟩ := h_tbd j h_j_dest h_j_i
@@ -259,12 +261,48 @@ theorem loop_invariant_item_ordered {current} offset (arr : Array (YjsItem A)) (
   | inr x =>
     sorry
 
+omit [DecidableEq A] in theorem insertIdxIfInBounds_mem {arr : Array (YjsItem A)} :
+    i ≤ arr.size →
+    (ArrSet (newItem :: arr.toList) x ↔ ArrSet (arr.insertIdxIfInBounds i newItem).toList x) := by
+    intros hlt
+    simp [ArrSet]
+    cases x <;> try simp [ArrSet]
+    rw [List.insertIdxIfInBounds_toArray]
+    simp
+    rw [List.mem_insertIdx]
+    simp
+    assumption
+
 theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
-  YjsArrInvariant arr.toList
+  ArrSet arr.toList newItem.origin
+  -> ArrSet arr.toList newItem.rightOrigin
+  -> YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin
+  -> (∀ (x : YjsPtr A),
+      OriginReachable (YjsPtr.itemPtr newItem) x →
+      YjsLeq' (ArrSet arr.toList) x newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin x)
+  -> (∀ (x : YjsItem A),
+      ArrSet arr.toList (YjsPtr.itemPtr x) →
+      x.id = newItem.id →
+      YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
+        YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
+  -> YjsArrInvariant arr.toList
   -> integrate newItem arr = Except.ok newArr
   -> YjsArrInvariant newArr.toList := by
-  intros hsorted hintegrate
+  intros horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent harrinv hintegrate
   unfold integrate at hintegrate
+
+  have hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)) := by
+    apply arr_set_closed_push _ _ _ horigin hrorigin
+    apply harrinv.closed
+
+  have harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList)) := by
+    apply item_set_invariant_push
+    apply harrinv.item_set_inv
+    apply harrinv.closed
+    apply horigin_consistent
+    apply hreachable_consistent
+    apply hsameid_consistent
+
 
   generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
@@ -304,13 +342,27 @@ theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : Yj
 
   obtain ⟨ _ ⟩ | ⟨ res ⟩ := l; cases hintegrate
   apply for_in_list_loop_invariant (I := fun x state => loopInv P arr newItem leftIdx rightIdx.toNat x state) at hloop
-
-  simp at hintegrate
-  rw [<-hintegrate]
-  -- Here, we prove that the array is still pairwise ordered after the integration.
-  -- So, what we need is arr[res.first] < newItem < arr[res.first + 1] (and also, 0 <= res.first <= arr.size)
-  . sorry
-  . sorry
+  . simp at hintegrate
+    rw [<-hintegrate]
+    -- Here, we prove that the array is still pairwise ordered after the integration.
+    -- So, what we need is arr[res.first] < newItem < arr[res.first + 1] (and also, 0 <= res.first <= arr.size)
+    obtain ⟨ current, res, hreseq, hloopinv, hdone ⟩ :=  hloop
+    constructor
+    apply IsClosedItemSet.eq_set <;> try assumption
+    . intros
+      apply insertIdxIfInBounds_mem
+      -- inserted position is in bounds
+      sorry
+    . apply ItemSetInvariant.eq_set <;> try assumption
+      intros
+      apply insertIdxIfInBounds_mem
+      sorry
+    . -- sorted
+      sorry
+    . -- unique
+      sorry
+  . -- initial
+    sorry
   . intros x state hloop i hlt heq hinv hbody
     rw [List.getElem_range'] at heq; simp at heq
     subst heq
@@ -327,13 +379,12 @@ theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : Yj
     all_goals (obtain ⟨ _ ⟩ | ⟨ oRightIdx ⟩ := oRightIdx; cases hbody)
     all_goals (rw [ok_bind] at hbody)
 
-    simp at hbody
-    rw [Int.toNat_add] at hbody
-    rw [Int.toNat_add] at hbody
-    simp at hbody
-
-    simp at hlt
-
+    . simp at hbody
+      rw [Int.toNat_add] at hbody
+      rw [Int.toNat_add] at hbody
+      simp at hbody
+      simp at hlt
+    . sorry
 
 theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList

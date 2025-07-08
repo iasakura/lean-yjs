@@ -214,6 +214,57 @@ omit [DecidableEq A] in theorem yjs_leq'_mono :
     apply yjs_lt_mono P Q x y hclosedP hinvP hsubset
     assumption
 
+theorem ItemSetInvariant.eq_set {A} (P Q : ItemSet A) :
+  IsClosedItemSet P →
+  ItemSetInvariant P →
+  (∀x, P x ↔ Q x) →
+  ItemSetInvariant Q := by
+  intros hPclosed hP hiff
+  constructor
+  . intros o r c id hq
+    rw [<-hiff] at *
+    apply yjs_lt'_mono P Q o r hPclosed hP (by intros; rw [<-hiff]; assumption)
+    apply hP.origin_not_leq <;> assumption
+  . intros o r c id x hq hreachable
+    rw [<-hiff] at *
+    have hor : YjsLeq' P x o ∨ YjsLeq' P r x := by
+      apply hP.origin_nearest_reachable <;> assumption
+    cases hor with
+    | inl hor =>
+      left
+      apply yjs_leq'_mono P Q x o hPclosed hP (by intros; rw [<-hiff]; assumption) hor
+    | inr hor =>
+      right
+      apply yjs_leq'_mono P Q r x hPclosed hP (by intros; rw [<-hiff]; assumption) hor
+  . intros x y hx hy hineq hid
+    rw [<-hiff] at *
+    have hor : YjsLeq' P (YjsPtr.itemPtr x) y.origin ∨
+      YjsLeq' P (YjsPtr.itemPtr y) x.origin ∨
+      YjsLeq' P x.rightOrigin (YjsPtr.itemPtr y) ∨ YjsLeq' P y.rightOrigin (YjsPtr.itemPtr x) := by
+      apply hP.same_id_ordered <;> assumption
+    cases hor with
+    | inl hor =>
+      left
+      apply yjs_leq'_mono P Q (YjsPtr.itemPtr x) y.origin hPclosed hP (by intros; rw [<-hiff]; assumption) hor
+    | inr hor =>
+      cases hor with
+      | inl hor =>
+        right
+        left
+        apply yjs_leq'_mono P Q (YjsPtr.itemPtr y) x.origin hPclosed hP (by intros; rw [<-hiff]; assumption) hor
+      | inr hor =>
+        cases hor with
+        | inl hor =>
+          right
+          right
+          left
+          apply yjs_leq'_mono P Q x.rightOrigin (YjsPtr.itemPtr y) hPclosed hP (by intros; rw [<-hiff]; assumption) hor
+        | inr hor =>
+          right
+          right
+          right
+          apply yjs_leq'_mono P Q y.rightOrigin (YjsPtr.itemPtr x) hPclosed hP (by intros; rw [<-hiff]; assumption) hor
+
 theorem push_subset {A} (arr : List (YjsItem A)) (a : YjsItem A) :
   ∀ x, ArrSet arr x -> ArrSet (a :: arr) x := by
   intros x hin
