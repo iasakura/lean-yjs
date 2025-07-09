@@ -790,6 +790,78 @@ omit [DecidableEq A] in theorem getElem_YjsLt'_index_lt (arr : Array (YjsItem A)
       apply yjs_lt_of_not_leq hinv.item_set_inv _ _ hinv.closed hlt hleq
     contradiction
 
+lemma YjsLt'_findPtrIdx_lt (i j : ℤ) (x y : YjsPtr A) (arr : Array (YjsItem A)) :
+  YjsArrInvariant arr.toList ->
+  YjsLt' (ArrSet arr.toList) x y ->
+  findPtrIdx x arr = Except.ok i ->
+  findPtrIdx y arr = Except.ok j ->
+  i < j := by
+  intros hinv hlt hleft hright
+  cases x with
+  | last =>
+    obtain ⟨ _, hlt ⟩ := hlt
+    apply not_last_lt_ptr at hlt
+    contradiction
+    apply hinv.item_set_inv
+  | first =>
+    cases y with
+    | first =>
+      obtain ⟨ _, hlt ⟩ := hlt
+      apply not_ptr_lt_first at hlt
+      contradiction
+      apply hinv.item_set_inv
+    | itemPtr r =>
+      simp only [findPtrIdx] at hleft hright
+      generalize heqright : Array.findIdx? (fun i => decide (i = r)) arr = right at hright
+      cases right with
+      | none => simp at hright
+      | some left =>
+        cases hleft
+        cases hright
+        omega
+    | last =>
+      simp only [findPtrIdx] at hleft hright
+      cases hleft
+      cases hright
+      omega
+  | itemPtr o =>
+    cases y with
+    | first =>
+      obtain ⟨ _, hlt ⟩ := hlt
+      apply not_ptr_lt_first at hlt
+      contradiction
+      apply hinv.item_set_inv
+    | last =>
+      simp only [findPtrIdx] at hleft hright
+      generalize heqleft : Array.findIdx? (fun i => decide (i = o)) arr = left at hleft
+      cases left with
+      | none => simp at hleft
+      | some left =>
+        cases hleft
+        cases hright
+        rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heqleft
+        omega
+    | itemPtr r =>
+      simp only [findPtrIdx] at hleft hright
+      generalize heqleft : Array.findIdx? (fun i => decide (i = o)) arr = left at hleft
+      generalize heqright : Array.findIdx? (fun i => decide (i = r)) arr = right at hright
+      cases left with
+      | none => simp at hleft
+      | some left =>
+        cases right with
+        | none => simp at hright
+        | some right =>
+          rw [Array.findIdx?_eq_some_iff_getElem] at heqleft heqright
+          obtain ⟨ _, hgetElemLeft, _ ⟩ := heqleft
+          obtain ⟨ _, hgetElemRight, _ ⟩ := heqright
+          simp at *
+          cases hleft
+          cases hright
+          simp
+          subst hgetElemLeft
+          subst hgetElemRight
+          apply getElem_YjsLt'_index_lt _ _ _ hinv _ _ hlt
+
 omit [DecidableEq A] in theorem YjsArrayInvariant_lt_neq (arr : Array (YjsItem A)) (i j : Nat) :
   YjsArrInvariant arr.toList ->
   (hilt : i < arr.size) ->

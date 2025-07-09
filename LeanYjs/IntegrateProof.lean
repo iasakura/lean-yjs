@@ -273,7 +273,54 @@ omit [DecidableEq A] in theorem insertIdxIfInBounds_mem {arr : Array (YjsItem A)
     simp
     assumption
 
-theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
+theorem loopInv_preserve1
+  (newItem : YjsItem A)
+  (arr newArr : Array (YjsItem A))
+  (horigin : ArrSet arr.toList newItem.origin)
+  (hrorigin : ArrSet arr.toList newItem.rightOrigin)
+  (horigin_consistent : YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin)
+  (hreachable_consistent : ∀ (x : YjsPtr A),
+    OriginReachable (YjsPtr.itemPtr newItem) x →
+      YjsLeq' (ArrSet arr.toList) x newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin x)
+  (hsameid_consistent : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) →
+      x.id = newItem.id →
+        YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
+          YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
+  (harrinv : YjsArrInvariant arr.toList)
+  (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
+  (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList)))
+  (leftIdx : ℤ)
+  (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx)
+  (rightIdx : ℤ)
+  (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
+  (hleftIdxrightIdx : leftIdx < rightIdx)
+  (res : MProd ℕ Bool)
+  (hintegrate : (fun a => arr.insertIdxIfInBounds a.fst newItem) <$> Except.ok (ε := IntegrateError) res = Except.ok newArr)
+  (state : MProd ℕ Bool)
+  (hloop : ForInStep (MProd ℕ Bool))
+  (i : ℕ)
+  (hinv : loopInv (ArrSet arr.toList) arr newItem leftIdx (↑rightIdx.toNat) (some (1 + i)) (ForInStep.yield state))
+  (other : YjsItem A)
+  (hother : getElemExcept arr (leftIdx + ↑(1 + i)).toNat = Except.ok other)
+  -- h✝ : state.snd = false
+  (oLeftIdx : ℤ)
+  (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx)
+  (oRightIdx : ℤ)
+  (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx)
+  -- hbody : (if oLeftIdx < leftIdx then pure (ForInStep.done ⟨(leftIdx + ↑(1 + i)).toNat, state.snd⟩)
+  --   else
+  --     if oLeftIdx = leftIdx then
+  --       if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, false⟩)
+  --       else
+  --         if oRightIdx = rightIdx then pure (ForInStep.done ⟨(leftIdx + ↑(1 + i)).toNat, state.snd⟩)
+  --         else pure (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, true⟩)
+  --     else pure (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, state.snd⟩)) =
+  --   Except.ok hloop
+  : loopInv P arr newItem leftIdx (↑rightIdx.toNat) (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? hloop := by
+  sorry
+
+theorem integrate_sound (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrSet arr.toList newItem.origin
   -> ArrSet arr.toList newItem.rightOrigin
   -> YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin
@@ -303,7 +350,6 @@ theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : Yj
     apply hreachable_consistent
     apply hsameid_consistent
 
-
   generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
   rw [ok_bind] at hintegrate
@@ -311,6 +357,10 @@ theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : Yj
   generalize heqright : findPtrIdx newItem.rightOrigin arr = rightIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ rightIdx ⟩ := rightIdx; cases hintegrate
   rw [ok_bind] at hintegrate
+
+  have hleftIdxrightIdx : leftIdx < rightIdx := by
+    apply YjsLt'_findPtrIdx_lt leftIdx rightIdx newItem.origin newItem.rightOrigin arr harrinv _ heqleft heqright
+    apply horigin_consistent
 
   simp at hintegrate
 
@@ -341,7 +391,7 @@ theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : Yj
               else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
 
   obtain ⟨ _ ⟩ | ⟨ res ⟩ := l; cases hintegrate
-  apply for_in_list_loop_invariant (I := fun x state => loopInv P arr newItem leftIdx rightIdx.toNat x state) at hloop
+  apply for_in_list_loop_invariant (I := fun x state => loopInv (ArrSet arr.toList) arr newItem leftIdx rightIdx.toNat x state) at hloop
   . simp at hintegrate
     rw [<-hintegrate]
     -- Here, we prove that the array is still pairwise ordered after the integration.
@@ -380,10 +430,22 @@ theorem integrate_sound (P : ItemSet A) (inv : ItemSetInvariant P) (newItem : Yj
     all_goals (rw [ok_bind] at hbody)
 
     . simp at hbody
-      rw [Int.toNat_add] at hbody
-      rw [Int.toNat_add] at hbody
-      simp at hbody
-      simp at hlt
+      split at hbody
+      . -- case 1: oLeftIdx < leftIdx
+        cases hbody
+        simp [loopInv]
+        constructor
+        . cases Nat.lt_or_ge (i + 1) (((rightIdx - leftIdx).toNat) - 1) with
+          | inl h_i_lt =>
+            rw [List.getElem?_range'] <;> try assumption
+            simp
+            omega
+          | inr h_i_ge =>
+            rw [List.getElem?_eq_none]
+            simp
+            simp
+            omega
+
     . sorry
 
 theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
