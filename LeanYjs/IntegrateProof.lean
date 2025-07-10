@@ -320,6 +320,118 @@ theorem loopInv_preserve1
   : loopInv P arr newItem leftIdx (↑rightIdx.toNat) (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? hloop := by
   sorry
 
+theorem List.Pairwise_insertIdx {A : Type} {R : A -> A -> Prop} [DecidableEq A] (l : List A) (i : ℕ) (newItem : A) :
+  (hilength : i ≤ l.length)
+  -> List.Pairwise R l
+  -> (∀j, (hji : j < i) -> R (l[j]) newItem)
+  -> (∀j, (hji : i <= j) -> (hjlen : j < l.length) -> R newItem (l[j]))
+  -> List.Pairwise R (l.insertIdx i newItem) := by
+  intros hilength hpair hlt1 hlt2
+  rw [List.pairwise_iff_getElem] at *
+  intros j k hjlen hklen hjk
+  rw [List.length_insertIdx_of_le_length] at * <;> try assumption
+  have hjk :
+    (j = i ∧ i < k) ∨
+    (j < i ∧ k = i) ∨
+    (j ≠ i ∧ i ≠ k) := by
+    omega
+  cases hjk with
+  | inl hjk =>
+    obtain ⟨ heq, hik ⟩ := hjk
+    subst heq
+    rw [List.getElem_insertIdx (i := j) (j := j)]
+    simp
+    rw [List.getElem_insertIdx (i := j) (j := k)]
+    split; omega
+    split; omega
+    apply hlt2; omega
+  | inr hjk =>
+    cases hjk with
+    | inl hjk =>
+      obtain ⟨ hjk, heq ⟩ := hjk
+      subst heq
+      simp
+      rw [List.getElem_insertIdx (i := k) (j := j)]
+      split; apply hlt1; omega
+      omega
+    | inr hjk =>
+      obtain ⟨ hji, hki ⟩ := hjk
+      rw [List.getElem_insertIdx (i := i) (j := j)]
+      rw [List.getElem_insertIdx (i := i) (j := k)]
+      split
+      split
+      apply hpair; omega
+      split; omega
+      apply hpair; omega
+      split; apply hpair; omega
+      split; omega
+      apply hpair; omega
+
+theorem List.Pairwise_weak {A : Type} {R Q : A -> A -> Prop} [DecidableEq A] (l : List A) :
+  List.Pairwise R l
+  -> (∀ a b, R a b -> Q a b)
+  -> List.Pairwise Q l := by
+  intros hpair hweak
+  rw [List.pairwise_iff_getElem] at *
+  intros
+  apply hweak
+  apply hpair
+  assumption
+
+theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
+  IsClosedItemSet (ArrSet $ newItem :: arr.toList)
+  -> ItemSetInvariant (ArrSet $ newItem :: arr.toList)
+  -> YjsArrInvariant arr.toList
+  -> (hisize : i ≤ arr.size)
+  -> ((hizero : 0 < i) -> YjsLt' (ArrSet $ newItem :: arr.toList) arr[i - 1] newItem)
+  -> ((hisize : i < arr.size) -> YjsLt' (ArrSet $ newItem :: arr.toList) newItem arr[i])
+  -> YjsArrInvariant (arr.insertIdxIfInBounds i newItem).toList := by
+  intros hclosed hinv harrinv hisize hlt1 hlt2
+  obtain ⟨ _, _, hsorted, hunique ⟩ := harrinv
+  have heqset : ∀ x, ArrSet (newItem :: arr.toList) x ↔ ArrSet (arr.insertIdxIfInBounds i newItem).toList x := by
+    intros x
+    simp only [ArrSet]
+    cases x with
+    | first => simp
+    | last => simp
+    | itemPtr x =>
+      simp
+      rw [List.insertIdxIfInBounds_toArray]
+      simp
+      rw [List.mem_insertIdx hisize]
+      simp
+  constructor
+  . apply IsClosedItemSet.eq_set (P := ArrSet $ newItem :: arr.toList) _ hclosed heqset
+  . apply ItemSetInvariant.eq_set (P := ArrSet $ newItem :: arr.toList) _ hclosed hinv heqset
+  . rw [List.insertIdxIfInBounds_toArray]
+    simp
+    apply List.Pairwise_insertIdx
+    . apply List.Pairwise_weak (R := fun (a b : YjsItem A) => YjsLt' (ArrSet arr.toList) a b) <;> try assumption
+      intros a b hlt
+      apply yjs_lt'_mono <;> try assumption
+      intros a hin
+      cases a with
+      | first => simp [ArrSet]
+      | last => simp [ArrSet]
+      | itemPtr a =>
+        simp [ArrSet]
+        rw [List.mem_insertIdx hisize]
+        right
+        assumption
+    . intros j hji
+      apply yjs_lt'_mono <;> try assumption
+      
+
+
+
+
+
+
+
+
+
+
+
 theorem integrate_sound (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrSet arr.toList newItem.origin
   -> ArrSet arr.toList newItem.rightOrigin
@@ -390,8 +502,8 @@ theorem integrate_sound (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
                   else pure (ForInStep.yield ⟨r.fst, true⟩)
               else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
 
-  obtain ⟨ _ ⟩ | ⟨ res ⟩ := l; cases hintegrate
-  apply for_in_list_loop_invariant (I := fun x state => loopInv (ArrSet arr.toList) arr newItem leftIdx rightIdx.toNat x state) at hloop
+  obtain ⟨ _ ⟩ | ⟨ resState ⟩ := l; cases hintegrate
+  apply for_in_list_loop_invariant (I := fun x state => loopInv (ArrSet (newItem :: arr.toList)) arr newItem leftIdx rightIdx.toNat x state) at hloop
   . simp at hintegrate
     rw [<-hintegrate]
     -- Here, we prove that the array is still pairwise ordered after the integration.
