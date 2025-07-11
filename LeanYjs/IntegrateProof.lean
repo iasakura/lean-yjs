@@ -320,7 +320,7 @@ theorem loopInv_preserve1
   : loopInv P arr newItem leftIdx (↑rightIdx.toNat) (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? hloop := by
   sorry
 
-theorem List.Pairwise_insertIdx {A : Type} {R : A -> A -> Prop} [DecidableEq A] (l : List A) (i : ℕ) (newItem : A) :
+theorem List.Pairwise_insertIdx {R : A -> A -> Prop} (l : List A) (i : ℕ) (newItem : A) :
   (hilength : i ≤ l.length)
   -> List.Pairwise R l
   -> (∀j, (hji : j < i) -> R (l[j]) newItem)
@@ -367,7 +367,7 @@ theorem List.Pairwise_insertIdx {A : Type} {R : A -> A -> Prop} [DecidableEq A] 
       split; omega
       apply hpair; omega
 
-theorem List.Pairwise_weak {A : Type} {R Q : A -> A -> Prop} [DecidableEq A] (l : List A) :
+theorem List.Pairwise_weaken {A : Type} {R Q : A -> A -> Prop} [DecidableEq A] (l : List A) :
   List.Pairwise R l
   -> (∀ a b, R a b -> Q a b)
   -> List.Pairwise Q l := by
@@ -385,10 +385,11 @@ theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem :
   -> (hisize : i ≤ arr.size)
   -> ((hizero : 0 < i) -> YjsLt' (ArrSet $ newItem :: arr.toList) arr[i - 1] newItem)
   -> ((hisize : i < arr.size) -> YjsLt' (ArrSet $ newItem :: arr.toList) newItem arr[i])
+  -> (∀ a, a ∈ arr -> a ≠ newItem)
   -> YjsArrInvariant (arr.insertIdxIfInBounds i newItem).toList := by
-  intros hclosed hinv harrinv hisize hlt1 hlt2
+  intros hclosed hinv harrinv hisize hlt1 hlt2 hneq
   obtain ⟨ _, _, hsorted, hunique ⟩ := harrinv
-  have heqset : ∀ x, ArrSet (newItem :: arr.toList) x ↔ ArrSet (arr.insertIdxIfInBounds i newItem).toList x := by
+  have heqset : ∀ x, ArrSet (newItem :: arr.toList) x ↔ ArrSet (List.insertIdx i newItem arr.toList) x := by
     intros x
     simp only [ArrSet]
     cases x with
@@ -396,41 +397,99 @@ theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem :
     | last => simp
     | itemPtr x =>
       simp
-      rw [List.insertIdxIfInBounds_toArray]
-      simp
       rw [List.mem_insertIdx hisize]
       simp
-  constructor
-  . apply IsClosedItemSet.eq_set (P := ArrSet $ newItem :: arr.toList) _ hclosed heqset
-  . apply ItemSetInvariant.eq_set (P := ArrSet $ newItem :: arr.toList) _ hclosed hinv heqset
+
+  have heqset' : ∀ x, ArrSet (newItem :: arr.toList) x ↔ ArrSet (arr.insertIdxIfInBounds i newItem).toList x := by
+    intros
+    rw [List.insertIdxIfInBounds_toArray]
+    simp
+    rw [heqset]
+
+  have hsubset a : (ArrSet arr.toList) a -> (ArrSet (List.insertIdx i newItem arr.toList)) a := by
+    intros hmem
+    cases a with
+    | first => simp [ArrSet]
+    | last => simp [ArrSet]
+    | itemPtr a =>
+      simp [ArrSet]
+      rw [List.mem_insertIdx hisize]
+      right
+      assumption
+
+  have hsubset' : ∀ x, ArrSet arr.toList x -> ArrSet (newItem :: arr.toList) x := by
+    intros a hmem
+    simp [ArrSet] at *
+    cases a <;> simp
+    right
+    assumption
+
+  apply YjsArrInvariant.mk
+  . apply IsClosedItemSet.eq_set (P := ArrSet $ newItem :: arr.toList) _ hclosed heqset'
+  . apply ItemSetInvariant.eq_set (P := ArrSet $ newItem :: arr.toList) _ hclosed hinv heqset'
   . rw [List.insertIdxIfInBounds_toArray]
     simp
     apply List.Pairwise_insertIdx
-    . apply List.Pairwise_weak (R := fun (a b : YjsItem A) => YjsLt' (ArrSet arr.toList) a b) <;> try assumption
-      intros a b hlt
-      apply yjs_lt'_mono <;> try assumption
-      intros a hin
-      cases a with
-      | first => simp [ArrSet]
-      | last => simp [ArrSet]
-      | itemPtr a =>
-        simp [ArrSet]
-        rw [List.mem_insertIdx hisize]
-        right
-        assumption
+    . apply List.Pairwise_weaken (R := fun (a b : YjsItem A) => YjsLt' (ArrSet arr.toList) a b) <;> try assumption
+      intros
+      apply yjs_lt'_mono (P := ArrSet arr.toList) <;> assumption
     . intros j hji
-      apply yjs_lt'_mono <;> try assumption
-      
-
-
-
-
-
-
-
-
-
-
+      apply yjs_lt'_mono (P := ArrSet $ newItem :: arr.toList) <;> try assumption
+      . intros
+        rw [<-heqset]
+        assumption
+      . apply yjs_leq'_p_trans1 (y := arr[i - 1]) <;> try assumption
+        . rw [List.pairwise_iff_getElem] at hsorted
+          apply yjs_leq'_mono (P := ArrSet arr.toList) <;> try assumption
+          cases Nat.lt_or_ge j (i - 1) with
+          | inl hj_lt =>
+            have hlt : YjsLt' (ArrSet arr.toList) (YjsPtr.itemPtr arr[j]) (YjsPtr.itemPtr arr[i - 1]) := by
+              apply hsorted; assumption
+            obtain ⟨ k, hlt ⟩ := hlt
+            apply Exists.intro (k + 1)
+            apply YjsLeq.leqLt
+            assumption
+            intros
+            simp; omega
+          | inr hj_ge =>
+            have heq : j = i - 1 := by omega
+            subst heq
+            simp
+            exists 0
+            apply YjsLeq.leqSame
+            simp [ArrSet]
+        . apply hlt1; omega
+    . intros j hij hjlen
+      apply yjs_lt'_mono (P := ArrSet $ newItem :: arr.toList) <;> try assumption
+      . intros
+        rw [<-heqset]
+        assumption
+      . simp at hjlen
+        apply yjs_leq'_p_trans2 (y := YjsPtr.itemPtr arr[i]) <;> try assumption
+        . apply hlt2
+        . rw [List.pairwise_iff_getElem] at hsorted
+          apply yjs_leq'_mono (P := ArrSet arr.toList) <;> try assumption
+          cases Nat.lt_or_ge i j with
+          | inl hj_lt =>
+            have hlt : YjsLt' (ArrSet arr.toList) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr arr[j]) := by
+              apply hsorted <;> try assumption
+            obtain ⟨ h, hlt' ⟩ := hlt
+            exists h + 1; right; assumption
+          | inr hj_ge =>
+            have heq : j = i := by omega
+            subst heq
+            simp
+            exists 0; apply YjsLeq.leqSame; simp [ArrSet]
+  . rw [List.insertIdxIfInBounds_toArray]
+    apply List.Pairwise_insertIdx <;> try assumption
+    . intros
+      apply hneq
+      simp
+    . intros j hij hlt heq
+      apply hneq arr[j]
+      simp [ArrSet]
+      subst heq
+      simp
 
 theorem integrate_sound (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrSet arr.toList newItem.origin
