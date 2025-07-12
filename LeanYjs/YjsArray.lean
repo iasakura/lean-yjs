@@ -887,3 +887,55 @@ theorem findPtrIdx_getElem (arr : Array (YjsItem A)) (i :  ℕ) :
   . intros j hij heq
     apply YjsArrayInvariant_lt_neq arr j i hinv (by omega) hlt hij (by simp at heq; assumption)
   . assumption
+
+
+theorem findPtrIdx_ge_minus_1 {arr : Array (YjsItem A)} (item : YjsPtr A) :
+  findPtrIdx item arr = Except.ok idx
+  -> idx ≥ -1 := by
+  intros hfind
+  unfold findPtrIdx at hfind
+  cases item with
+  | first =>
+    simp at hfind
+    cases hfind
+    simp
+  | last =>
+    simp at hfind
+    cases hfind
+    omega
+  | itemPtr item =>
+    simp at hfind
+    generalize heq : Array.findIdx? (fun i => decide (i = item)) arr = idx at hfind
+    cases idx with
+    | none =>
+      cases hfind
+    | some idx =>
+      cases hfind
+      omega
+
+theorem findPtrIdx_le_size {arr : Array (YjsItem A)} (item : YjsPtr A) :
+  findPtrIdx item arr = Except.ok idx
+  -> idx ≤ arr.size := by
+  intros hfind
+  unfold findPtrIdx at hfind
+  cases item with
+  | first =>
+    simp at hfind
+    cases hfind
+    omega
+  | last =>
+    simp at hfind
+    cases hfind
+    simp
+  | itemPtr item =>
+    simp at hfind
+    generalize heq : Array.findIdx? (fun i => decide (i = item)) arr = idx at hfind
+    cases idx with
+    | none =>
+      cases hfind
+    | some idx =>
+      cases hfind
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
+      obtain ⟨ _, _ ⟩ := heq
+      simp
+      omega
