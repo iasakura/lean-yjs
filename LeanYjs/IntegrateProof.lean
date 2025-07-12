@@ -498,7 +498,7 @@ theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem :
       subst heq
       simp
 
-theorem integrate_sound (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
+theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrSet arr.toList newItem.origin
   -> ArrSet arr.toList newItem.rightOrigin
   -> YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin
