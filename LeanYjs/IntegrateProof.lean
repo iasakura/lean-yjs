@@ -1,3 +1,4 @@
+import LeanYjs.ListExtra
 import LeanYjs.Item
 import LeanYjs.ItemSet
 import LeanYjs.ActorId
@@ -318,64 +319,6 @@ theorem loopInv_preserve1
   : loopInv P arr newItem leftIdx (↑rightIdx.toNat) (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? hloop := by
   sorry
 
-theorem List.Pairwise_insertIdx {R : A -> A -> Prop} (l : List A) (i : ℕ) (newItem : A) :
-  (hilength : i ≤ l.length)
-  -> List.Pairwise R l
-  -> (∀j, (hji : j < i) -> R (l[j]) newItem)
-  -> (∀j, (hji : i <= j) -> (hjlen : j < l.length) -> R newItem (l[j]))
-  -> List.Pairwise R (l.insertIdx i newItem) := by
-  intros hilength hpair hlt1 hlt2
-  rw [List.pairwise_iff_getElem] at *
-  intros j k hjlen hklen hjk
-  rw [List.length_insertIdx_of_le_length] at * <;> try assumption
-  have hjk :
-    (j = i ∧ i < k) ∨
-    (j < i ∧ k = i) ∨
-    (j ≠ i ∧ i ≠ k) := by
-    omega
-  cases hjk with
-  | inl hjk =>
-    obtain ⟨ heq, hik ⟩ := hjk
-    subst heq
-    rw [List.getElem_insertIdx (i := j) (j := j)]
-    simp
-    rw [List.getElem_insertIdx (i := j) (j := k)]
-    split; omega
-    split; omega
-    apply hlt2; omega
-  | inr hjk =>
-    cases hjk with
-    | inl hjk =>
-      obtain ⟨ hjk, heq ⟩ := hjk
-      subst heq
-      simp
-      rw [List.getElem_insertIdx (i := k) (j := j)]
-      split; apply hlt1; omega
-      omega
-    | inr hjk =>
-      obtain ⟨ hji, hki ⟩ := hjk
-      rw [List.getElem_insertIdx (i := i) (j := j)]
-      rw [List.getElem_insertIdx (i := i) (j := k)]
-      split
-      split
-      apply hpair; omega
-      split; omega
-      apply hpair; omega
-      split; apply hpair; omega
-      split; omega
-      apply hpair; omega
-
-theorem List.Pairwise_weaken {A : Type} {R Q : A -> A -> Prop} [DecidableEq A] (l : List A) :
-  List.Pairwise R l
-  -> (∀ a b, R a b -> Q a b)
-  -> List.Pairwise Q l := by
-  intros hpair hweak
-  rw [List.pairwise_iff_getElem] at *
-  intros
-  apply hweak
-  apply hpair
-  assumption
-
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)
   -> ItemSetInvariant (ArrSet $ newItem :: arr.toList)
@@ -630,7 +573,10 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
   . -- initial
     sorry
   . intros x state hloop i hlt heq hinv hbody
-    rw [List.getElem_range'] at heq; simp at heq
+    rw [List.getElem_range'] at *; simp at heq
+    have hlt2: i < ((rightIdx - leftIdx).toNat - 1) := by
+      rw [List.length_range'] at hlt; assumption
+
     subst heq
     generalize hother : getElemExcept arr (leftIdx + ↑(1 + i)).toNat = other at hbody
     obtain ⟨ _ ⟩ | ⟨ other ⟩ := other; cases hbody
@@ -644,6 +590,10 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
     all_goals (generalize hoRightIdx : findPtrIdx other.rightOrigin arr = oRightIdx at hbody)
     all_goals (obtain ⟨ _ ⟩ | ⟨ oRightIdx ⟩ := oRightIdx; cases hbody)
     all_goals (rw [ok_bind] at hbody)
+
+    unfold loopInv; simp
+    -- prove each case one by one?
+    constructor
 
     . simp at hbody
       split at hbody
