@@ -280,12 +280,13 @@ theorem loopInv_preserve1
   (horigin_consistent : YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin)
   (hreachable_consistent : ∀ (x : YjsPtr A),
     OriginReachable (YjsPtr.itemPtr newItem) x →
-      YjsLeq' (ArrSet arr.toList) x newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin x)
+    YjsLeq' (ArrSet arr.toList) x newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin x)
   (hsameid_consistent : ∀ (x : YjsItem A),
     ArrSet arr.toList (YjsPtr.itemPtr x) →
-      x.id = newItem.id →
-        YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
-          YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
+    x.id = newItem.id →
+      YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
+        YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
+  (hneq : ∀ x ∈ arr.toList, x ≠ newItem)
   (harrinv : YjsArrInvariant arr.toList)
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList)))
@@ -294,29 +295,29 @@ theorem loopInv_preserve1
   (rightIdx : ℤ)
   (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
   (hleftIdxrightIdx : leftIdx < rightIdx)
-  (res : MProd ℕ Bool)
-  (hintegrate : (fun a => arr.insertIdxIfInBounds a.fst newItem) <$> Except.ok (ε := IntegrateError) res = Except.ok newArr)
+  (hrightIdx : rightIdx ≥ 0)
+  (resState : MProd ℕ Bool)
   (state : MProd ℕ Bool)
   (hloop : ForInStep (MProd ℕ Bool))
   (i : ℕ)
-  (hinv : loopInv (ArrSet arr.toList) arr newItem leftIdx (↑rightIdx.toNat) (some (1 + i)) (ForInStep.yield state))
+  (hlt : i < (List.range' 1 ((rightIdx - leftIdx).toNat - 1)).length)
+  (hlt2 : i < (rightIdx - leftIdx).toNat - 1)
+  (hinv : loopInv (ArrSet (newItem :: arr.toList)) arr newItem leftIdx (↑rightIdx.toNat) (some (1 + i)) (ForInStep.yield state))
   (other : YjsItem A)
   (hother : getElemExcept arr (leftIdx + ↑(1 + i)).toNat = Except.ok other)
-  -- h✝ : state.snd = false
   (oLeftIdx : ℤ)
   (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx)
   (oRightIdx : ℤ)
   (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx)
-  -- hbody : (if oLeftIdx < leftIdx then pure (ForInStep.done ⟨(leftIdx + ↑(1 + i)).toNat, state.snd⟩)
-  --   else
-  --     if oLeftIdx = leftIdx then
-  --       if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, false⟩)
-  --       else
-  --         if oRightIdx = rightIdx then pure (ForInStep.done ⟨(leftIdx + ↑(1 + i)).toNat, state.snd⟩)
-  --         else pure (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, true⟩)
-  --     else pure (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, state.snd⟩)) =
-  --   Except.ok hloop
-  : loopInv P arr newItem leftIdx (↑rightIdx.toNat) (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? hloop := by
+  (hnext : hloop = let dest := if state.snd = true then state.fst else (leftIdx + ↑(1 + i)).toNat;
+    if oLeftIdx < leftIdx then ForInStep.done ⟨dest, state.snd⟩
+    else
+      if oLeftIdx = leftIdx then
+        if other.id < newItem.id then ForInStep.yield ⟨dest, false⟩
+        else if oRightIdx = rightIdx then ForInStep.done ⟨dest, state.snd⟩ else ForInStep.yield ⟨dest, true⟩
+      else ForInStep.yield ⟨dest, state.snd⟩) :
+  loopInv (ArrSet (newItem :: arr.toList)) arr newItem leftIdx (↑rightIdx.toNat)
+    (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? hloop := by
   sorry
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
@@ -441,6 +442,12 @@ theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem :
       subst heq
       simp
 
+theorem if_app (α β : Type) (f : α -> β) (P : Prop) [Decidable P] (x y : α):
+  f (if decide P then x else y) = if decide P then f x else f y := by
+  cases decide P with
+  | true => simp
+  | false => simp
+
 theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   ArrSet arr.toList newItem.origin
   -> ArrSet arr.toList newItem.rightOrigin
@@ -524,7 +531,11 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
     simp at hintegrate
     rw [<-hintegrate]
     obtain ⟨ offset, res', hres', hloopInv, hdone ⟩ := hloop
-    apply YjsArrInvariant_insertIdxIfInBounds <;> try assumption
+    have h_resState : resState.fst ≤ arr.size := by
+      apply findPtrIdx_le_size at heqright
+      unfold loopInv at *
+      sorry
+    apply YjsArrInvariant_insertIdxIfInBounds arr newItem resState.fst hclosed harrsetinv harrinv h_resState
     . intros hi0
       simp [loopInv] at hloopInv
       obtain ⟨ hidx, hdest_current, dest, hdest, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
@@ -582,36 +593,46 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
     obtain ⟨ _ ⟩ | ⟨ other ⟩ := other; cases hbody
     rw [ok_bind] at hbody
 
-    split at hbody
-    all_goals (generalize hoLeftIdx : findPtrIdx other.origin arr = oLeftIdx at hbody)
-    all_goals (obtain ⟨ _ ⟩ | ⟨ oLeftIdx ⟩ := oLeftIdx; cases hbody)
-    all_goals (rw [ok_bind] at hbody)
+    generalize hoLeftIdx : findPtrIdx other.origin arr = oLeftIdx at hbody
+    obtain ⟨ _ ⟩ | ⟨ oLeftIdx ⟩ := oLeftIdx; (split at hbody <;> cases hbody)
+    rw [ok_bind] at hbody
 
-    all_goals (generalize hoRightIdx : findPtrIdx other.rightOrigin arr = oRightIdx at hbody)
-    all_goals (obtain ⟨ _ ⟩ | ⟨ oRightIdx ⟩ := oRightIdx; cases hbody)
-    all_goals (rw [ok_bind] at hbody)
+    generalize hoRightIdx : findPtrIdx other.rightOrigin arr = oRightIdx at hbody
+    obtain ⟨ _ ⟩ | ⟨ oRightIdx ⟩ := oRightIdx; (split at hbody <;> cases hbody)
+    rw [ok_bind] at hbody
 
-    unfold loopInv; simp
-    -- prove each case one by one?
-    constructor
+    let next : (ForInStep (MProd ℕ Bool)) :=
+      let dest := if state.snd then state.fst else (leftIdx + ↑(1 + i)).toNat
+      if oLeftIdx < leftIdx then (ForInStep.done ⟨dest, state.snd⟩)
+      else
+        if oLeftIdx = leftIdx then
+          if other.id < newItem.id then (ForInStep.yield ⟨dest, false⟩)
+          else
+            if oRightIdx = rightIdx then (ForInStep.done ⟨dest, state.snd⟩)
+            else (ForInStep.yield ⟨dest, true⟩)
+        else (ForInStep.yield ⟨dest, state.snd⟩)
+    have hnext : hloop = next := by
+      suffices Except.ok (ε := IntegrateError) hloop = Except.ok next by
+        simp at this
+        assumption
+      rw [<-hbody]
+      unfold next
+      simp
+      repeat' rw [ok_bind]
+      obtain ⟨ dest, scanning ⟩ := state
+      simp
+      cases scanning with
+      | true =>
+        simp
+        (repeat' (split <;> try simp)) <;> try simp [pure, Except.pure]
+      | false =>
+        simp
+        (repeat' (split <;> try simp)) <;> try simp [pure, Except.pure]
 
-    . simp at hbody
-      split at hbody
-      . -- case 1: oLeftIdx < leftIdx
-        cases hbody
-        simp [loopInv]
-        constructor
-        . cases Nat.lt_or_ge (i + 1) (((rightIdx - leftIdx).toNat) - 1) with
-          | inl h_i_lt =>
-            rw [List.getElem?_range'] <;> try assumption
-            simp
-            omega
-          | inr h_i_ge =>
-            rw [List.getElem?_eq_none]
-            simp
-            simp
-            omega
-    . sorry
+    apply loopInv_preserve1
+      newItem arr newArr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent hneq
+      harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx
+      resState state hloop i hlt hlt2 hinv other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx hnext
 
 theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
