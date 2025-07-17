@@ -318,7 +318,29 @@ theorem loopInv_preserve1
       else ForInStep.yield ⟨dest, state.snd⟩) :
   loopInv (ArrSet (newItem :: arr.toList)) arr newItem leftIdx (↑rightIdx.toNat)
     (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? hloop := by
-  sorry
+  constructor
+  . cases Nat.lt_or_ge (i + 1) (((rightIdx - leftIdx).toNat) - 1) with
+    | inl h_i_lt =>
+      rw [List.getElem?_range'] <;> try assumption
+      simp
+      omega
+    | inr h_i_ge =>
+      rw [List.getElem?_eq_none]
+      simp
+      simp
+      omega
+  constructor
+  . cases Nat.lt_or_ge (i + 1) (((rightIdx - leftIdx).toNat) - 1) with
+    | inl h_i_lt =>
+      rw [List.getElem?_range'] <;> try assumption
+      simp [offsetToIndex]
+      omega
+    | inr h_i_ge =>
+      rw [List.getElem?_eq_none]
+      simp
+      simp
+      omega
+
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)
