@@ -298,7 +298,7 @@ theorem loopInv_preserve1
   (hrightIdx : rightIdx ≥ 0)
   (resState : MProd ℕ Bool)
   (state : MProd ℕ Bool)
-  (hloop : ForInStep (MProd ℕ Bool))
+  (next : ForInStep (MProd ℕ Bool))
   (i : ℕ)
   (hlt : i < (List.range' 1 ((rightIdx - leftIdx).toNat - 1)).length)
   (hlt2 : i < (rightIdx - leftIdx).toNat - 1)
@@ -309,7 +309,7 @@ theorem loopInv_preserve1
   (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx)
   (oRightIdx : ℤ)
   (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx)
-  (hnext : hloop = let dest := if state.snd = true then state.fst else (leftIdx + ↑(1 + i)).toNat;
+  (hnext : next = let dest := if state.snd = true then state.fst else (leftIdx + ↑(1 + i)).toNat;
     if oLeftIdx < leftIdx then ForInStep.done ⟨dest, state.snd⟩
     else
       if oLeftIdx = leftIdx then
@@ -317,7 +317,32 @@ theorem loopInv_preserve1
         else if oRightIdx = rightIdx then ForInStep.done ⟨dest, state.snd⟩ else ForInStep.yield ⟨dest, true⟩
       else ForInStep.yield ⟨dest, state.snd⟩) :
   loopInv (ArrSet (newItem :: arr.toList)) arr newItem leftIdx (↑rightIdx.toNat)
-    (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? hloop := by
+    (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? next := by
+  have hnext_dest : next.value.fst = if state.snd = true then state.fst else (leftIdx + ↑(1 + i)).toNat := by
+    sorry
+    -- simp [hnext]
+    -- split
+    -- simp
+    -- split
+    -- split
+    -- simp
+    -- split
+    -- simp
+    -- split
+    -- simp
+    -- simp
+    -- simp
+  have hnext_scanning : next.value.snd =
+    if oLeftIdx < leftIdx then state.snd
+    else if oLeftIdx = leftIdx then
+      if other.id < newItem.id then false
+      else if oRightIdx = rightIdx then state.snd else true
+    else state.snd := by
+    sorry
+  unfold loopInv
+  generalize hnexteq : next.value = nextValue at *
+  obtain ⟨ dest, scanning ⟩ := nextValue
+  simp at *
   constructor
   . cases Nat.lt_or_ge (i + 1) (((rightIdx - leftIdx).toNat) - 1) with
     | inl h_i_lt =>
