@@ -76,7 +76,10 @@ def isDone (state : ForInStep (MProd ℕ Bool)) (x : Option ℕ) : Bool :=
   | ForInStep.done _ => true
   | ForInStep.yield _ => false
 
-def loopInv (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rightIdx : ℤ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :=
+def scannedItem arr (item newItem destItem : YjsItem A) :=
+  (item.origin = newItem.origin ∧ newItem.id < item.id ∨ YjsLt' (ArrSet arr) destItem item.origin)
+
+def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rightIdx : ℤ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :=
   -- when x is none, we are done so current is rightIdx
   let current := offsetToIndex leftIdx rightIdx x
   let ⟨ dest, scanning ⟩ := state.value
@@ -87,13 +90,13 @@ def loopInv (P : ItemSet A) (arr : Array (YjsItem A)) (newItem : YjsItem A) (lef
   (dest < current) ∧
   ∃ destItem,
     arr[dest]? = some destItem ∧
-    (∀ i, i < dest -> ∃ other : YjsItem A, arr[i]? = some other ∧ YjsLt' P other newItem) ∧
+    (∀ i, i < dest -> ∃ other : YjsItem A, arr[i]? = some other ∧ YjsLt' (ArrSet $ newItem :: arr.toList) other newItem) ∧
     (∀ i, (h_dest_i : dest ≤ i) -> (h_i_c : i < current) ->
       ∃ item : YjsItem A, arr[i]? = some item ∧
         (item.origin = newItem.origin ∧ newItem.id < item.id ∨
-         YjsLt' P destItem item.origin)) ∧
+         YjsLt' (ArrSet $ newItem :: arr.toList) destItem item.origin)) ∧
     (scanning -> destItem.origin = newItem.origin) ∧
-    (done -> ∀item : YjsItem A, getElemExcept arr current = Except.ok item -> YjsLt' P newItem item)
+    (done -> ∀item : YjsItem A, getElemExcept arr current = Except.ok item -> YjsLt' (ArrSet $ newItem :: arr.toList) newItem item)
 
 omit [DecidableEq A] in theorem not_rightOrigin_first (P : YjsPtr A -> Prop) (item : YjsItem A) :
   IsClosedItemSet P ->
@@ -117,7 +120,7 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
   IsClosedItemSet (ArrSet (newItem :: arr.toList)) ->
   ItemSetInvariant (ArrSet (newItem :: arr.toList)) ->
   YjsArrInvariant arr.toList ->
-  loopInv (ArrSet $ newItem :: arr.toList) arr newItem leftIdx rightIdx offset state ->
+  loopInv arr newItem leftIdx rightIdx offset state ->
 
   findPtrIdx newItem.origin arr = Except.ok leftIdx ->
   findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx ->
@@ -143,7 +146,7 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
     subst h_scanning
     cases state <;> eq_refl
   rw [heq] at hloopinv
-  obtain ⟨ hrange, hdest_current, destItem, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hloopinv
+  obtain ⟨ hsize, hdest_current, destItem, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hloopinv
   -- simp [offsetToIndex] at h_tbd hcurrent
   subst hcurrent
   obtain ⟨ item, heq, h_tbd ⟩ := h_tbd j h_j_dest h_j_i
@@ -302,25 +305,39 @@ theorem loopInv_preserve1
   (i : ℕ)
   (hlt : i < (List.range' 1 ((rightIdx - leftIdx).toNat - 1)).length)
   (hlt2 : i < (rightIdx - leftIdx).toNat - 1)
-  (hinv : loopInv (ArrSet (newItem :: arr.toList)) arr newItem leftIdx (↑rightIdx.toNat) (some (1 + i)) (ForInStep.yield state))
+  (hinv : loopInv arr newItem leftIdx (↑rightIdx.toNat) (some (1 + i)) (ForInStep.yield state))
   (other : YjsItem A)
   (hother : getElemExcept arr (leftIdx + ↑(1 + i)).toNat = Except.ok other)
   (oLeftIdx : ℤ)
   (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx)
   (oRightIdx : ℤ)
   (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx)
-  (hnext : next = let dest := if state.snd = true then state.fst else (leftIdx + ↑(1 + i)).toNat;
-    if oLeftIdx < leftIdx then ForInStep.done ⟨dest, state.snd⟩
-    else
-      if oLeftIdx = leftIdx then
-        if other.id < newItem.id then ForInStep.yield ⟨dest, false⟩
-        else if oRightIdx = rightIdx then ForInStep.done ⟨dest, state.snd⟩ else ForInStep.yield ⟨dest, true⟩
-      else ForInStep.yield ⟨dest, state.snd⟩) :
-  loopInv (ArrSet (newItem :: arr.toList)) arr newItem leftIdx (↑rightIdx.toNat)
+  (hbody : next = (if oLeftIdx < leftIdx then (ForInStep.done (α := MProd ℕ Bool) ⟨state.fst, state.snd⟩)
+            else
+              if oLeftIdx = leftIdx then
+                if other.id < newItem.id then (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, false⟩)
+                else
+                  if oRightIdx = rightIdx then (ForInStep.done ⟨state.fst, state.snd⟩)
+                  else (ForInStep.yield ⟨state.fst, true⟩)
+              else
+                if state.snd = false then (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, state.snd⟩)
+                else (ForInStep.yield ⟨state.fst, state.snd⟩))) :
+  loopInv arr newItem leftIdx (↑rightIdx.toNat)
     (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? next := by
-  have hnext_dest : next.value.fst = if state.snd = true then state.fst else (leftIdx + ↑(1 + i)).toNat := by
+  obtain ⟨ dest, scanning ⟩ := state
+  have hnext_dest :
+    next.value.fst = if oLeftIdx < leftIdx then dest
+      else
+        if oLeftIdx = leftIdx then
+          if other.id < newItem.id then (leftIdx + ↑(1 + i)).toNat
+          else
+            if oRightIdx = rightIdx then dest
+            else dest
+        else
+          if scanning = false then (leftIdx + ↑(1 + i)).toNat
+          else dest := by
     sorry
-    -- simp [hnext]
+    -- subst hbody
     -- split
     -- simp
     -- split
@@ -328,20 +345,48 @@ theorem loopInv_preserve1
     -- simp
     -- split
     -- simp
-    -- split
     -- simp
+    -- simp
+    -- split
     -- simp
     -- simp
   have hnext_scanning : next.value.snd =
-    if oLeftIdx < leftIdx then state.snd
-    else if oLeftIdx = leftIdx then
-      if other.id < newItem.id then false
-      else if oRightIdx = rightIdx then state.snd else true
-    else state.snd := by
+    if oLeftIdx < leftIdx then scanning
+    else
+      if oLeftIdx = leftIdx then
+        if other.id < newItem.id then false
+        else
+          if oRightIdx = rightIdx then scanning
+          else true
+      else
+        if scanning = false then scanning
+        else scanning := by
     sorry
+    -- subst hbody
+    -- split
+    -- simp
+    -- split
+    -- split
+    -- simp
+    -- split
+    -- simp
+    -- simp
+    -- simp
+    -- split
+    -- simp
+    -- simp
+  have hinv' := hinv
+  obtain ⟨ hidx, hdest_current, destItem, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hinv'
+  have h_leftIdx : -1 <= leftIdx := by
+    apply findPtrIdx_ge_minus_1 at heqleft
+    omega
+  have h_leftIdx : rightIdx <= arr.size := by
+    apply findPtrIdx_le_size at heqright
+    omega
+
   unfold loopInv
   generalize hnexteq : next.value = nextValue at *
-  obtain ⟨ dest, scanning ⟩ := nextValue
+  obtain ⟨ nDest, nScanning ⟩ := nextValue
   simp at *
   constructor
   . cases Nat.lt_or_ge (i + 1) (((rightIdx - leftIdx).toNat) - 1) with
@@ -358,14 +403,41 @@ theorem loopInv_preserve1
   . cases Nat.lt_or_ge (i + 1) (((rightIdx - leftIdx).toNat) - 1) with
     | inl h_i_lt =>
       rw [List.getElem?_range'] <;> try assumption
-      simp [offsetToIndex]
-      omega
+      simp [offsetToIndex] at *
+      subst nDest
+      split <;> omega
     | inr h_i_ge =>
-      rw [List.getElem?_eq_none]
+      simp [offsetToIndex] at *
+      rw [List.getElem?_eq_none (by rw [List.length_range']; omega)]
+      subst nDest
       simp
-      simp
-      omega
-
+      split <;> omega
+  have nDest_lt_size : nDest < arr.size := by
+    simp [offsetToIndex] at *
+    subst nDest
+    split <;> omega
+  exists arr[nDest]
+  constructor
+  . simp
+  constructor
+  . -- ∀ i < nDest, ∃ other,
+    --   arr[i]? = some other ∧ YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr other) (YjsPtr.itemPtr newItem)
+    intros j h_j_lt
+    exists arr[j]
+    constructor
+    . simp
+    . subst nDest
+      split at h_j_lt
+      . obtain ⟨ other, heq, hlt ⟩ := h_lt_item j h_j_lt
+        have heq : other = arr[j] := by
+          rw [Array.getElem?_eq_some_iff] at heq
+          obtain ⟨ _, heq ⟩ := heq
+          subst heq
+          simp
+        subst other
+        assumption
+      . sorry
+  sorry
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)
@@ -548,31 +620,21 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
   generalize hloop :
     forIn (α := ℕ) (m := Except IntegrateError) (β := MProd ℕ Bool) (List.range' 1 ((rightIdx - leftIdx).toNat - 1) 1) ⟨(leftIdx + 1).toNat, false⟩ (fun offset r => do
       let other ← getElemExcept arr (leftIdx + ↑offset).toNat
-      if r.snd = false then do
-          let oLeftIdx ← findPtrIdx other.origin arr
-          let oRightIdx ← findPtrIdx other.rightOrigin arr
-          if oLeftIdx < leftIdx then pure (ForInStep.done ⟨(leftIdx + ↑offset).toNat, r.snd⟩)
+      let oLeftIdx ← findPtrIdx other.origin arr
+      let oRightIdx ← findPtrIdx other.rightOrigin arr
+      if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
+        else
+          if oLeftIdx = leftIdx then
+            if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, false⟩)
             else
-              if oLeftIdx = leftIdx then
-                if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, false⟩)
-                else
-                  if oRightIdx = rightIdx then pure (ForInStep.done ⟨(leftIdx + ↑offset).toNat, r.snd⟩)
-                  else pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, true⟩)
-              else pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, r.snd⟩)
-        else do
-          let oLeftIdx ← findPtrIdx other.origin arr
-          let oRightIdx ← findPtrIdx other.rightOrigin arr
-          if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
-            else
-              if oLeftIdx = leftIdx then
-                if other.id < newItem.id then pure (ForInStep.yield ⟨r.fst, false⟩)
-                else
-                  if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
-                  else pure (ForInStep.yield ⟨r.fst, true⟩)
-              else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
+              if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
+              else pure (ForInStep.yield ⟨r.fst, true⟩)
+          else
+            if r.snd = false then pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, r.snd⟩)
+            else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
 
   obtain ⟨ _ ⟩ | ⟨ resState ⟩ := l; cases hintegrate
-  apply for_in_list_loop_invariant (I := fun x state => loopInv (ArrSet (newItem :: arr.toList)) arr newItem leftIdx rightIdx.toNat x state) at hloop
+  apply for_in_list_loop_invariant (I := fun x state => loopInv arr newItem leftIdx rightIdx.toNat x state) at hloop
   . -- Here, we prove that the array is still pairwise ordered after the integration.
     -- So, what we need is arr[res.first] < newItem < arr[res.first + 1] (and also, 0 <= res.first <= arr.size)
     simp at hintegrate
@@ -649,15 +711,16 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
     rw [ok_bind] at hbody
 
     let next : (ForInStep (MProd ℕ Bool)) :=
-      let dest := if state.snd then state.fst else (leftIdx + ↑(1 + i)).toNat
-      if oLeftIdx < leftIdx then (ForInStep.done ⟨dest, state.snd⟩)
+      if oLeftIdx < leftIdx then (ForInStep.done (α := MProd ℕ Bool) ⟨state.fst, state.snd⟩)
       else
         if oLeftIdx = leftIdx then
-          if other.id < newItem.id then (ForInStep.yield ⟨dest, false⟩)
+          if other.id < newItem.id then (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, false⟩)
           else
-            if oRightIdx = rightIdx then (ForInStep.done ⟨dest, state.snd⟩)
-            else (ForInStep.yield ⟨dest, true⟩)
-        else (ForInStep.yield ⟨dest, state.snd⟩)
+            if oRightIdx = rightIdx then (ForInStep.done ⟨state.fst, state.snd⟩)
+            else (ForInStep.yield ⟨state.fst, true⟩)
+        else
+          if state.snd = false then (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, state.snd⟩)
+          else (ForInStep.yield ⟨state.fst, state.snd⟩)
     have hnext : hloop = next := by
       suffices Except.ok (ε := IntegrateError) hloop = Except.ok next by
         simp at this
