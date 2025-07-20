@@ -383,11 +383,20 @@ theorem loopInv_preserve1
   have h_leftIdx : rightIdx <= arr.size := by
     apply findPtrIdx_le_size at heqright
     omega
-
   unfold loopInv
   generalize hnexteq : next.value = nextValue at *
   obtain ⟨ nDest, nScanning ⟩ := nextValue
   simp at *
+  have nDest_eq : nDest = dest ∨ nDest = (leftIdx + ↑(1 + i)).toNat := by
+    split at hnext_dest
+    . left; assumption
+    split at hnext_dest
+    . split at hnext_dest
+      . right; assumption
+      . left; assumption
+    . split at hnext_dest
+      . right; assumption
+      . left; assumption
   constructor
   . cases Nat.lt_or_ge (i + 1) (((rightIdx - leftIdx).toNat) - 1) with
     | inl h_i_lt =>
@@ -404,18 +413,15 @@ theorem loopInv_preserve1
     | inl h_i_lt =>
       rw [List.getElem?_range'] <;> try assumption
       simp [offsetToIndex] at *
-      subst nDest
-      split <;> omega
+      omega
     | inr h_i_ge =>
       simp [offsetToIndex] at *
       rw [List.getElem?_eq_none (by rw [List.length_range']; omega)]
-      subst nDest
       simp
-      split <;> omega
+      omega
   have nDest_lt_size : nDest < arr.size := by
     simp [offsetToIndex] at *
-    subst nDest
-    split <;> omega
+    omega
   exists arr[nDest]
   constructor
   . simp
@@ -436,7 +442,7 @@ theorem loopInv_preserve1
           simp
         subst other
         assumption
-      . sorry
+      . 
   sorry
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
