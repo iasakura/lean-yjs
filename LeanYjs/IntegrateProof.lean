@@ -274,6 +274,10 @@ omit [DecidableEq A] in theorem insertIdxIfInBounds_mem {arr : Array (YjsItem A)
     simp
     assumption
 
+lemma Except.ok_inj {α ε : Type} {x y : α} (h : Except.ok (ε := ε) x = Except.ok y) : x = y := by
+  cases h
+  simp
+
 theorem loopInv_preserve1
   (newItem : YjsItem A)
   (arr newArr : Array (YjsItem A))
@@ -447,11 +451,41 @@ theorem loopInv_preserve1
           apply getElem_lt_YjsLt' arr j (leftIdx + (1 + ↑i)).toNat harrinv (by omega)
         have hor : YjsLeq' (ArrSet $ newItem :: arr.toList) arr[(leftIdx + (1 + ↑i)).toNat].rightOrigin newItem ∨ YjsLt' (ArrSet $ newItem :: arr.toList) newItem arr[(leftIdx + (1 + ↑i)).toNat].rightOrigin := by
           apply yjs_lt_total (P := ArrSet $ newItem :: arr.toList) <;> try assumption
-          . obtain ⟨ _, _, _, _ ⟩ := arr[(leftIdx + (1 + ↑i)).toNat]
-            apply hclosed.closedRight
-            sorry
-          . apply hclosed.closedRight
-            sorry
+          . generalize heq : arr[(leftIdx + (1 + ↑i)).toNat] = item at *
+            obtain ⟨ o, r, id, c ⟩ := item
+            apply hclosed.closedRight o r id c
+            simp [ArrSet]
+            rw [<-heq]
+            right; simp
+          . simp [ArrSet]
+        cases hor with
+        | inl hle =>
+          obtain ⟨ _, hle ⟩ := hle
+          generalize heq : arr[(leftIdx + (1 + ↑i)).toNat] = item at *
+          obtain ⟨ o, r, id, c ⟩ := item
+          constructor
+          apply YjsLt.ltRightOrigin
+          . rw [<-heq]
+            simp [ArrSet]
+          assumption
+        | inr hlt =>
+          have hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size := by
+            omega
+          obtain ⟨ _, hlt ⟩ := hlt
+          simp [getElemExcept] at hother
+          rw [Array.getElem?_eq_getElem hlt_current] at hother
+          simp [pure, Except.pure] at hother
+          subst other
+          subst oLeftIdx
+          -- findPtrIdx is injective, so newItem.origin = other.origin
+          constructor
+          apply YjsLt.ltConflict
+          apply ConflictLt.ltOriginSame <;> try assumption
+
+
+
+
+
 
   sorry
 
