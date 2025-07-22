@@ -274,9 +274,75 @@ omit [DecidableEq A] in theorem insertIdxIfInBounds_mem {arr : Array (YjsItem A)
     simp
     assumption
 
-lemma Except.ok_inj {α ε : Type} {x y : α} (h : Except.ok (ε := ε) x = Except.ok y) : x = y := by
-  cases h
-  simp
+theorem findPtrIdx_eq_ok_inj {arr : Array (YjsItem A)} (x y : YjsPtr A) :
+  findPtrIdx x arr = Except.ok i →
+  findPtrIdx y arr = Except.ok i →
+   x = y := by
+  intros heq_x heq_y
+  cases x with
+  | first =>
+    cases y with
+    | first =>
+      simp
+    | last =>
+      simp [findPtrIdx] at heq_x heq_y
+      cases heq_x
+      cases heq_y
+    | itemPtr y =>
+      exfalso
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq :  Array.findIdx? (fun i => decide (i = y)) arr = idx at *
+      cases idx <;> cases heq_y
+      cases heq_x
+  | last =>
+    cases y with
+    | first =>
+      simp [findPtrIdx] at heq_x heq_y
+      cases heq_x
+      cases heq_y
+    | last =>
+      simp
+    | itemPtr y =>
+      exfalso
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq :  Array.findIdx? (fun i => decide (i = y)) arr = idx at *
+      cases idx <;> cases heq_y
+      cases heq_x
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
+      omega
+  | itemPtr x =>
+    cases y with
+    | first =>
+      exfalso
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq :  Array.findIdx? (fun i => decide (i = x)) arr = idx at *
+      cases idx <;> cases heq_x
+      cases heq_y
+    | last =>
+      exfalso
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq :  Array.findIdx? (fun i => decide (i = x)) arr = idx at *
+      cases idx <;> cases heq_x
+      cases heq_y
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
+      omega
+    | itemPtr y =>
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq_x :  Array.findIdx? (fun i => decide (i = x)) arr = idxX at *
+      generalize heq_y :  Array.findIdx? (fun i => decide (i = y)) arr = idxY at *
+      cases idxX <;> cases heq_x
+      cases idxY <;> cases heq_y
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq_x
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq_y
+      obtain ⟨ hlt_x, heq_x ⟩ := heq_x
+      obtain ⟨ hlt_y, heq_y ⟩ := heq_y
+      rw [Array.findIdx_eq hlt_x] at heq_x
+      rw [Array.findIdx_eq hlt_y] at heq_y
+      simp at heq_x heq_y
+      obtain ⟨ heq_x, _ ⟩ := heq_x
+      obtain ⟨ heq_y, _ ⟩ := heq_y
+      subst x y
+      simp
 
 theorem loopInv_preserve1
   (newItem : YjsItem A)
@@ -438,9 +504,16 @@ theorem loopInv_preserve1
     split at h_j_lt <;> try (apply h_j_dest (by assumption))
     split at h_j_lt
     . split at h_j_lt
-      . apply yjs_lt_trans (y := arr[(leftIdx + (1 + ↑i)).toNat]) <;> try assumption
+      have hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size := by
+        omega
+      have heq : arr[(leftIdx + (1 + ↑i)).toNat] = other := by
+        simp [getElemExcept] at hother
+        rw [Array.getElem?_eq_getElem hlt_current] at hother
+        simp [pure, Except.pure] at hother
+        assumption
+      . apply yjs_lt_trans (y := other) <;> try assumption
         . simp [ArrSet]
-        . simp [ArrSet]
+        . subst other; simp [ArrSet]
         . simp [ArrSet]
         . apply yjs_lt'_mono (P := ArrSet arr.toList)
           . apply harrinv.closed
@@ -448,11 +521,11 @@ theorem loopInv_preserve1
           . intros a hlt;
             cases a <;> try simp [ArrSet] at *
             right; assumption
+          subst other
           apply getElem_lt_YjsLt' arr j (leftIdx + (1 + ↑i)).toNat harrinv (by omega)
-        have hor : YjsLeq' (ArrSet $ newItem :: arr.toList) arr[(leftIdx + (1 + ↑i)).toNat].rightOrigin newItem ∨ YjsLt' (ArrSet $ newItem :: arr.toList) newItem arr[(leftIdx + (1 + ↑i)).toNat].rightOrigin := by
+        have hor : YjsLeq' (ArrSet $ newItem :: arr.toList) other.rightOrigin newItem ∨ YjsLt' (ArrSet $ newItem :: arr.toList) newItem other.rightOrigin := by
           apply yjs_lt_total (P := ArrSet $ newItem :: arr.toList) <;> try assumption
-          . generalize heq : arr[(leftIdx + (1 + ↑i)).toNat] = item at *
-            obtain ⟨ o, r, id, c ⟩ := item
+          . obtain ⟨ o, r, id, c ⟩ := other
             apply hclosed.closedRight o r id c
             simp [ArrSet]
             rw [<-heq]
@@ -464,23 +537,26 @@ theorem loopInv_preserve1
           generalize heq : arr[(leftIdx + (1 + ↑i)).toNat] = item at *
           obtain ⟨ o, r, id, c ⟩ := item
           constructor
-          apply YjsLt.ltRightOrigin
+          subst other; apply YjsLt.ltRightOrigin
           . rw [<-heq]
             simp [ArrSet]
           assumption
         | inr hlt =>
-          have hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size := by
-            omega
           obtain ⟨ _, hlt ⟩ := hlt
-          simp [getElemExcept] at hother
-          rw [Array.getElem?_eq_getElem hlt_current] at hother
-          simp [pure, Except.pure] at hother
-          subst other
           subst oLeftIdx
-          -- findPtrIdx is injective, so newItem.origin = other.origin
+          have heq_origin : newItem.origin = other.origin := by
+            apply findPtrIdx_eq_ok_inj _ _ heqleft hoLeftIdx
+          obtain ⟨ o, r, id, c ⟩ := other
+          obtain ⟨ no, nr, nid, nc ⟩ := newItem
+          simp [YjsItem.origin, YjsItem.rightOrigin] at heq_origin hlt
+          subst no
           constructor
           apply YjsLt.ltConflict
           apply ConflictLt.ltOriginSame <;> try assumption
+          rw [<-heq]
+          -- TODO: findPtrIdx_lt_YjsLt' requires ArrSet and findPtrIdx arguments are the same, but here
+          -- we have `ArrSet (newItem :: arr.toList)` and `ArrSet arr.toList`.
+          apply findPtrIdx_lt_YjsLt'
 
 
 
