@@ -88,6 +88,7 @@ def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rig
     | none => True
     | some x => 0 < x ∧ x < rightIdx - leftIdx) ∧
   (dest < current) ∧
+  (!scanning -> dest = current) ∧
   ∃ (destLt : dest < arr.size),
     let destItem := arr[dest]
     ((∀ i, (h_i_lt_dest : i < dest) -> YjsLt' (ArrSet $ newItem :: arr.toList) arr[i] newItem) ∧
@@ -146,7 +147,7 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
     subst h_scanning
     cases state <;> eq_refl
   rw [heq] at hloopinv
-  obtain ⟨ hsize, hdest_current, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hloopinv
+  obtain ⟨ hsize, hdest_current, h_not_scanning, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hloopinv
   -- simp [offsetToIndex] at h_tbd hcurrent
   subst hcurrent
   obtain ⟨ h_j_lt_size, h_tbd ⟩ := h_tbd j h_j_dest h_j_i
@@ -445,7 +446,7 @@ theorem loopInv_preserve1
     -- simp
     -- simp
   have hinv' := hinv
-  obtain ⟨ hidx, hdest_current, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hinv'
+  obtain ⟨ hidx, hdest_current, h_not_scanning, h_dest, h_lt_item, h_tbd, h_cand, h_done ⟩ := hinv'
   have h_leftIdx : -1 <= leftIdx := by
     apply findPtrIdx_ge_minus_1 at heqleft
     omega
@@ -491,6 +492,14 @@ theorem loopInv_preserve1
   have nDest_lt_size : nDest < arr.size := by
     simp [offsetToIndex] at *
     omega
+  constructor
+  . revert hnext_scanning hnext_dest
+    split
+    . intros
+      subst nDest nScanning
+      sorry
+      -- rw [List.getElem?_range' _ _ (by assumption)]
+    sorry
   exists nDest_lt_size
   constructor
   . -- ∀ i < nDest, ∃ other,
@@ -501,9 +510,10 @@ theorem loopInv_preserve1
       intros
       obtain hlt := h_lt_item j (by omega)
       assumption
-    split at h_j_lt <;> try (apply h_j_dest (by assumption))
+    split at h_j_lt <;> try (apply h_j_dest h_j_lt)
     split at h_j_lt
     . split at h_j_lt
+      on_goal 2 => apply h_j_dest h_j_lt
       have hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size := by
         omega
       have heq : arr[(leftIdx + (1 + ↑i)).toNat] = other := by
@@ -542,7 +552,7 @@ theorem loopInv_preserve1
             simp [ArrSet]
           assumption
         | inr hlt =>
-          obtain ⟨ _, hlt ⟩ := hlt
+          -- obtain ⟨ _, hlt ⟩ := hlt
           subst oLeftIdx
           have heq_origin : newItem.origin = other.origin := by
             apply findPtrIdx_eq_ok_inj _ _ heqleft hoLeftIdx
@@ -550,20 +560,31 @@ theorem loopInv_preserve1
           obtain ⟨ no, nr, nid, nc ⟩ := newItem
           simp [YjsItem.origin, YjsItem.rightOrigin] at heq_origin hlt
           subst no
-          constructor
-          apply YjsLt.ltConflict
-          apply ConflictLt.ltOriginSame <;> try assumption
+          apply YjsLt'.ltConflict
+          apply ConflictLt'.ltOriginSame <;> try assumption
           rw [<-heq]
           -- TODO: findPtrIdx_lt_YjsLt' requires ArrSet and findPtrIdx arguments are the same, but here
           -- we have `ArrSet (newItem :: arr.toList)` and `ArrSet arr.toList`.
-          apply findPtrIdx_lt_YjsLt'
-
-
-
-
-
-
-  sorry
+          apply yjs_lt'_mono (P := ArrSet arr.toList) (Q := (ArrSet (YjsItem.item o nr nid nc :: arr.toList))) <;> try assumption
+          . apply harrinv.closed
+          . apply harrinv.item_set_inv
+          . intros a ha; simp [ArrSet] at *; cases a <;> simp
+            right; assumption
+          apply findPtrIdx_lt_YjsLt' arr _ _ harrinv
+          . apply findPtrIdx_getElem _ _ harrinv (by omega)
+          . simp [YjsItem.rightOrigin] at heqright
+            apply heqright
+          . omega
+    . split at h_j_lt
+      on_goal 2 => apply h_j_dest h_j_lt
+      have hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size := by
+        omega
+      have heq : arr[(leftIdx + (1 + ↑i)).toNat] = other := by
+        simp [getElemExcept] at hother
+        rw [Array.getElem?_eq_getElem hlt_current] at hother
+        simp [pure, Except.pure] at hother
+        assumption
+      
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)

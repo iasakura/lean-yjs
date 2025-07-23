@@ -46,8 +46,63 @@ mutual
       -> ConflictLt P (max h1 h2 + 1) (YjsItem.item l r1 id1 c1) (YjsItem.item l r2 id2 c2)
 end
 
+def ConflictLt' {A} (P : ItemSet A) (i1 i2 : YjsPtr A) : Prop :=
+  ∃ h, ConflictLt P h i1 i2
+
 def YjsLt' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLt A P h x y
+
+def YjsLeq' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
+  ∃ h, @YjsLeq A P h x y
+
+theorem ConflictLt'.ltOriginDiff {A : Type} (P : ItemSet A) l1 l2 r1 r2 id1 id2 c1 c2 :
+  YjsLt' P l2 l1
+  -> YjsLt' P (YjsItem.item l1 r1 id1 c1) r2
+  -> YjsLt' P l1 (YjsItem.item l2 r2 id2 c2)
+  -> YjsLt' P (YjsItem.item l2 r2 id2 c2) r1
+  -> ConflictLt' P (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2) := by
+  intros hlt1 hlt2 hlt3 hlt4
+  obtain ⟨ h1, hlt1 ⟩ := hlt1
+  obtain ⟨ h2, hlt2 ⟩ := hlt2
+  obtain ⟨ h3, hlt3 ⟩ := hlt3
+  obtain ⟨ h4, hlt4 ⟩ := hlt4
+  constructor
+  apply ConflictLt.ltOriginDiff <;> try assumption
+
+theorem ConflictLt'.ltOriginSame {A : Type} (P : ItemSet A) l r1 r2 id1 id2 c1 c2 :
+  YjsLt' P (YjsItem.item l r1 id1 c1) r2
+  -> YjsLt' P (YjsItem.item l r2 id2 c2) r1
+  -> id1 < id2
+  -> ConflictLt' P (YjsItem.item l r1 id1 c1) (YjsItem.item l r2 id2 c2) := by
+  intros hlt1 hlt2 hlt3
+  obtain ⟨ h1, hlt1 ⟩ := hlt1
+  obtain ⟨ h2, hlt2 ⟩ := hlt2
+  constructor
+  apply ConflictLt.ltOriginSame <;> try assumption
+
+theorem YjsLt'.ltConflict {A : Type} (P : ItemSet A) i1 i2 : ConflictLt' P i1 i2 -> YjsLt' P i1 i2 := by
+  intros hlt
+  obtain ⟨ h, hlt ⟩ := hlt
+  constructor
+  apply YjsLt.ltConflict
+  assumption
+
+theorem YjsLt'.ltOriginOrder {A : Type} (P : ItemSet A) i1 i2 : P i1 -> P i2 -> OriginLt i1 i2 -> YjsLt' P i1 i2 := by
+  intros hpi1 hpi2 hor
+  constructor
+  apply YjsLt.ltOriginOrder <;> try assumption
+
+theorem YjsLt'.ltOrigin {A : Type} (P : ItemSet A) x o r id c : P (YjsItem.item o r id c) -> YjsLeq' P x o -> YjsLt' P x (YjsItem.item o r id c) := by
+  intros hpi hleq
+  obtain ⟨ h, hleq ⟩ := hleq
+  constructor
+  apply YjsLt.ltOrigin <;> try assumption
+
+theorem YjsLt'.ltRightOrigin {A : Type} (P : ItemSet A) o r id c x : P (YjsItem.item o r id c) -> YjsLeq' P r x -> YjsLt' P (YjsItem.item o r id c) x := by
+  intros hpi hleq
+  obtain ⟨ h, hleq ⟩ := hleq
+  constructor
+  apply YjsLt.ltRightOrigin <;> try assumption
 
 theorem yjs_lt_p1_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) ∧ (YjsLeq P h x y -> P x) := by
@@ -182,9 +237,6 @@ theorem yjs_leq_p2 {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr 
     | leqSame => assumption
     | leqLt _ _ _ hlt => apply yjs_lt_p2 hlt
 
-def YjsLeq' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
-  ∃ h, @YjsLeq A P h x y
-
 def yjs_leq'_imp_eq_or_yjs_lt' {A : Type} {P : @ItemSet A} {x y : YjsPtr A} :
   YjsLeq' P x y -> x = y ∨ YjsLt' P x y := by
     intros hleq
@@ -192,9 +244,6 @@ def yjs_leq'_imp_eq_or_yjs_lt' {A : Type} {P : @ItemSet A} {x y : YjsPtr A} :
     cases hleq with
     | leqSame _ => left; rfl
     | leqLt _ _ _ hlt => right; constructor; assumption
-
-def ConflictLt' {A} (P : ItemSet A) (x y : YjsPtr A) : Prop :=
-  ∃ h, ConflictLt P h x y
 
 theorem yjs_leq'_p1 {A : Type} {P : @ItemSet A} : forall {x y : YjsPtr A},
   YjsLeq' P x y -> P y -> P x := by
