@@ -68,7 +68,7 @@ def offsetToIndex (leftIdx : ℤ) (rightIdx : ℤ) (offset : Option ℕ) : ℕ :
   | none => rightIdx.toNat
   | some o => (leftIdx + o).toNat
 
-def isDone (state : ForInStep (MProd ℕ Bool)) (x : Option ℕ) : Bool :=
+def isDone (state : ForInStep (MProd ℤ Bool)) (x : Option ℕ) : Bool :=
   (match x with
   | none => true
   | some _ => false) ||
@@ -79,16 +79,17 @@ def isDone (state : ForInStep (MProd ℕ Bool)) (x : Option ℕ) : Bool :=
 def scannedItem arr (item newItem destItem : YjsItem A) :=
   (item.origin = newItem.origin ∧ newItem.id < item.id ∨ YjsLt' (ArrSet arr) destItem item.origin)
 
-def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rightIdx : ℤ) (x : Option ℕ) (state : ForInStep (MProd ℕ Bool)) :=
+def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rightIdx : ℤ) (x : Option ℕ) (state : ForInStep (MProd ℤ Bool)) :=
   -- when x is none, we are done so current is rightIdx
   let current := offsetToIndex leftIdx rightIdx x
   let ⟨ dest, scanning ⟩ := state.value
   let done := isDone state x
+  let dest := dest.toNat;
   (match x with
     | none => True
     | some x => 0 < x ∧ x < rightIdx - leftIdx) ∧
   (dest < current) ∧
-  (!scanning -> dest = current) ∧
+  (!scanning -> dest = current - 1) ∧
   ∃ (destLt : dest < arr.size),
     let destItem := arr[dest]
     ((∀ i, (h_i_lt_dest : i < dest) -> YjsLt' (ArrSet $ newItem :: arr.toList) arr[i] newItem) ∧
@@ -117,7 +118,7 @@ omit [DecidableEq A] in theorem not_rightOrigin_first (P : YjsPtr A -> Prop) (it
 
 -- 補題: itemとの大小関係が保留の区間 [dest, i) newItem < arr[i]なら∀j ∈ [dest, i) でnewItem < arr[j]が成り立つ。
 -- つまりループの終了条件が満たされたら[dest, i)のすべてでnewItem < arr[j]
-theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx rightIdx : ℤ) (state : ForInStep (MProd ℕ Bool)) :
+theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx rightIdx : ℤ) (state : ForInStep (MProd ℤ Bool)) :
   IsClosedItemSet (ArrSet (newItem :: arr.toList)) ->
   ItemSetInvariant (ArrSet (newItem :: arr.toList)) ->
   YjsArrInvariant arr.toList ->
@@ -129,7 +130,7 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
   current = offsetToIndex leftIdx rightIdx offset ->
   (hcurrentlt : current ≤ arr.size) ->
   ((hlt : current < arr.size) -> YjsLt' (ArrSet $ newItem :: arr.toList) newItem arr[current]) ->
-  ∀ j, (h_j_dest : state.value.fst ≤ j) ->
+  ∀ j, (h_j_dest : state.value.fst.toNat ≤ j) ->
   (h_j_i : j < current) ->
   YjsLt' (ArrSet $ newItem :: arr.toList) newItem arr[j] := by
 
@@ -138,7 +139,7 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
   revert j
   generalize h_dest_def : state.value.fst = dest
   generalize h_scanning : state.value.snd = scanning
-  apply Nat.strongRec' (p := fun size => ∀ (j : ℕ), dest ≤ j → ∀ (h_j_i : j < current), arr[j].size = size → YjsLt' _ newItem (YjsPtr.itemPtr arr[j]) )
+  apply Nat.strongRec' (p := fun size => ∀ (j : ℕ), dest.toNat ≤ j → ∀ (h_j_i : j < current), arr[j].size = size → YjsLt' _ newItem (YjsPtr.itemPtr arr[j]) )
   intros n ih j h_j_dest h_j_i heq_n
   subst heq_n
   unfold loopInv at hloopinv
@@ -194,7 +195,7 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
           simp [YjsItem.size, YjsPtr.size]
           omega
 
-        have h_dest_k : dest ≤ roIdx := by
+        have h_dest_k : dest.toNat ≤ roIdx := by
           obtain ⟨ roIdx, _ ⟩ := roIdx
           simp at *
           have hlt : j < roIdx := by
@@ -369,9 +370,9 @@ theorem loopInv_preserve1
   (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
   (hleftIdxrightIdx : leftIdx < rightIdx)
   (hrightIdx : rightIdx ≥ 0)
-  (resState : MProd ℕ Bool)
-  (state : MProd ℕ Bool)
-  (next : ForInStep (MProd ℕ Bool))
+  (resState : MProd ℤ Bool)
+  (state : MProd ℤ Bool)
+  (next : ForInStep (MProd ℤ Bool))
   (i : ℕ)
   (hlt : i < (List.range' 1 ((rightIdx - leftIdx).toNat - 1)).length)
   (hlt2 : i < (rightIdx - leftIdx).toNat - 1)
@@ -382,7 +383,7 @@ theorem loopInv_preserve1
   (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx)
   (oRightIdx : ℤ)
   (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx)
-  (hbody : next = (if oLeftIdx < leftIdx then (ForInStep.done (α := MProd ℕ Bool) ⟨state.fst, state.snd⟩)
+  (hbody : next = (if oLeftIdx < leftIdx then (ForInStep.done (α := MProd ℤ Bool) ⟨state.fst, state.snd⟩)
             else
               if oLeftIdx = leftIdx then
                 if other.id < newItem.id then (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, false⟩)
@@ -457,12 +458,13 @@ theorem loopInv_preserve1
   generalize hnexteq : next.value = nextValue at *
   obtain ⟨ nDest, nScanning ⟩ := nextValue
   simp at *
-  have nDest_eq : nDest = dest ∨ nDest = (leftIdx + ↑(1 + i)).toNat := by
+  rw [max_eq_left (a := leftIdx + (1 + ↑i)) (b := 0) (by omega)] at *
+  have nDest_eq : nDest = dest ∨ nDest = (leftIdx + ↑(1 + i)) := by
     split at hnext_dest
     . left; assumption
     split at hnext_dest
     . split at hnext_dest
-      . right; assumption
+      . right; simp; assumption
       . left; assumption
     . split at hnext_dest
       . right; assumption
@@ -489,16 +491,16 @@ theorem loopInv_preserve1
       rw [List.getElem?_eq_none (by rw [List.length_range']; omega)]
       simp
       omega
-  have nDest_lt_size : nDest < arr.size := by
+  have nDest_lt_size : nDest.toNat < arr.size := by
     simp [offsetToIndex] at *
     omega
   constructor
-  . revert hnext_scanning hnext_dest
+  . intros hneq
+    revert hnext_scanning hnext_dest
     split
     . intros
       subst nDest nScanning
-      sorry
-      -- rw [List.getElem?_range' _ _ (by assumption)]
+      rw [List.getElem?_range' _ _ (by omega)]
     sorry
   exists nDest_lt_size
   constructor
@@ -506,7 +508,7 @@ theorem loopInv_preserve1
     --   arr[i]? = some other ∧ YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr other) (YjsPtr.itemPtr newItem)
     intros j h_j_lt
     subst nDest
-    have h_j_dest :  j < dest → YjsLt' (ArrSet (newItem :: arr.toList)) arr[j] newItem := by
+    have h_j_dest :  j < dest.toNat → YjsLt' (ArrSet (newItem :: arr.toList)) arr[j] newItem := by
       intros
       obtain hlt := h_lt_item j (by omega)
       assumption
@@ -584,7 +586,8 @@ theorem loopInv_preserve1
         rw [Array.getElem?_eq_getElem hlt_current] at hother
         simp [pure, Except.pure] at hother
         assumption
-      
+
+
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)
@@ -765,19 +768,19 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
   simp at hintegrate
 
   generalize hloop :
-    forIn (α := ℕ) (m := Except IntegrateError) (β := MProd ℕ Bool) (List.range' 1 ((rightIdx - leftIdx).toNat - 1) 1) ⟨(leftIdx + 1).toNat, false⟩ (fun offset r => do
+   forIn (m := Except IntegrateError) (ρ := List ℕ) (α := ℕ) (β := MProd ℤ Bool)  (List.range' 1 ((rightIdx - leftIdx).toNat - 1) 1) ⟨leftIdx, false⟩ (fun offset r => do
       let other ← getElemExcept arr (leftIdx + ↑offset).toNat
       let oLeftIdx ← findPtrIdx other.origin arr
       let oRightIdx ← findPtrIdx other.rightOrigin arr
       if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
         else
           if oLeftIdx = leftIdx then
-            if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, false⟩)
+            if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑offset) ⊔ 0, false⟩)
             else
               if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
               else pure (ForInStep.yield ⟨r.fst, true⟩)
           else
-            if r.snd = false then pure (ForInStep.yield ⟨(leftIdx + ↑offset).toNat, r.snd⟩)
+            if r.snd = false then pure (ForInStep.yield ⟨(leftIdx + ↑offset) ⊔ 0, r.snd⟩)
             else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
 
   obtain ⟨ _ ⟩ | ⟨ resState ⟩ := l; cases hintegrate
@@ -787,16 +790,16 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
     simp at hintegrate
     rw [<-hintegrate]
     obtain ⟨ offset, res', hres', hloopInv, hdone ⟩ := hloop
-    have h_resState : resState.fst ≤ arr.size := by
+    have h_resState : resState.fst.toNat ≤ arr.size := by
       apply findPtrIdx_le_size at heqright
       unfold loopInv at *
       sorry
-    apply YjsArrInvariant_insertIdxIfInBounds arr newItem resState.fst hclosed harrsetinv harrinv h_resState
+    apply YjsArrInvariant_insertIdxIfInBounds arr newItem resState.fst.toNat hclosed harrsetinv harrinv h_resState
     . intros hi0
       simp [loopInv] at hloopInv
-      obtain ⟨ hidx, hdest_current, hdest, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
+      obtain ⟨ hidx, hdest_current, hdest, _, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
       subst hres'
-      obtain hlt  := hlt (res'.value.fst - 1) (by omega)
+      obtain hlt  := hlt (res'.value.fst.toNat - 1) (by omega)
       assumption
     . have current_lt : offsetToIndex leftIdx rightIdx offset ≤ arr.size := by
         obtain ⟨ hidx, dest, hdest, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
@@ -811,7 +814,7 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
         rw [max_eq_left hrightIdx]
       . intros hlt
         simp [loopInv] at hloopInv
-        obtain ⟨ hidx, hdest_current, hdest, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
+        obtain ⟨ hidx, hdest_current, hdest, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
         apply hdone'
         . cases hdone with
           | inl hdone =>
@@ -828,8 +831,10 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
       . subst hres'
         simp
       . subst hres'
-        obtain ⟨ hidx, hdest_current, hdest, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
-        assumption
+        obtain ⟨ hidx, hdest_current, hdest, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
+        obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at *
+        all_goals rw [max_eq_left hrightIdx] at hdest_current
+        all_goals assumption
     . intros
       apply hneq
       simp
@@ -854,8 +859,8 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
     obtain ⟨ _ ⟩ | ⟨ oRightIdx ⟩ := oRightIdx; (split at hbody <;> cases hbody)
     rw [ok_bind] at hbody
 
-    let next : (ForInStep (MProd ℕ Bool)) :=
-      if oLeftIdx < leftIdx then (ForInStep.done (α := MProd ℕ Bool) ⟨state.fst, state.snd⟩)
+    let next : (ForInStep (MProd ℤ Bool)) :=
+      if oLeftIdx < leftIdx then (ForInStep.done (α := MProd ℤ Bool) ⟨state.fst, state.snd⟩)
       else
         if oLeftIdx = leftIdx then
           if other.id < newItem.id then (ForInStep.yield ⟨(leftIdx + ↑(1 + i)).toNat, false⟩)
