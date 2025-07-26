@@ -41,8 +41,6 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
         scanning := false
       else if oRightIdx == rightIdx then
         break
-      else
-        scanning := true
 
     if !scanning then
       destIdx := i
