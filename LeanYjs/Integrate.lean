@@ -26,7 +26,7 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
   let rightIdx <- findPtrIdx (YjsItem.rightOrigin newItem) arr
 
   let mut scanning := false
-  let mut destIdx := leftIdx
+  let mut destIdx := leftIdx + 1
   for offset in [1:(rightIdx-leftIdx).toNat] do
     let i := (leftIdx + offset).toNat
     let other <- getElemExcept arr i
@@ -41,8 +41,10 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
         scanning := false
       else if oRightIdx == rightIdx then
         break
+      else
+        scanning := true
 
     if !scanning then
-      destIdx := i
+      destIdx := i + 1
 
   return (Array.insertIdxIfInBounds arr (Int.toNat destIdx) newItem)
