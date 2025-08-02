@@ -772,6 +772,106 @@ theorem findPtrIdx_lt_YjsLt' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
         rw [<-Int.ofNat_lt]
         assumption
 
+theorem findPtrIdx_eq_ok_inj {arr : Array (YjsItem A)} (x y : YjsPtr A) :
+  findPtrIdx x arr = Except.ok i →
+  findPtrIdx y arr = Except.ok i →
+   x = y := by
+  intros heq_x heq_y
+  cases x with
+  | first =>
+    cases y with
+    | first =>
+      simp
+    | last =>
+      simp [findPtrIdx] at heq_x heq_y
+      cases heq_x
+      cases heq_y
+    | itemPtr y =>
+      exfalso
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq :  Array.findIdx? (fun i => decide (i = y)) arr = idx at *
+      cases idx <;> cases heq_y
+      cases heq_x
+  | last =>
+    cases y with
+    | first =>
+      simp [findPtrIdx] at heq_x heq_y
+      cases heq_x
+      cases heq_y
+    | last =>
+      simp
+    | itemPtr y =>
+      exfalso
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq :  Array.findIdx? (fun i => decide (i = y)) arr = idx at *
+      cases idx <;> cases heq_y
+      cases heq_x
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
+      omega
+  | itemPtr x =>
+    cases y with
+    | first =>
+      exfalso
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq :  Array.findIdx? (fun i => decide (i = x)) arr = idx at *
+      cases idx <;> cases heq_x
+      cases heq_y
+    | last =>
+      exfalso
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq :  Array.findIdx? (fun i => decide (i = x)) arr = idx at *
+      cases idx <;> cases heq_x
+      cases heq_y
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
+      omega
+    | itemPtr y =>
+      simp [findPtrIdx] at heq_x heq_y
+      generalize heq_x :  Array.findIdx? (fun i => decide (i = x)) arr = idxX at *
+      generalize heq_y :  Array.findIdx? (fun i => decide (i = y)) arr = idxY at *
+      cases idxX <;> cases heq_x
+      cases idxY <;> cases heq_y
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq_x
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq_y
+      obtain ⟨ hlt_x, heq_x ⟩ := heq_x
+      obtain ⟨ hlt_y, heq_y ⟩ := heq_y
+      rw [Array.findIdx_eq hlt_x] at heq_x
+      rw [Array.findIdx_eq hlt_y] at heq_y
+      simp at heq_x heq_y
+      obtain ⟨ heq_x, _ ⟩ := heq_x
+      obtain ⟨ heq_y, _ ⟩ := heq_y
+      subst x y
+      simp
+
+theorem findPtrIdx_leq_YjsLeq' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
+  YjsArrInvariant arr.toList ->
+  findPtrIdx x arr = Except.ok i ->
+  findPtrIdx y arr = Except.ok j ->
+  i ≤ j ->
+  YjsLeq' (ArrSet arr.toList) x y := by
+  intros hinv hfindx hfindy hleq
+  have hor : i < j ∨ i = j := by omega
+  cases hor with
+  | inl hor =>
+    apply YjsLeq'.leqLt
+    apply findPtrIdx_lt_YjsLt' arr x y hinv hfindx hfindy hor
+  | inr heq =>
+    subst heq
+    have heq : x = y := by
+      apply findPtrIdx_eq_ok_inj x y hfindx hfindy
+    subst x
+    apply YjsLeq'.leqSame
+    cases y with
+    | first =>
+      simp [ArrSet]
+    | last =>
+      simp [ArrSet]
+    | itemPtr y =>
+      obtain ⟨ _, hfindx, heq ⟩ := findPtrIdx_item_exists arr y hfindy
+      rw [Array.getElem?_eq_some_iff] at heq
+      obtain ⟨ _, heq ⟩ := heq
+      subst y
+      simp [ArrSet]
+
 omit [DecidableEq A] in theorem getElem_YjsLt'_index_lt (arr : Array (YjsItem A)) (i j : Nat) :
   YjsArrInvariant arr.toList ->
   (hi_lt : i < arr.size) -> (hj_lt : j < arr.size) ->
@@ -938,76 +1038,6 @@ theorem findPtrIdx_le_size {arr : Array (YjsItem A)} (item : YjsPtr A) :
       obtain ⟨ _, _ ⟩ := heq
       simp
       omega
-
-theorem findPtrIdx_eq_ok_inj {arr : Array (YjsItem A)} (x y : YjsPtr A) :
-  findPtrIdx x arr = Except.ok i →
-  findPtrIdx y arr = Except.ok i →
-   x = y := by
-  intros heq_x heq_y
-  cases x with
-  | first =>
-    cases y with
-    | first =>
-      simp
-    | last =>
-      simp [findPtrIdx] at heq_x heq_y
-      cases heq_x
-      cases heq_y
-    | itemPtr y =>
-      exfalso
-      simp [findPtrIdx] at heq_x heq_y
-      generalize heq :  Array.findIdx? (fun i => decide (i = y)) arr = idx at *
-      cases idx <;> cases heq_y
-      cases heq_x
-  | last =>
-    cases y with
-    | first =>
-      simp [findPtrIdx] at heq_x heq_y
-      cases heq_x
-      cases heq_y
-    | last =>
-      simp
-    | itemPtr y =>
-      exfalso
-      simp [findPtrIdx] at heq_x heq_y
-      generalize heq :  Array.findIdx? (fun i => decide (i = y)) arr = idx at *
-      cases idx <;> cases heq_y
-      cases heq_x
-      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
-      omega
-  | itemPtr x =>
-    cases y with
-    | first =>
-      exfalso
-      simp [findPtrIdx] at heq_x heq_y
-      generalize heq :  Array.findIdx? (fun i => decide (i = x)) arr = idx at *
-      cases idx <;> cases heq_x
-      cases heq_y
-    | last =>
-      exfalso
-      simp [findPtrIdx] at heq_x heq_y
-      generalize heq :  Array.findIdx? (fun i => decide (i = x)) arr = idx at *
-      cases idx <;> cases heq_x
-      cases heq_y
-      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
-      omega
-    | itemPtr y =>
-      simp [findPtrIdx] at heq_x heq_y
-      generalize heq_x :  Array.findIdx? (fun i => decide (i = x)) arr = idxX at *
-      generalize heq_y :  Array.findIdx? (fun i => decide (i = y)) arr = idxY at *
-      cases idxX <;> cases heq_x
-      cases idxY <;> cases heq_y
-      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq_x
-      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq_y
-      obtain ⟨ hlt_x, heq_x ⟩ := heq_x
-      obtain ⟨ hlt_y, heq_y ⟩ := heq_y
-      rw [Array.findIdx_eq hlt_x] at heq_x
-      rw [Array.findIdx_eq hlt_y] at heq_y
-      simp at heq_x heq_y
-      obtain ⟨ heq_x, _ ⟩ := heq_x
-      obtain ⟨ heq_y, _ ⟩ := heq_y
-      subst x y
-      simp
 
 theorem findPtrIdx_origin_leq_newItem_YjsLt' {oIdx : ℕ} (arr : Array (YjsItem A)) (other newItem : YjsItem A) :
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList))) ->

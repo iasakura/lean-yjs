@@ -104,6 +104,19 @@ theorem YjsLt'.ltRightOrigin {A : Type} (P : ItemSet A) o r id c x : P (YjsItem.
   constructor
   apply YjsLt.ltRightOrigin <;> try assumption
 
+theorem YjsLeq'.leqSame {A : Type} (P : ItemSet A) x : P x -> YjsLeq' P x x := by
+  intros hpx
+  exists 0
+  apply YjsLeq.leqSame
+  assumption
+
+theorem YjsLeq'.leqLt {A : Type} (P : ItemSet A) x y : YjsLt' P x y -> YjsLeq' P x y := by
+  intros hlt
+  obtain ⟨ h, hlt ⟩ := hlt
+  exists h + 1
+  apply YjsLeq.leqLt
+  assumption
+
 theorem yjs_lt_p1_aux {A : Type} {P : @ItemSet A} {h : Nat} : forall {x y : YjsPtr A},
   (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) ∧ (YjsLeq P h x y -> P x) := by
     apply Nat.strongRecOn' (P := fun h => ∀ x y, (YjsLt P h x y -> P x) ∧ (ConflictLt P h x y -> P x) ∧ (YjsLeq P h x y -> P x))

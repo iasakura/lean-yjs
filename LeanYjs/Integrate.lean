@@ -44,7 +44,7 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
       else
         scanning := true
 
-    if !scanning ∧ i < rightIdx - 1 then
+    if !scanning then
       destIdx := i + 1
 
   return (Array.insertIdxIfInBounds arr (Int.toNat destIdx) newItem)
