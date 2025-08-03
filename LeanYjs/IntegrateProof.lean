@@ -886,23 +886,28 @@ lemma findPtrIdx_lt_size_getElem {p : YjsPtr A} :
     subst p
     simp
 
-theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
-  ArrSet arr.toList newItem.origin
-  -> ArrSet arr.toList newItem.rightOrigin
-  -> YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin
-  -> (∀ (x : YjsPtr A),
+structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
+  origin_in : ArrSet arr.toList newItem.origin
+  rightOrigin_in : ArrSet arr.toList newItem.rightOrigin
+  origin_lt_rightOrigin : YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin
+  reachable_YjsLeq' : (∀ (x : YjsPtr A),
       OriginReachable (YjsPtr.itemPtr newItem) x →
       YjsLeq' (ArrSet arr.toList) x newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin x)
-  -> (∀ (x : YjsItem A),
+  id_eq_YjsLeq' : (∀ (x : YjsItem A),
       ArrSet arr.toList (YjsPtr.itemPtr x) →
       x.id = newItem.id →
       YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
         YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
-  -> (∀ x ∈ arr.toList, x ≠ newItem)
-  -> YjsArrInvariant arr.toList
+  not_mem : (∀ x ∈ arr.toList, x ≠ newItem)
+
+theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
+  YjsArrInvariant arr.toList
+  -> InsertOk arr newItem
   -> integrate newItem arr = Except.ok newArr
   -> YjsArrInvariant newArr.toList := by
-  intros horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent hneq harrinv hintegrate
+  intros harrinv h_InsertOk hintegrate
+  obtain ⟨ horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent, hneq ⟩ :=
+    h_InsertOk
   unfold integrate at hintegrate
 
   have hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)) := by
@@ -1168,6 +1173,8 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
 
 theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
+  -> InsertOk arr1 a
+  -> InsertOk arr1 b
   -> integrate a arr1 = Except.ok arr2
   -> integrate b arr2 = Except.ok arr3
   -> integrate b arr1 = Except.ok arr2'
