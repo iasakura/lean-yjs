@@ -530,7 +530,7 @@ theorem loopInv_preserve1
     x.id = newItem.id →
       YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
         YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
-  (hneq : ∀ x ∈ arr.toList, x ≠ newItem)
+  (hneq : ∀ x ∈ arr, x ≠ newItem)
   (harrinv : YjsArrInvariant arr.toList)
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList)))
@@ -898,7 +898,7 @@ structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
       x.id = newItem.id →
       YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
         YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
-  not_mem : (∀ x ∈ arr.toList, x ≠ newItem)
+  not_mem : (∀ x ∈ arr, x ≠ newItem)
 
 theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
@@ -1023,7 +1023,6 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
         obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
     . intros
       apply hneq
-      simp
       assumption
   . -- initial
     simp only [loopInv]
@@ -1171,8 +1170,104 @@ theorem integrate_preserve (newItem : YjsItem A) (arr newArr : Array (YjsItem A)
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx
       resState state hloop i hlt hlt2 hinv other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx hnext
 
+theorem subset_ArrSet {arr1 arr2 : Array (YjsItem A)} {a : YjsPtr A}:
+  (∀ a, a ∈ arr1 -> a ∈ arr2)
+  -> ArrSet arr1.toList a
+  -> ArrSet arr2.toList a := by
+  intros h_subset h_arr1
+  simp [ArrSet] at *
+  cases a with
+  | first => simp [ArrSet]
+  | last => simp [ArrSet]
+  | itemPtr a =>
+    simp [ArrSet] at *
+    apply h_subset a h_arr1
+
+theorem insertOk_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
+  YjsArrInvariant arr1.toList
+  -> YjsArrInvariant arr2.toList
+  -> (∀ a, a ∈ arr1 → a ∈ arr2)
+  -> (∀ a, a ∈ arr2 → a ∉ arr1 -> a.id ≠ x.id)
+  -> InsertOk arr1 x
+  -> InsertOk arr2 x := by
+  intros harrinv1 harrinv2 h_arr1_subset_arr2 h_id_neq h_InsertOk
+  obtain ⟨ horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent, hneq ⟩ := h_InsertOk
+  constructor <;> try assumption
+  . apply subset_ArrSet h_arr1_subset_arr2
+    assumption
+  . apply subset_ArrSet h_arr1_subset_arr2
+    assumption
+  . apply yjs_lt'_mono (P := ArrSet arr1.toList)
+    . apply harrinv1.closed
+    . apply harrinv1.item_set_inv
+    . intros
+      apply subset_ArrSet h_arr1_subset_arr2; assumption
+    apply horigin_consistent
+  . intros y hreachable
+    replace hreachable_consistent := hreachable_consistent y hreachable
+    cases hreachable_consistent with
+    | inl hleq =>
+      left
+      all_goals apply yjs_leq'_mono (P := ArrSet arr1.toList)
+      . apply harrinv1.closed
+      . apply harrinv1.item_set_inv
+      . intros
+        apply subset_ArrSet h_arr1_subset_arr2; assumption
+      apply hleq
+    | inr hleq =>
+      right
+      all_goals apply yjs_leq'_mono (P := ArrSet arr1.toList)
+      . apply harrinv1.closed
+      . apply harrinv1.item_set_inv
+      . intros
+        apply subset_ArrSet h_arr1_subset_arr2; assumption
+      apply hleq
+  . intros y hy_in_arr2 hid_eq
+    have hy_in_arr1 : ArrSet arr1.toList y := by
+      simp [ArrSet]
+      generalize y_in_arr1_eq : decide (y ∈ arr1) = y_in_arr1
+      cases y_in_arr1 with
+      | true =>
+        rw [decide_eq_true_eq] at y_in_arr1_eq
+        assumption
+      | false =>
+        rw [decide_eq_false_iff_not] at y_in_arr1_eq
+        simp [ArrSet] at hy_in_arr2
+        obtain h_neq := h_id_neq y hy_in_arr2 y_in_arr1_eq
+        contradiction
+    replace hsameid_consistent := hsameid_consistent y hy_in_arr1 hid_eq
+    cases hsameid_consistent with
+    | inl hleq =>
+      left
+      all_goals apply yjs_leq'_mono (P := ArrSet arr1.toList)
+      . apply harrinv1.closed
+      . apply harrinv1.item_set_inv
+      . intros
+        apply subset_ArrSet h_arr1_subset_arr2; assumption
+      apply hleq
+    | inr hleq =>
+      right
+      all_goals apply yjs_leq'_mono (P := ArrSet arr1.toList)
+      . apply harrinv1.closed
+      . apply harrinv1.item_set_inv
+      . intros
+        apply subset_ArrSet h_arr1_subset_arr2; assumption
+      apply hleq
+  . intros y hy_in_arr1 hy_eq_x
+    generalize hy_in_arr1_eq : decide (y ∈ arr1) = hy_in_arr1
+    cases hy_in_arr1 with
+    | true =>
+      rw [decide_eq_true_eq] at hy_in_arr1_eq
+      apply hneq y hy_in_arr1_eq hy_eq_x
+    | false =>
+      rw [decide_eq_false_iff_not] at hy_in_arr1_eq
+      replace h_id_neq := h_id_neq y hy_in_arr1 hy_in_arr1_eq
+      subst x
+      contradiction
+
 theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
+  -> a ≠ b
   -> InsertOk arr1 a
   -> InsertOk arr1 b
   -> integrate a arr1 = Except.ok arr2
@@ -1180,4 +1275,19 @@ theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Ar
   -> integrate b arr1 = Except.ok arr2'
   -> integrate a arr2' = Except.ok arr3'
   -> arr3 = arr3' := by
-  sorry
+  intros harrinv ha_neq_b h_InsertOk_a h_InsertOk_b hintegrate_a hintegrate_b hintegrate_b' hintegrate_a'
+  have arr2_inv : YjsArrInvariant arr2.toList := by
+    apply integrate_preserve a arr1 arr2
+    assumption
+    assumption
+    assumption
+
+  have arr2'_inv : YjsArrInvariant arr2'.toList := by
+    apply integrate_preserve b arr1 arr2'
+    assumption
+    assumption
+    assumption
+
+  have arr3_inv : YjsArrInvariant arr3.toList := by
+    apply integrate_preserve b arr2 arr3
+    assumption
