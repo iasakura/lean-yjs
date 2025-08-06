@@ -118,17 +118,3 @@ theorem not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @
     | ltOriginOrder _ _ hlt =>
       assumption
   cases h with
-
--- theorem origin_lt_p1 {A} {P : @ItemSet A} {x y : YjsPtr A} (h : OriginLt _ x y) : P x := by
---   sorry
-
--- theorem origin_lt_p2 {A} {P : @ItemSet A} {x y : YjsPtr A} (h : OriginLt _ x y) : P y := by
---   cases h with
---   | ltOrigin  y hpx hpy hlt
---     assumption
---   -- | ltReachableOrigin o r id c t ho hr ht hreach hlt =>
---   --   assumption
---   -- | ltReachableRight o r id c t ho hr ht hreach hlt =>
---   --   assumption
---   | ltTrans x y z hx hy hz hlt1 hlt2 =>
---     assumption

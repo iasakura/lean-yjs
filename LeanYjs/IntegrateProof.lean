@@ -578,7 +578,7 @@ theorem loopInv_preserve1
         else
           if scanning = false then (leftIdx + ↑(1 + i)).toNat + 1
           else dest := by
-    sorry
+    sorry -- temporarily
     -- subst hbody
     -- split
     -- simp
@@ -605,7 +605,7 @@ theorem loopInv_preserve1
       else
         if scanning = false then scanning
         else scanning := by
-    sorry
+    sorry -- temporarily
     -- subst hbody
     -- split
     -- simp
@@ -688,7 +688,7 @@ theorem loopInv_preserve1
     simp [offsetToIndex] at *
     omega
   constructor
-  . sorry
+  . sorry -- temporary
   -- . intros h_scanning_eq_false h_is_done
   --   rw [Int.max_eq_left (by assumption)]
   --   rw [offsetToIndex_range'_getElem (by assumption) (by assumption) (by omega)]
@@ -904,7 +904,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
   YjsArrInvariant arr.toList
   -> InsertOk arr newItem
   -> integrate newItem arr = Except.ok newArr
-  -> YjsArrInvariant newArr.toList := by
+  -> ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList := by
   intros harrinv h_InsertOk hintegrate
   obtain ⟨ horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent, hneq ⟩ :=
     h_InsertOk
@@ -980,50 +980,55 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
         | some offset =>
           simp [offsetToIndex]; omega
       omega
-    apply YjsArrInvariant_insertIdxIfInBounds arr newItem resState.fst.toNat hclosed harrsetinv harrinv h_resState
-    . intros hi0
-      simp [loopInv] at hloopInv
-      obtain ⟨ hidx, hdest_current, _, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
-      subst hres'
-      obtain hlt  := hlt (res'.value.fst.toNat - 1) (by omega) (by omega)
-      assumption
-    . have current_lt : offsetToIndex leftIdx rightIdx offset ≤ arr.size := by
-        obtain ⟨ hidx, dest, hdest, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
-        apply findPtrIdx_le_size at heqright
-        cases offset <;> simp [offsetToIndex] <;> omega
-      intros hisize
-      apply loopInv_YjsLt' (current := offsetToIndex leftIdx rightIdx offset) <;> try assumption
-      . simp
-        rw [max_eq_left hrightIdx]
-        assumption
-      . simp
-        rw [max_eq_left hrightIdx]
-      . intros hlt
+    exists resState.fst.toNat
+    constructor
+    . assumption
+    constructor
+    . subst newArr; eq_refl
+    . apply YjsArrInvariant_insertIdxIfInBounds arr newItem resState.fst.toNat hclosed harrsetinv harrinv h_resState
+      . intros hi0
         simp [loopInv] at hloopInv
-        obtain ⟨ hidx, hdest_current, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
-        apply hdone'
-        . cases hdone with
-          | inl hdone =>
-            subst hdone
-            simp [isDone]
-          | inr hdone =>
-            subst hdone
-            simp [isDone]
-        . rw [max_eq_left hrightIdx]
-          simp [getElemExcept]
-          rw [Array.getElem?_eq_getElem hlt]
+        obtain ⟨ hidx, hdest_current, _, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
+        subst hres'
+        obtain hlt  := hlt (res'.value.fst.toNat - 1) (by omega) (by omega)
+        assumption
+      . have current_lt : offsetToIndex leftIdx rightIdx offset ≤ arr.size := by
+          obtain ⟨ hidx, dest, hdest, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
+          apply findPtrIdx_le_size at heqright
+          cases offset <;> simp [offsetToIndex] <;> omega
+        intros hisize
+        apply loopInv_YjsLt' (current := offsetToIndex leftIdx rightIdx offset) <;> try assumption
+        . simp
+          rw [max_eq_left hrightIdx]
+          assumption
+        . simp
+          rw [max_eq_left hrightIdx]
+        . intros hlt
+          simp [loopInv] at hloopInv
+          obtain ⟨ hidx, hdest_current, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
+          apply hdone'
+          . cases hdone with
+            | inl hdone =>
+              subst hdone
+              simp [isDone]
+            | inr hdone =>
+              subst hdone
+              simp [isDone]
+          . rw [max_eq_left hrightIdx]
+            simp [getElemExcept]
+            rw [Array.getElem?_eq_getElem hlt]
+            simp
+            eq_refl
+        . subst hres'
           simp
-          eq_refl
-      . subst hres'
-        simp
-      . subst hres'
-        obtain ⟨ hidx, hdest_current, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
-        simp at *
-        rw [Int.max_eq_left hrightIdx] at hdest_current
-        obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
-    . intros
-      apply hneq
-      assumption
+        . subst hres'
+          obtain ⟨ hidx, hdest_current, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
+          simp at *
+          rw [Int.max_eq_left hrightIdx] at hdest_current
+          obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
+      . intros
+        apply hneq
+        assumption
   . -- initial
     simp only [loopInv]
     rw [List.head?_range']
@@ -1301,43 +1306,6 @@ theorem insertIdxIfInBounds_insertOk (arr : Array (YjsItem A)) (a x : YjsItem A)
       contradiction
   . assumption
 
-theorem integrate_is_insertIdxIfInBounds (newItem : YjsItem A) (arr : Array (YjsItem A)) :
-  integrate newItem arr = Except.ok arr2
-  → ∃ idx, arr2 = arr.insertIdxIfInBounds idx newItem := by
-  intros hintegrate
-  unfold integrate at hintegrate
-  generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
-  obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
-  rw [ok_bind] at hintegrate
-
-  generalize heqleft : findPtrIdx newItem.rightOrigin arr = rightIdx at hintegrate
-  obtain ⟨ _ ⟩ | ⟨ rightIdx ⟩ := rightIdx; cases hintegrate
-  rw [ok_bind] at hintegrate
-
-  simp at hintegrate
-
-  generalize hloop :
-   forIn (m := Except IntegrateError) (ρ := List ℕ) (α := ℕ) (β := MProd ℤ Bool) (List.range' 1 ((rightIdx - leftIdx).toNat - 1) 1) ⟨leftIdx + 1, false⟩ (fun offset r => do
-      let other ← getElemExcept arr (leftIdx + ↑offset).toNat
-      let oLeftIdx ← findPtrIdx other.origin arr
-      let oRightIdx ← findPtrIdx other.rightOrigin arr
-      if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
-        else
-          if oLeftIdx = leftIdx then
-            if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑offset) ⊔ 0 + 1, false⟩)
-            else
-              if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
-              else pure (ForInStep.yield ⟨r.fst, true⟩)
-          else
-            if r.snd = false then pure (ForInStep.yield ⟨(leftIdx + ↑offset) ⊔ 0 + 1, r.snd⟩)
-            else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
-
-  obtain ⟨ _ ⟩ | ⟨ resState ⟩ := l; cases hintegrate
-  cases hintegrate
-  constructor
-  simp
-  eq_refl
-
 theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
   -> a.id ≠ b.id
@@ -1349,39 +1317,61 @@ theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Ar
   -> integrate a arr2' = Except.ok arr3'
   -> arr3 = arr3' := by
   intros harrinv haid_neq_bid h_InsertOk_a h_InsertOk_b hintegrate_a hintegrate_b hintegrate_b' hintegrate_a'
-  have arr2_inv : YjsArrInvariant arr2.toList := by
+
+  have ⟨ idx2, h_idx2, arr2_insertIdx, arr2_inv ⟩ : ∃ idx ≤ arr1.size, arr2 = arr1.insertIdxIfInBounds idx a ∧ YjsArrInvariant arr2.toList := by
     apply YjsArrInvariant_integrate a arr1 arr2
     assumption
     assumption
     assumption
 
-  have arr2'_inv : YjsArrInvariant arr2'.toList := by
+  have h_InsertOk_arr2_b : InsertOk arr2 b := by
+    subst arr2
+    apply insertIdxIfInBounds_insertOk <;> assumption
+
+  have ⟨ idx2', h_idx2', arr2'_insertIdx, arr2'_inv ⟩ : ∃ idx ≤ arr1.size, arr2' = arr1.insertIdxIfInBounds idx b ∧ YjsArrInvariant arr2'.toList := by
     apply YjsArrInvariant_integrate b arr1 arr2'
     assumption
     assumption
     assumption
 
-  have h_InsertOk_arr2_b : InsertOk arr2 b := by
-    obtain ⟨ _, harr2_eq ⟩ := integrate_is_insertIdxIfInBounds _ _ hintegrate_a
-    subst arr2
-    apply insertIdxIfInBounds_insertOk <;> assumption
-
-  have arr3_inv : YjsArrInvariant arr3.toList := by
-    apply YjsArrInvariant_integrate b arr2 arr3
-    assumption
-    assumption
-    assumption
-
   have h_InsertOk_arr2'_a : InsertOk arr2' a := by
-    obtain ⟨ _, harr2'_eq ⟩ := integrate_is_insertIdxIfInBounds _ _ hintegrate_b'
     subst arr2'
     apply insertIdxIfInBounds_insertOk <;> try assumption
     intros heq
     rw [heq] at haid_neq_bid
     contradiction
 
-  have arr3'_inv : YjsArrInvariant arr3'.toList := by
+  have ⟨ idx3, h_idx3, arr3_insertIdx,  arr3_inv ⟩ : ∃ idx ≤ arr2.size, arr3 = arr2.insertIdxIfInBounds idx b ∧ YjsArrInvariant arr3.toList := by
+    apply YjsArrInvariant_integrate b arr2 arr3
+    assumption
+    assumption
+    assumption
+
+  have ⟨ idx3', h_idx3', arr3'_insertIdx, arr3'_inv ⟩ : ∃ idx ≤ arr2'.size, arr3' = arr2'.insertIdxIfInBounds idx a ∧ YjsArrInvariant arr3'.toList := by
     apply YjsArrInvariant_integrate a arr2' arr3'
     assumption
     assumption
     assumption
+
+  subst arr2 arr2' arr3 arr3'
+
+  rw [<-Array.toList_inj]
+
+  rw [List.insertIdxIfInBounds_toArray] at *; simp at *
+  rw [List.insertIdxIfInBounds_toArray] at *; simp at *
+  rw [List.insertIdxIfInBounds_toArray] at *; simp at *
+  rw [List.insertIdxIfInBounds_toArray] at *; simp at *
+
+  apply same_yjs_set_unique _ _ arr3_inv arr3'_inv
+
+  intros a
+  cases a with
+  | first =>
+    simp [ArrSet]
+  | last =>
+    simp [ArrSet]
+  | itemPtr a =>
+    simp [ArrSet]
+    rw [List.mem_insertIdx h_idx3, List.mem_insertIdx h_idx3', List.mem_insertIdx h_idx2, List.mem_insertIdx h_idx2']
+    simp
+    tauto
