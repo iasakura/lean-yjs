@@ -21,13 +21,13 @@ Note: Convergence (strong eventual consistency) follows from these properties bu
 
 ## Current Status
 
-🚧 **Under Development** 🚧
+**Under Development**
 
-- ✅ Core data structures and operations defined
-- ✅ Integration algorithm implemented
-- ✅ Item ordering definition and total ordering proof
-- 🔄 Preservation proof (work in progress)
-- 🔄 Commutativity proof (work in progress)
+- [x] Core data structures and operations defined
+- [x] Integration algorithm implemented
+- [x] Item ordering definition and total ordering proof
+- [ ] Preservation proof (work in progress)
+- [x] Commutativity proof
 
 ## References
 
