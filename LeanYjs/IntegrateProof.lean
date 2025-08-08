@@ -1,4 +1,5 @@
 import Mathlib.Tactic.WLOG
+import Mathlib.Tactic.ExtractGoal
 
 import LeanYjs.ListExtra
 import LeanYjs.Item
@@ -327,7 +328,6 @@ theorem dest_lt_YjsLt'_preserve
   (rightIdx : ℤ)
   (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
   (hleftIdxrightIdx : leftIdx < rightIdx)
-  (resState : MProd ℤ Bool)
   (next : ForInStep (MProd ℤ Bool))
   (i : ℕ)
   (hlt2 : i < (rightIdx - leftIdx).toNat - 1)
@@ -342,12 +342,10 @@ theorem dest_lt_YjsLt'_preserve
     ∀ (h_i_lt : i < arr.size), YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
   (h_cand : scanning = true → ∃ (h_dest_lt : dest.toNat < arr.size), arr[dest.toNat].origin = newItem.origin)
   (h_leftIdx_leq : -1 ≤ leftIdx)
-  (h_leftIdx : rightIdx ≤ ↑arr.size)
   (nDest : ℤ)
   (nScanning : Bool)
   (hnexteq : next.value = ⟨nDest, nScanning⟩)
   (hneq : ∀ x ∈ arr, ¬x = newItem)
-  (hrightIdx : 0 ≤ rightIdx)
   (hlt : i < (rightIdx - leftIdx).toNat - 1)
   (hother : getElemExcept arr (leftIdx + (1 + ↑i)).toNat = Except.ok other)
   (hinv : loopInv arr newItem leftIdx (rightIdx ⊔ 0) (some (1 + i)) (ForInStep.yield ⟨dest, scanning⟩))
@@ -459,7 +457,7 @@ theorem dest_lt_YjsLt'_preserve
         . simp
         . omega
         . omega
-        . intros; omega
+        . omega
         . omega
         . generalize h_other_origin_eq : arr[(leftIdx + (1 + ↑i)).toNat].origin = otherOrigin at *
           cases otherOrigin with
@@ -515,6 +513,90 @@ theorem dest_lt_YjsLt'_preserve
             omega
         . assumption
     apply h_j_dest h_j_lt
+
+theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A)
+  (arr : Array (YjsItem A))
+  (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx) (rightIdx : ℤ)
+  (next : ForInStep (MProd ℤ Bool)) (i : ℕ) (other : YjsItem A)
+  (oLeftIdx : ℤ) (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx) (oRightIdx : ℤ)
+  (dest : ℤ) (scanning : Bool)
+  (h_cand : scanning = true → ∃ (h_dest_lt : dest.toNat < arr.size), arr[dest.toNat].origin = newItem.origin)
+  (h_leftIdx : -1 ≤ leftIdx) (nDest : ℤ) (nScanning : Bool)
+  (hnexteq : next.value = ⟨nDest, nScanning⟩)
+  (hinv : loopInv arr newItem leftIdx (rightIdx ⊔ 0) (some (1 + i)) (ForInStep.yield ⟨dest, scanning⟩))
+  (hbody :
+    next =
+      if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
+      else
+        if oLeftIdx = leftIdx then
+          if other.id < newItem.id then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
+          else if oRightIdx = rightIdx then ForInStep.done ⟨dest, scanning⟩ else ForInStep.yield ⟨dest, true⟩
+        else
+          if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
+          else ForInStep.yield ⟨dest, scanning⟩)
+  (hdest_current : dest ≤ ↑(offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i))))
+  (h_not_scanning :
+    scanning = false →
+      isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = false →
+        dest = ↑(offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i))))
+  (h_lt_item :
+    ∀ i < dest.toNat,
+      ∀ (h_i_lt : i < arr.size), YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
+  (h_tbd :
+    ∀ (i_1 : ℕ),
+      dest.toNat ≤ i_1 →
+        i_1 < offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i)) →
+          ∃ (i_lt_size : i_1 < arr.size) (h_dest_lt : dest.toNat < arr.size),
+            arr[i_1].origin = newItem.origin ∧ newItem.id < arr[i_1].id ∨
+              YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
+  (h_done :
+    isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
+      ∀ (item : YjsItem A),
+        getElemExcept arr (offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i))) = Except.ok item →
+          YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) (YjsPtr.itemPtr item))
+  (hnext_dest :
+    nDest =
+      if oLeftIdx < leftIdx then dest
+      else
+        if oLeftIdx = leftIdx then if other.id < newItem.id then leftIdx + (1 + ↑i) + 1 else dest
+        else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
+  (hnext_scanning :
+    nScanning =
+      if oLeftIdx < leftIdx then scanning
+      else
+        if oLeftIdx = leftIdx then !decide (other.id < newItem.id) && (!decide (oRightIdx = rightIdx) || scanning)
+        else scanning)
+  (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
+  (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other)
+  (nDest_lt_size : nDest.toNat ≤ arr.size) :
+  nScanning = true → ∃ (h_dest_lt : nDest.toNat < arr.size), arr[nDest.toNat].origin = newItem.origin := by
+  intros h_scanning
+  split at hbody; rw [hbody] at hnexteq; cases hnexteq
+  . apply h_cand h_scanning
+  split at hbody
+  . split at hbody; rw [hbody] at hnexteq; cases hnexteq
+    . contradiction
+    . split at hbody <;> (rw [hbody] at hnexteq; cases hnexteq)
+      . apply h_cand h_scanning
+      . cases scanning with
+        | true =>
+          apply h_cand h_scanning
+        | false =>
+          have h_dest_eq : dest = ↑(offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i))) := by
+            apply h_not_scanning (by simp)
+            simp [isDone]
+          simp [offsetToIndex] at h_dest_eq
+          rw [Int.max_eq_left (by omega)] at h_dest_eq
+          have h_dest_lt_size : dest.toNat < arr.size := by
+            omega
+          exists h_dest_lt_size
+          subst dest oLeftIdx
+          rw [heq]
+          apply findPtrIdx_eq_ok_inj _ _ hoLeftIdx heqleft
+  split at hbody <;> (rw [hbody] at hnexteq; cases hnexteq)
+  . subst scanning
+    contradiction
+  . apply h_cand h_scanning
 
 theorem loopInv_preserve1
   (newItem : YjsItem A)
@@ -726,15 +808,19 @@ theorem loopInv_preserve1
   . apply dest_lt_YjsLt'_preserve
       newItem arr horigin hrorigin horigin_consistent
       hreachable_consistent hsameid_consistent harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright
-      hleftIdxrightIdx resState next i hlt other oLeftIdx hoLeftIdx oRightIdx hoRightIdx dest scanning
-      h_lt_item h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hneq
-      hrightIdx hlt2 hother hinv hbody hidx hdest_current h_not_scanning h_tbd h_done
+      hleftIdxrightIdx next i hlt other oLeftIdx hoLeftIdx oRightIdx hoRightIdx dest scanning
+      h_lt_item h_cand h_leftIdx nDest nScanning hnexteq hneq
+      hlt2 hother hinv hbody hidx hdest_current h_not_scanning h_tbd h_done
       hnext_dest hnext_scanning nDest_eq hlt_current heq h_in_other
       h_in_other_origin h_other_origin_lt nDest_lt_size
   constructor
   . sorry
   constructor
-  . sorry
+  . apply scanning_dest_origin_eq_newItem_origin_preserve
+      newItem arr heqleft rightIdx next i other oLeftIdx hoLeftIdx oRightIdx
+      dest scanning h_cand h_leftIdx nDest nScanning hnexteq
+      hinv hbody hdest_current h_not_scanning h_lt_item h_tbd h_done
+      hnext_dest hnext_scanning nDest_eq hlt_current heq nDest_lt_size
   intros hdone item hitem
   sorry
 
