@@ -16,6 +16,8 @@ import LeanYjs.YjsArray
 variable {A : Type}
 variable [DecidableEq A]
 
+set_option maxHeartbeats 400000
+
 theorem ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
   (do
     let x <- Except.ok x
@@ -338,8 +340,10 @@ theorem dest_lt_YjsLt'_preserve
   (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx)
   (dest : ℤ)
   (scanning : Bool)
-  (h_lt_item : ∀ i < dest.toNat,
-    ∀ (h_i_lt : i < arr.size), YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
+  (h_lt_item : ∀ (i : ℕ),
+    ↑i < dest →
+      ∀ (h_i_lt : i < arr.size),
+        YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
   (h_cand : scanning = true → ∃ (h_dest_lt : dest.toNat < arr.size), arr[dest.toNat].origin = newItem.origin)
   (h_leftIdx_leq : -1 ≤ leftIdx)
   (nDest : ℤ)
@@ -363,8 +367,8 @@ theorem dest_lt_YjsLt'_preserve
     isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = false →
       dest = ↑(offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i))))
   (h_tbd : ∀ (i_1 : ℕ),
-    dest.toNat ≤ i_1 →
-      i_1 < offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i)) →
+    dest ≤ ↑i_1 →
+      i_1 < offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) →
         ∃ (i_lt_size : i_1 < arr.size) (h_dest_lt : dest.toNat < arr.size),
           arr[i_1].origin = newItem.origin ∧ newItem.id < arr[i_1].id ∨
             YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
@@ -389,7 +393,8 @@ theorem dest_lt_YjsLt'_preserve
   (h_in_other_origin : ArrSet (newItem :: arr.toList) other.origin)
   (h_other_origin_lt : YjsLt' (ArrSet (newItem :: arr.toList)) other.origin (YjsPtr.itemPtr other))
   (nDest_lt_size : nDest.toNat ≤ arr.size) :
-  ∀ i < nDest.toNat,
+  ∀ (i : ℕ),
+  ↑i < nDest →
     ∀ (h_i_lt : i < arr.size), YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem) := by
   intros j h_j_lt h_j_lt_size
   subst nDest
@@ -512,7 +517,7 @@ theorem dest_lt_YjsLt'_preserve
               assumption
             omega
         . assumption
-    apply h_j_dest h_j_lt
+    apply h_j_dest (by omega)
 
 theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A)
   (arr : Array (YjsItem A))
@@ -540,15 +545,17 @@ theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : Decid
       isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = false →
         dest = ↑(offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i))))
   (h_lt_item :
-    ∀ i < dest.toNat,
-      ∀ (h_i_lt : i < arr.size), YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
+    ∀ (i : ℕ),
+    ↑i < dest →
+      ∀ (h_i_lt : i < arr.size),
+        YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
   (h_tbd :
     ∀ (i_1 : ℕ),
-      dest.toNat ≤ i_1 →
-        i_1 < offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i)) →
-          ∃ (i_lt_size : i_1 < arr.size) (h_dest_lt : dest.toNat < arr.size),
-            arr[i_1].origin = newItem.origin ∧ newItem.id < arr[i_1].id ∨
-              YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
+    dest ≤ ↑i_1 →
+      i_1 < offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) →
+        ∃ (i_lt_size : i_1 < arr.size) (h_dest_lt : dest.toNat < arr.size),
+          arr[i_1].origin = newItem.origin ∧ newItem.id < arr[i_1].id ∨
+            YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
   (h_done :
     isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
       ∀ (item : YjsItem A),
@@ -835,7 +842,7 @@ theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem :
   -> YjsArrInvariant (arr.insertIdxIfInBounds i newItem).toList := by
   intros hclosed hinv harrinv hisize hlt1 hlt2 hneq
   obtain ⟨ _, _, hsorted, hunique ⟩ := harrinv
-  have heqset : ∀ x, ArrSet (newItem :: arr.toList) x ↔ ArrSet (List.insertIdx i newItem arr.toList) x := by
+  have heqset : ∀ x, ArrSet (newItem :: arr.toList) x ↔ ArrSet (List.insertIdx arr.toList i newItem) x := by
     intros x
     simp only [ArrSet]
     cases x with
@@ -852,7 +859,7 @@ theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem :
     simp
     rw [heqset]
 
-  have hsubset a : (ArrSet arr.toList) a -> (ArrSet (List.insertIdx i newItem arr.toList)) a := by
+  have hsubset a : (ArrSet arr.toList) a -> (ArrSet (List.insertIdx arr.toList i newItem)) a := by
     intros hmem
     cases a with
     | first => simp [ArrSet]
@@ -1366,11 +1373,9 @@ theorem insertIdxIfInBounds_insertOk (arr : Array (YjsItem A)) (a x : YjsItem A)
   wlog hidx : idx ≤ arr.size
   case inr =>
     rw [List.insertIdxIfInBounds_toArray]
-    rw [List.insertIdx_of_length_lt arr.toList a idx]
+    rw [List.insertIdx_of_length_lt (l := arr.toList) (by simp only [Array.length_toList]; omega)]
     simp
     assumption
-    simp
-    omega
   apply insertOk_mono arr (arr.insertIdxIfInBounds idx a) x harrinv harrinv2
   . intros b hb_in_arr
     rw [List.insertIdxIfInBounds_toArray]

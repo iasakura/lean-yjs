@@ -37,7 +37,7 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
       unfold ActorId at *
       omega
 
-theorem yjs_leq_right_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :
+theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :
   IsClosedItemSet P ->
   YjsLeq' P x.rightOrigin y →
   YjsLt' P y x →
@@ -68,7 +68,7 @@ theorem yjs_leq_right_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvaria
   . simp [YjsPtr.size, YjsItem.size]; omega
   constructor <;> assumption
 
-theorem yjs_leq_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsPtr A) (y : YjsItem A) :
+theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsPtr A) (y : YjsItem A) :
   IsClosedItemSet P ->
   YjsLeq' P x y.origin →
   YjsLt' P y x →
@@ -99,7 +99,7 @@ theorem yjs_leq_origin_decreases {A} {P : ItemSet A} (inv : ItemSetInvariant P) 
   . simp [YjsPtr.size, YjsItem.size]; omega
   constructor <;> assumption
 
-theorem yjs_lt_anti_symm {A} {P : ItemSet A} :
+theorem yjs_lt_anti_symm {A} [DecidableEq A] {P : ItemSet A} :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
   ∀ (x y : YjsPtr A), YjsLt' P x y -> YjsLt' P y x -> False := by
@@ -174,7 +174,7 @@ theorem yjs_lt_anti_symm {A} {P : ItemSet A} :
       apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp [hsize])
       omega
 
-theorem yjs_lt_of_not_leq {A} {P : ItemSet A} (inv : ItemSetInvariant P) (x y : YjsPtr A) :
+theorem yjs_lt_of_not_leq {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y : YjsPtr A) :
   IsClosedItemSet P ->
   YjsLt' P x y → ¬ YjsLeq' P y x := by
   intros hP hltxy

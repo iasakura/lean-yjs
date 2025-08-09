@@ -52,7 +52,7 @@ import LeanYjs.ItemSetInvariant
 --     constructor
 --     apply YjsLt.ltRightOrigin <;> try assumption
 
-theorem yjs_lt_total {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P} :
+theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y : YjsPtr A), P x -> P y ->
     (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x) := by

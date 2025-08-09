@@ -427,7 +427,7 @@ structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
   sorted : List.Pairwise (fun (x y : YjsItem A) => YjsLt' (ArrSet arr) x y) arr
   unique : List.Pairwise (fun x y => x ≠ y) arr
 
-omit [DecidableEq A] in theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
+theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
   YjsArrInvariant xs_all ->
   YjsArrInvariant ys_all ->
   (∀ a, ArrSet xs_all a ↔ ArrSet ys_all a) ->
@@ -582,7 +582,7 @@ omit [DecidableEq A] in theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : L
             | inr hin =>
               assumption
 
-omit [DecidableEq A] in theorem same_yjs_set_unique (xs ys : List (YjsItem A)) :
+theorem same_yjs_set_unique (xs ys : List (YjsItem A)) :
   YjsArrInvariant xs ->
   YjsArrInvariant ys ->
   (∀ a, ArrSet xs a ↔ ArrSet ys a) ->
@@ -602,7 +602,6 @@ theorem findPtrIdx_item_exists (arr : Array (YjsItem A)) (x : YjsItem A) :
   cases idx <;> cases hfind
   constructor; constructor
   . unfold Int.toNat'
-    simp
     eq_refl
   . rw [Array.findIdx?_eq_some_iff_getElem] at heq
     obtain ⟨ h, h1, h2 ⟩ := heq
@@ -872,7 +871,7 @@ theorem findPtrIdx_leq_YjsLeq' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
       subst y
       simp [ArrSet]
 
-omit [DecidableEq A] in theorem getElem_YjsLt'_index_lt (arr : Array (YjsItem A)) (i j : Nat) :
+theorem getElem_YjsLt'_index_lt (arr : Array (YjsItem A)) (i j : Nat) :
   YjsArrInvariant arr.toList ->
   (hi_lt : i < arr.size) -> (hj_lt : j < arr.size) ->
   YjsLt' (ArrSet arr.toList) arr[i] arr[j] ->
