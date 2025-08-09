@@ -828,8 +828,8 @@ theorem loopInv_preserve1
       dest scanning h_cand h_leftIdx nDest nScanning hnexteq
       hinv hbody hdest_current h_not_scanning h_lt_item h_tbd h_done
       hnext_dest hnext_scanning nDest_eq hlt_current heq nDest_lt_size
-  intros hdone item hitem
-  sorry
+  . intros hdone item hitem
+    sorry
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)
