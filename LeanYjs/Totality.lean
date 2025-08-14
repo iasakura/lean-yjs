@@ -291,3 +291,16 @@ theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
                               right
                               constructor
                               assumption
+
+theorem YjsLeq'_or_YjsLt' {A : Type} [DecidableEq A] {P : ItemSet A} {x y : YjsPtr A} :
+  ItemSetInvariant P -> IsClosedItemSet P -> P x -> P y -> (YjsLeq' P x y) ∨ (YjsLt' P y x) := by
+  intros inv hP hx hy
+  cases yjs_lt_total (inv := inv) hP x y hx hy with
+  | inl hleq =>
+    left
+    obtain ⟨ h, hleq ⟩ := hleq
+    constructor; assumption
+  | inr hlt =>
+    right
+    obtain ⟨ h, hlt ⟩ := hlt
+    constructor; assumption

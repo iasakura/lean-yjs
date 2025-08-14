@@ -12,6 +12,7 @@ import LeanYjs.Transitivity
 import LeanYjs.AntiSymmetry
 import LeanYjs.Integrate
 import LeanYjs.YjsArray
+import LeanYjs.NoCrossOrigin
 
 variable {A : Type}
 variable [DecidableEq A]
@@ -74,6 +75,11 @@ def offsetToIndex (leftIdx : ℤ) (rightIdx : ℤ) (offset : Option ℕ) (isBrea
   | none => rightIdx.toNat - back
   | some o => (leftIdx + o).toNat - back
 
+def isBreak (state : ForInStep (MProd ℤ Bool)) : Bool :=
+  match state with
+  | ForInStep.done _ => true
+  | ForInStep.yield _ => false
+
 def isDone (state : ForInStep (MProd ℤ Bool)) (x : Option ℕ) : Bool :=
   (match x with
   | none => true
@@ -82,13 +88,21 @@ def isDone (state : ForInStep (MProd ℤ Bool)) (x : Option ℕ) : Bool :=
   | ForInStep.done _ => true
   | ForInStep.yield _ => false
 
-def isBreak (state : ForInStep (MProd ℤ Bool)) : Bool :=
-  match state with
-  | ForInStep.done _ => true
-  | ForInStep.yield _ => false
-
 def scannedItem arr (item newItem destItem : YjsItem A) :=
   (item.origin = newItem.origin ∧ newItem.id < item.id ∨ YjsLt' (ArrSet arr) destItem item.origin)
+
+def extGetElemExcept (arr : Array (YjsItem A)) (idx : Int) : Except IntegrateError (YjsPtr A) :=
+  if idx = -1 then
+    Except.ok YjsPtr.first
+  else if idx = arr.size then
+    Except.ok YjsPtr.last
+  else
+    if idx < 0 || idx >= arr.size then
+      Except.error IntegrateError.notFound
+    else
+      match arr[idx.toNat]? with
+      | some item => return item
+      | none => Except.error IntegrateError.notFound
 
 def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rightIdx : ℤ) (x : Option ℕ) (state : ForInStep (MProd ℤ Bool)) :=
   -- when x is none, we are done so current is rightIdx
@@ -108,7 +122,7 @@ def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rig
       (arr[i].origin = newItem.origin ∧ newItem.id < arr[i].id ∨
         YjsLt' (ArrSet $ newItem :: arr.toList) arr[dest] arr[i].origin)) ∧
   (scanning -> ∃ h_dest_lt : dest < arr.size, arr[dest].origin = newItem.origin) ∧
-  (done -> ∀item : YjsItem A, getElemExcept arr current = Except.ok item -> YjsLt' (ArrSet $ newItem :: arr.toList) newItem item)
+  (done -> ∀item : YjsPtr A, extGetElemExcept arr current = Except.ok item -> YjsLt' (ArrSet $ newItem :: arr.toList) newItem item)
 
 omit [DecidableEq A] in theorem not_rightOrigin_first (P : YjsPtr A -> Prop) (item : YjsItem A) :
   IsClosedItemSet P ->
@@ -261,13 +275,14 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
         cases offset <;> simp [offsetToIndex] at h_j_i <;> omega
       have heq : findPtrIdx arr[j] arr = Except.ok j := by
         apply findPtrIdx_getElem; assumption
-      obtain x := findPtrIdx_lt_YjsLt' arr _ _ harrinv heq hrightIdx hlt
-      apply yjs_lt'_mono (P := ArrSet arr.toList) (Q := ArrSet $ newItem :: arr.toList) <;> try assumption
-      apply harrinv.closed
-      apply harrinv.item_set_inv
-      intros a; cases a <;> try simp [ArrSet]
-      intros; right; assumption
-
+      -- obtain x := findPtrIdx_lt_YjsLt' _ harrinv heq hrightIdx hlt
+      -- apply yjs_lt'_mono (P := ArrSet arr.toList) (Q := ArrSet $ newItem :: arr.toList) <;> try assumption
+      -- apply harrinv.closed
+      -- apply harrinv.item_set_inv
+      -- intros a; cases a <;> try simp [ArrSet]
+      -- intros; right; assumption
+      apply findPtrIdx_lt_YjsLt' _ harrinv heq hrightIdx hlt
+      intros; simp; right; assumption
     -- rw [heq]
     -- rw [heq] at hlt_ro hlt_ro'
     obtain ⟨ o, r, id, c ⟩ := newItem
@@ -372,11 +387,11 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
               YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
   (h_done :
     isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
-      ∀ (item : YjsItem A),
-        getElemExcept arr
-              (offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
+      ∀ (item : YjsPtr A),
+        extGetElemExcept arr
+              ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
             Except.ok item →
-          YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) (YjsPtr.itemPtr item))
+          YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) item)
   (hnext_dest :
     nDest =
       if oLeftIdx < leftIdx then dest
@@ -403,6 +418,16 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
     intros
     obtain hlt := h_lt_item j (by omega) (by omega)
     assumption
+  have h_newItem_origin_lt_other : YjsLt' (ArrSet (newItem :: arr.toList)) newItem.origin other := by
+    apply findPtrIdx_lt_YjsLt' (i := leftIdx) (j := (leftIdx + (1 + ↑i)).toNat)  <;> try assumption
+    . intros; simp; right; assumption
+    . subst other; rw [findPtrIdx_getElem]; assumption
+    . omega
+  have h_other_lt_newItem_rightOrigin : YjsLt' (ArrSet (newItem :: arr.toList)) other newItem.rightOrigin := by
+    apply findPtrIdx_lt_YjsLt' (i := (leftIdx + (1 + ↑i)).toNat) (j := rightIdx) <;> try assumption
+    . intros; simp; right; assumption
+    . subst other; rw [findPtrIdx_getElem]; assumption
+    . omega
   split at h_j_lt <;> try (apply h_j_dest (by omega))
   split at h_j_lt
   . split at h_j_lt
@@ -420,11 +445,7 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
       subst other
       apply getElem_leq_YjsLeq' arr j (leftIdx + (1 + ↑i)).toNat harrinv
       omega
-    apply findPtrIdx_origin_leq_newItem_YjsLt' (oIdx := (leftIdx + (1 + ↑i)).toNat)
-      arr _ _ hclosed harrsetinv harrinv <;> try first | assumption | simpa
-    . subst other; simp
-    . omega
-    . omega
+    apply findPtrIdx_origin_leq_newItem_YjsLt' _ _ _ hclosed harrsetinv harrinv <;> try first | assumption | simpa
     . omega
     . intros; assumption
     . subst leftIdx
@@ -438,9 +459,10 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
         exists 0; apply YjsLeq.leqSame <;> try assumption
         apply hclosed.closedLeft
         left
+    . intros; simp; right; assumption
   . -- leftIdx < oLeftIdx cases
     split at h_j_lt
-    . apply yjs_leq'_p_trans1 (y := arr[(leftIdx + (1 + ↑i)).toNat]) <;> try assumption
+    . apply yjs_leq'_p_trans1 (y := other) <;> try assumption
       . apply yjs_leq'_mono (P := ArrSet arr.toList) (Q := (ArrSet (newItem :: arr.toList))) <;> try assumption
         . apply harrinv.closed
         . apply harrinv.item_set_inv
@@ -452,20 +474,13 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
             simp [ArrSet] at ha
             simp [ArrSet]
             right; assumption
+        subst other
         apply getElem_leq_YjsLeq' arr j (leftIdx + (1 + ↑i)).toNat harrinv
         omega
-      . apply findPtrIdx_origin_leq_newItem_YjsLt' (oIdx := (leftIdx + (1 + ↑i)).toNat) arr _ _ hclosed harrsetinv harrinv
-          _ harrinv (by assumption) (by assumption)
-        . subst other
-          apply hoLeftIdx
-        . subst other
-          apply hoRightIdx
-        . simp
+      . apply findPtrIdx_origin_leq_newItem_YjsLt' _ _ _ hclosed harrsetinv harrinv _ (by assumption) (by assumption) <;> try assumption
         . omega
         . omega
-        . omega
-        . omega
-        . generalize h_other_origin_eq : arr[(leftIdx + (1 + ↑i)).toNat].origin = otherOrigin at *
+        . generalize h_other_origin_eq : other.origin = otherOrigin at *
           cases otherOrigin with
           | first =>
             apply YjsLt'.ltOriginOrder
@@ -474,7 +489,6 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
             apply OriginLt.lt_first
           | last =>
             subst other
-            rw [h_other_origin_eq] at h_other_origin_lt
             obtain ⟨ _, h_other_origin_lt ⟩ := h_other_origin_lt
             apply not_last_lt_ptr harrsetinv at h_other_origin_lt <;> try assumption
             contradiction
@@ -482,7 +496,7 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
             have ⟨  k, _, h_otherOrigin_arr_k⟩ : ∃(k : ℕ) (h : k < arr.size), arr[k] = otherOrigin := by
               have h_otherOrigin_in_arr : ArrSet arr.toList (YjsPtr.itemPtr otherOrigin) := by
                 obtain ⟨ o, r, id, c ⟩ := other
-                rw [heq] at h_other_origin_eq
+                -- rw [heq] at h_other_origin_eq
                 simp [YjsItem.origin] at h_other_origin_eq
                 subst o
                 apply harrinv.closed.closedLeft (YjsPtr.itemPtr otherOrigin) r id c
@@ -508,7 +522,7 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
               apply YjsLt'.ltOrigin
               rw [<-h_other_eq]
               simp [ArrSet]
-              apply YjsLeq'.leqSame
+              subst other; apply YjsLeq'.leqSame
               apply harrinv.closed.closedLeft o r id c
               rw [<-h_other_eq]
               simp [ArrSet]
@@ -517,7 +531,8 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
               rw [<-h_otherOrigin_arr_k] at otherOrigin_lt
               assumption
             omega
-        . assumption
+        . intros; simp; right; assumption
+        . simp
     apply h_j_dest (by omega)
 
 theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A)
@@ -578,11 +593,11 @@ theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : Decid
               YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
   (h_done :
     isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
-      ∀ (item : YjsItem A),
-        getElemExcept arr
-              (offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
+      ∀ (item : YjsPtr A),
+        extGetElemExcept arr
+              ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
             Except.ok item →
-          YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) (YjsPtr.itemPtr item))
+          YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) item)
   (hnext_dest :
     nDest =
       if oLeftIdx < leftIdx then dest
@@ -628,6 +643,89 @@ theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : Decid
   . subst scanning
     contradiction
   . apply h_cand h_scanning
+
+theorem YjsLt_subset_in (P : ItemSet A) :
+  IsClosedItemSet Q ->
+  Q x -> Q y ->
+  -- (∀x, Q x -> P x) ->
+  YjsLt P h x y → YjsLt Q h x y := by
+  intros hclosed hx hy hlt
+  revert hlt x y
+  apply Nat.strongRec' (p := fun h => ∀ x y, Q x -> Q y -> YjsLt P h x y → YjsLt Q h x y)
+  intros n ih x y hx hy hlt
+  cases hlt with
+  | ltOrigin h x o r id c hPitem hleq =>
+    apply YjsLt.ltOrigin <;> try assumption
+    cases hleq with
+    | leqSame _ hPx =>
+      apply YjsLeq.leqSame <;> assumption
+    | leqLt h _ _ hlt =>
+      apply YjsLeq.leqLt <;> try assumption
+      apply ih <;> try assumption
+      omega
+      apply hclosed.closedLeft; assumption
+  | ltRightOrigin h x o r id c hPitem hleq =>
+    apply YjsLt.ltRightOrigin <;> try assumption
+    cases hleq with
+    | leqSame _ hPx =>
+      apply YjsLeq.leqSame <;> assumption
+    | leqLt h _ _ hlt =>
+      apply YjsLeq.leqLt <;> try assumption
+      apply ih <;> try assumption
+      omega
+      apply hclosed.closedRight; assumption
+  | ltConflict h i1 i2 hlt =>
+    apply YjsLt.ltConflict <;> try assumption
+    cases hlt with
+    | ltOriginDiff h1 h2 h3 h4 l1 l2 l3 l4 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+      apply ConflictLt.ltOriginDiff <;> try assumption
+      . apply ih<;> try assumption
+        . simp [max4]; omega
+        . apply hclosed.closedLeft; assumption
+        . apply hclosed.closedLeft; assumption
+      . apply ih<;> try assumption
+        . simp [max4]; omega
+        . apply hclosed.closedRight; assumption
+      . apply ih<;> try assumption
+        . simp [max4]; omega
+        . apply hclosed.closedLeft; assumption
+      . apply ih<;> try assumption
+        . simp [max4]; omega
+        . apply hclosed.closedRight; assumption
+    | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 hidlt =>
+      apply ConflictLt.ltOriginSame <;> try assumption
+      . apply ih<;> try assumption
+        . omega
+        . apply hclosed.closedRight; assumption
+      . apply ih<;> try assumption
+        . omega
+        . apply hclosed.closedRight; assumption
+  | ltOriginOrder hpx hpy hlt =>
+    apply YjsLt.ltOriginOrder <;> try assumption
+
+theorem YjsLt'_subset_in (P : ItemSet A) :
+  IsClosedItemSet Q ->
+  Q x -> Q y ->
+  YjsLt' P x y → YjsLt' Q x y := by
+  intros hclosed hx hy hlt
+  obtain ⟨ h, hlt ⟩ := hlt
+  exists h
+  apply YjsLt_subset_in P hclosed hx hy hlt
+
+theorem YjsLeq'_subset_in (P : ItemSet A) :
+  IsClosedItemSet Q ->
+  Q x -> Q y ->
+  YjsLeq' P x y → YjsLeq' Q x y := by
+  intros hclosed hx hy hleq
+  apply yjs_leq'_imp_eq_or_yjs_lt' at hleq
+  cases hleq with
+  | inl heq =>
+    subst heq
+    exists 0
+    apply YjsLeq.leqSame <;> assumption
+  | inr hlt =>
+    apply YjsLt'_subset_in P hclosed hx hy at hlt
+    apply YjsLeq'.leqLt _ _ _ hlt
 
 theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
   (horigin : ArrSet arr.toList newItem.origin) (hrorigin : ArrSet arr.toList newItem.rightOrigin)
@@ -686,11 +784,11 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
               YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
   (h_done :
     isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
-      ∀ (item : YjsItem A),
-        getElemExcept arr
-              (offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
+      ∀ (item : YjsPtr A),
+        extGetElemExcept arr
+              ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
             Except.ok item →
-          YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) (YjsPtr.itemPtr item))
+          YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) item)
   (hnext_dest :
     nDest =
       if oLeftIdx < leftIdx then dest
@@ -708,42 +806,189 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
   (h_in_other_origin : ArrSet (newItem :: arr.toList) other.origin)
   (h_other_origin_lt : YjsLt' (ArrSet (newItem :: arr.toList)) other.origin (YjsPtr.itemPtr other))
   (nDest_lt_size : nDest.toNat ≤ arr.size)
-  (hdone : isDone next (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? = true) (item : YjsItem A)
+  (hdone : isDone next (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? = true) (item : YjsPtr A)
   (hitem :
     getElemExcept arr
         (offsetToIndex leftIdx (max rightIdx 0) (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]?
           (isBreak next)) =
       Except.ok item) :
-  YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) (YjsPtr.itemPtr item) := by
+  YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr newItem) item := by
   rw [Int.max_eq_left (by omega)] at *
   rw [offsetToIndex_range'_getElem (by assumption) (by assumption) (by omega)] at *
   simp [isDone] at hdone
-  cases Nat.lt_or_ge (i + 1) ((rightIdx - leftIdx).toNat - 1) with
-  | inl hlt =>
-    rw [List.getElem?_range' (by omega)] at hdone
-    simp at hdone
-    cases next with
-    | yield next =>
-      cases hdone
-    | done next =>
-      have hor : oLeftIdx < leftIdx ∨ (oLeftIdx = leftIdx ∧ oRightIdx = rightIdx ∧ !(newItem.id > other.id)) := by
-        split at hbody
-        . left; assumption
+  have harr_other : ArrSet arr.toList (YjsPtr.itemPtr other) := by
+    subst other; simp [ArrSet]
+  have harr_other_origin : ArrSet arr.toList other.origin := by
+    obtain ⟨ o, r, id, c ⟩ := other
+    simp [YjsItem.origin]
+    apply harrinv.closed.closedLeft o r id c
+    rw [<-heq]
+    simp [ArrSet]
+  -- cases Nat.lt_or_ge (i + 1) ((rightIdx - leftIdx).toNat - 1) with
+  cases next with
+  | done next  =>
+    -- rw [List.getElem?_range' (by omega)] at hdone
+    -- simp at hdone
+    -- cases next with
+    -- | yield next =>
+    --   cases hdone
+    -- | done next =>
+    simp [isBreak] at hitem
+    have hor : oLeftIdx < leftIdx ∨ (oLeftIdx = leftIdx ∧ oRightIdx = rightIdx ∧ !(newItem.id > other.id)) := by
+      split at hbody
+      . left; assumption
+      . split at hbody
         . split at hbody
+          . cases hbody
           . split at hbody
+            . right; constructor; assumption
+              constructor; assumption
+              simp
+              assumption
             . cases hbody
-            . split at hbody
-              . right; constructor; assumption
-                constructor; assumption
-                simp
-                assumption
-              . cases hbody
-          . split at hbody
-            . cases hbody
-            . cases hbody
-      cases hor with
-      | inl hlt =>
-        t
+        . split at hbody
+          . cases hbody
+          . cases hbody
+    have hitem_eq_other : item = other := by
+      have heq_idx : ((leftIdx + (↑i + 1) +1).toNat - 1  = (leftIdx + ((1 : ℤ) + ↑i)).toNat) := by
+        omega
+      rw [heq_idx] at hitem
+      unfold getElemExcept at hitem
+      rw [Array.getElem?_eq_getElem (by omega), heq] at hitem
+      simp at hitem
+      cases hitem
+      simp
+    subst item
+    have h_other_neq_newItem : other ≠ newItem := by
+      apply hneq other
+      subst other; simp
+    cases hor with
+    | inl hlt =>
+      cases YjsLeq'_or_YjsLt' (x := other) (y := newItem) harrsetinv hclosed (by assumption) (by simp [ArrSet]) with
+      | inr hlt =>
+        apply hlt
+      | inl hleq =>
+        have hlt : YjsLt' (ArrSet (newItem :: arr.toList)) (YjsPtr.itemPtr other) (YjsPtr.itemPtr newItem) := by
+          cases yjs_leq'_imp_eq_or_yjs_lt' hleq with
+          | inr hlt =>
+            apply hlt
+          | inl heq =>
+            have heq : other = newItem := by
+              cases heq
+              simp
+            contradiction
+        apply no_cross_origin hclosed harrsetinv at hlt
+        cases hlt with
+        | inl hleq =>
+          have hle_leftIdx_oLeftIdx : leftIdx ≤ oLeftIdx := by
+            apply YjsLeq'_findPtrIdx_leq _ _ (x := newItem.origin) (y := other.origin) _ harrinv _ heqleft hoLeftIdx
+            apply YjsLeq'_subset_in _ harrinv.closed horigin harr_other_origin hleq
+          omega
+        | inr hleq =>
+          have hleq : YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr other) newItem.origin := by
+            apply YjsLeq'_subset_in _ harrinv.closed <;> try assumption
+          have hle_leftIdx_oLeftIdx : leftIdx + (1 + ↑i) ≤ leftIdx := by
+            apply YjsLeq'_findPtrIdx_leq _ _ (x := other) (y := newItem.origin) _ harrinv hleq _ heqleft
+            subst other
+            rw [findPtrIdx_getElem] <;> try assumption
+            simp; omega
+          omega
+    | inr hcond =>
+      obtain ⟨ h_oLeftIdx_eq_leftIdx, h_oRightIdx_eq_rightIdx, h_other_id_lt_newItem_id ⟩ := hcond
+      have h_id_lt_id' : newItem.id < other.id := by
+        simp at h_other_id_lt_newItem_id
+        rw [Nat.not_lt_eq, Nat.le_iff_lt_or_eq] at h_other_id_lt_newItem_id
+        cases h_other_id_lt_newItem_id with
+        | inl =>
+          assumption
+        | inr heq =>
+          have hor : YjsLeq' (ArrSet arr.toList) other newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin other := by
+            apply hsameid_consistent other
+            subst other; simp [ArrSet]
+            rw [heq]
+          cases hor with
+          | inl hleq =>
+            have hlt : YjsLt' (ArrSet arr.toList) newItem.origin other := by
+              apply findPtrIdx_lt_YjsLt' (arr := arr) (x := newItem.origin) (y := other) (j := (leftIdx + (1 + ↑i))) _ harrinv heqleft
+              . subst other
+                rw [findPtrIdx_getElem] <;> try assumption
+                simp; omega
+              . omega
+              . intros; simp; assumption
+            apply yjs_lt_of_not_leq harrinv.item_set_inv _ _ harrinv.closed hlt at hleq
+            contradiction
+          | inr hleq =>
+            have hlt : YjsLt' (ArrSet arr.toList) other newItem.rightOrigin:= by
+              apply findPtrIdx_lt_YjsLt' (arr := arr) (x := other) (y := newItem.rightOrigin) (i := (leftIdx + (1 + ↑i))) _ harrinv _ heqright
+              . omega
+              . intros; simp; assumption
+              . subst other
+                rw [findPtrIdx_getElem] <;> try assumption
+                simp; omega
+            apply yjs_lt_of_not_leq harrinv.item_set_inv _ _ harrinv.closed hlt at hleq
+            contradiction
+      subst h_oLeftIdx_eq_leftIdx h_oRightIdx_eq_rightIdx
+      apply YjsLt'.ltConflict
+      obtain ⟨ o, r, id, c ⟩ := newItem
+      obtain ⟨ o', r', id', c' ⟩ := other
+      have h_o_eq_o' : o = o' := by
+        simp [YjsItem.origin] at *
+        apply findPtrIdx_eq_ok_inj _ _ heqleft hoLeftIdx <;> try assumption
+      have h_r_eq_r' : r = r' := by
+        simp [YjsItem.origin] at *
+        apply findPtrIdx_eq_ok_inj _ _ heqright hoRightIdx <;> try assumption
+      subst o r
+      apply ConflictLt'.ltOriginSame
+      . apply YjsLt'.ltRightOrigin
+        . simp [ArrSet]
+        . apply YjsLeq'.leqSame
+          . apply hclosed.closedRight o' r' id c
+            simp [ArrSet]
+      . apply YjsLt'.ltRightOrigin
+        . rw [<-heq]; simp [ArrSet]
+        . apply YjsLeq'.leqSame
+          . apply hclosed.closedRight o' r' id c
+            simp [ArrSet]
+      . assumption
+  | yield h =>
+    simp [isBreak] at hitem
+    simp at hdone
+    generalize hoffset : (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? = offset at hdone
+    have heq : offset = none := by
+      cases offset <;> try simp
+      simp at hdone
+    subst offset
+    rw [List.getElem?_eq_none_iff] at heq
+    simp at heq
+    replace heq : (leftIdx + (↑i + 1) + 1).toNat = rightIdx.toNat := by
+      omega
+    rw [heq] at hitem
+    have hitem : item = newItem.rightOrigin := by
+      unfold getElemExcept at hitem
+      generalize h_rightOrigin : newItem.rightOrigin = rightOrigin at *
+      cases rightOrigin with
+      | itemPtr rightOrgin =>
+        obtain ⟨ r, h_rightIdx_eq, h_rightOrigin_eq ⟩ := findPtrIdx_item_exists _ _ heqright
+        have heq : r = rightIdx.toNat := by
+          simp [Int.toNat'] at h_rightIdx_eq
+          rw [Int.mem_toNat?] at h_rightIdx_eq
+          omega
+        subst heq
+        rw [h_rightOrigin_eq] at hitem
+        simp at hitem
+        cases hitem
+        simp
+      | first =>
+        obtain ⟨ _, horigin_consistent ⟩ := horigin_consistent
+        apply not_ptr_lt_first at horigin_consistent <;> try assumption
+        contradiction
+        apply harrinv.item_set_inv
+      | last =>
+        a
+
+
+
+
 
 theorem loopInv_preserve1
   (newItem : YjsItem A)
@@ -1271,7 +1516,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
               subst hdone
               simp [isDone]
           . rw [max_eq_left hrightIdx]
-            simp [getElemExcept]
+            simp [extGetElemExcept]
             rw [Array.getElem?_eq_getElem (by omega)]
             simp
             eq_refl
@@ -1362,7 +1607,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
       | none =>
         split at heq <;> cases heq
         rw [Int.max_eq_left (by assumption)] at h_item_eq
-        simp [offsetToIndex, getElemExcept, isBreak] at h_item_eq
+        simp [offsetToIndex, extGetElemExcept, isBreak] at h_item_eq
         generalize h_getElem_eq : arr[rightIdx.toNat]? = rItem at h_item_eq
         cases rItem <;> cases h_item_eq
         rw [Array.getElem?_eq_some_iff] at h_getElem_eq

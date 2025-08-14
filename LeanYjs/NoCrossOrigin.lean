@@ -8,9 +8,10 @@ import LeanYjs.AntiSymmetry
 import Mathlib.Order.Defs.Unbundled
 
 variable {A : Type}
-variable (P : ItemSet A)
+variable {P : ItemSet A}
+variable [DecidableEq A]
 
-theorem no_cross_origin (x y : YjsItem A) :
+theorem no_cross_origin {x y : YjsItem A} :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
   YjsLt' P x y ->
@@ -75,7 +76,8 @@ theorem no_cross_origin (x y : YjsItem A) :
               constructor; apply YjsLt.ltOrigin <;> try assumption
               apply YjsLeq.leqSame
               . apply hP.closedLeft; assumption
-            cases yjs_lt_anti_symm hP hinv y.origin y hltorigin hlt
+            by_contra
+            apply yjs_lt_anti_symm hP hinv y.origin y hltorigin hlt
           | inl heq =>
             obtain ⟨ yo, yr, yid, yc ⟩ := y
             simp [YjsItem.origin] at heq
