@@ -595,13 +595,13 @@ theorem same_yjs_set_unique (xs ys : List (YjsItem A)) :
 
 theorem findPtrIdx_item_exists (arr : Array (YjsItem A)) (x : YjsItem A) :
   findPtrIdx x arr = Except.ok i ->
-  ∃j, i.toNat' = some j ∧ arr[j]? = some x := by
+  ∃j, i.toNat? = some j ∧ arr[j]? = some x := by
   intros hfind
   simp [findPtrIdx] at hfind
   generalize heq : Array.findIdx? (fun i => i = x) arr = idx at hfind
   cases idx <;> cases hfind
   constructor; constructor
-  . unfold Int.toNat'
+  . unfold Int.toNat?
     eq_refl
   . rw [Array.findIdx?_eq_some_iff_getElem] at heq
     obtain ⟨ h, h1, h2 ⟩ := heq
@@ -730,7 +730,7 @@ theorem findPtrIdx_lt_YjsLt'_aux (arr : Array (YjsItem A)) (x y : YjsPtr A) :
       obtain ⟨ k, heq, hfindy ⟩ := hfindy
       rw [Array.getElem?_eq_some_iff] at hfindy
       obtain ⟨ _, hfindy ⟩ := hfindy
-      unfold Int.toNat' at heq
+      unfold Int.toNat? at heq
       cases j <;> cases heq
       simp at hlt
       omega

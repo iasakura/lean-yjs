@@ -52,7 +52,7 @@ theorem for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) 
       cases res with
       | yield y =>
         apply ih y <;> try assumption
-        . apply hbody (i := 0) at heq <;> try first | simpa | assumption
+        . apply hbody (i := 0) at heq <;> try first | simp | assumption
           simp at *
           rw [List.head?_eq_getElem?]
           assumption
@@ -63,7 +63,7 @@ theorem for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) 
       | done y =>
         simp at hforin
         cases hforin
-        apply hbody (i := 0) at heq <;> try first | simpa | assumption
+        apply hbody (i := 0) at heq <;> try first | simp | assumption
         simp at heq
         exists xs[0]?, ForInStep.done res
         constructor; constructor; constructor <;> try assumption
@@ -974,7 +974,6 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
       | itemPtr rightOrigin =>
         obtain ⟨ r, h_rightIdx_eq, h_rightOrigin_eq ⟩ := findPtrIdx_item_exists arr rightOrigin heqright
         have heq : r = rightIdx.toNat := by
-          simp [Int.toNat'] at h_rightIdx_eq
           rw [Int.mem_toNat?] at h_rightIdx_eq
           omega
         subst heq
