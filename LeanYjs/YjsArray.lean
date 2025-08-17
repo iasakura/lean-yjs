@@ -26,7 +26,7 @@ omit [DecidableEq A] in theorem arr_set_closed_push (arr : List (YjsItem A)) (it
   ArrSet arr item.rightOrigin ->
   ArrSetClosed (item :: arr) := by
   intros hclosed horigin hright
-  constructor <;> try simp [ArrSet, IsClosedItemSet]
+  constructor <;> try simp [ArrSet]
   . intros o r id c hor
     cases o with
     | itemPtr item' =>

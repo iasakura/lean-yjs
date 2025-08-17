@@ -65,7 +65,7 @@ theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv 
       constructor; assumption
   exists r, y
   constructor
-  . simp [YjsPtr.size, YjsItem.size]; omega
+  . simp [YjsItem.size]; omega
   constructor <;> assumption
 
 theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsPtr A) (y : YjsItem A) :
@@ -96,7 +96,7 @@ theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : Item
       constructor; assumption
   exists x, o
   constructor
-  . simp [YjsPtr.size, YjsItem.size]; omega
+  . simp [YjsItem.size]; omega
   constructor <;> assumption
 
 theorem yjs_lt_anti_symm {A} [DecidableEq A] {P : ItemSet A} :
@@ -133,14 +133,14 @@ theorem yjs_lt_anti_symm {A} [DecidableEq A] {P : ItemSet A} :
   . subst hxeq
     obtain ⟨ x', y', hsize', hltxy', hltyx' ⟩ :=
       yjs_leq_right_origin_decreases inv x y hP hxrleq hltyx
-    apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp [hsize'])
-    simp [YjsPtr.size, YjsItem.size] at hsize
+    apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp)
+    simp [YjsPtr.size] at hsize
     omega
   . subst hyeq
     obtain ⟨ x', y', hsize', hltxy', hltyx ⟩ :=
       yjs_leq_origin_decreases inv x y hP hyoleq hltyx
-    apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx (by simp [hsize'])
-    simp [YjsPtr.size, YjsItem.size] at hsize
+    apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx (by simp)
+    simp [YjsPtr.size] at hsize
     omega
   . obtain hltyx' := yjs_lt'_cases _ _ _ _ hltyx
     rcases hltyx' with
@@ -160,18 +160,18 @@ theorem yjs_lt_anti_symm {A} [DecidableEq A] {P : ItemSet A} :
     . subst hyeq
       obtain ⟨ x', y', hsize', hltxy', hltyx' ⟩ :=
         yjs_leq_right_origin_decreases inv y x hP hyrleq hltxy
-      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp [hsize'])
-      simp [YjsPtr.size, YjsItem.size] at hsize
+      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp)
+      simp [YjsPtr.size] at hsize
       omega
     . subst hxeq
       obtain ⟨ x', y', hsize', hltxy', hltyx ⟩ :=
         yjs_leq_origin_decreases inv y x hP hxoleq hltxy
-      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx (by simp [hsize])
-      simp [YjsPtr.size, YjsItem.size] at hsize
+      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx (by simp)
+      simp [YjsPtr.size] at hsize
       omega
     . obtain ⟨ x', y', hsize', hltxy', hltyx' ⟩ :=
         yjs_lt_conflict_lt_decreases inv x y hltxy' hltyx'
-      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp [hsize])
+      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp)
       omega
 
 theorem yjs_lt_of_not_leq {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y : YjsPtr A) :
