@@ -535,6 +535,47 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
         . simp
     apply h_j_dest (by omega)
 
+
+theorem idx_between_id_neq {A : Type} [inst : DecidableEq A] {i : ℕ} {newItem other : YjsItem A} {arr : Array (YjsItem A)}
+  (harrinv : YjsArrInvariant arr.toList)
+  (hsameid_consistent :
+    ∀ (x : YjsItem A),
+      ArrSet arr.toList (YjsPtr.itemPtr x) →
+        x.id = newItem.id →
+          YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
+            YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
+  (hleftIdx : findPtrIdx newItem.origin arr = Except.ok leftIdx)
+  (hrightIdx : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
+  (h_leftIdx_lt_i : leftIdx < i)
+  (h_i_lt_rightIdx : i < rightIdx)
+  (h_i_lt_arr_size : i < arr.size)
+  (heq : other = arr[i]) :
+  other.id ≠ newItem.id := by
+  intros hcontra
+  have hor : YjsLeq' (ArrSet arr.toList) other newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin other := by
+    apply hsameid_consistent other
+    subst other; simp [ArrSet]
+    subst other; assumption
+  cases hor with
+  | inl hleq =>
+    have hlt : YjsLt' (ArrSet arr.toList) newItem.origin other := by
+      apply findPtrIdx_lt_YjsLt' (arr := arr) (x := newItem.origin) (y := other) (j := i) _ harrinv hleftIdx
+      . subst other
+        rw [findPtrIdx_getElem]; assumption
+      . omega
+      . intros; simp; assumption
+    apply yjs_lt_of_not_leq harrinv.item_set_inv _ _ harrinv.closed hlt at hleq
+    contradiction
+  | inr hleq =>
+    have hlt : YjsLt' (ArrSet arr.toList) other newItem.rightOrigin:= by
+      apply findPtrIdx_lt_YjsLt' (arr := arr) (x := other) (y := newItem.rightOrigin) (i := i) _ harrinv _ hrightIdx
+      . omega
+      . intros; simp; assumption
+      . subst other
+        rw [findPtrIdx_getElem]; assumption
+    apply yjs_lt_of_not_leq harrinv.item_set_inv _ _ harrinv.closed hlt at hleq
+    contradiction
+
 theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin {A : Type}
   [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A)) (horigin : ArrSet arr.toList newItem.origin)
   (hrorigin : ArrSet arr.toList newItem.rightOrigin)
@@ -627,7 +668,107 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
     split at h_i_c <;> omega
   have nDest_lt_arr_size : nDest.toNat < arr.size := by omega
   exists h_j_lt_arr_size, nDest_lt_arr_size
-  sorry
+  rw [offsetToIndex_range'_getElem (by assumption) (by assumption) (by omega)] at h_i_c
+  split at hbody
+  . -- break case (oLeftIdx < leftIdx)
+    have ⟨ heq1, heq2 ⟩ : nDest = dest ∧ nScanning = scanning := by
+      subst next; cases hnexteq; simp
+    subst next heq1 heq2
+    simp [isBreak] at h_i_c
+    simp [offsetToIndex, isBreak] at h_tbd
+    obtain ⟨ _, _, h_tbd ⟩ := h_tbd j (by assumption) (by omega)
+    apply h_tbd
+  . split at hbody
+    . -- oLeftIdx = leftIdx case
+      split at hbody
+      . -- other.id < newItem.id case
+        have ⟨ heq1, heq2 ⟩ : nDest = leftIdx + (1 + ↑i) + 1 ∧ nScanning = false := by
+          subst next; cases hnexteq; simp
+        subst next heq1 heq2
+        simp [isBreak] at h_i_c
+        omega
+      . -- other.id >= newItem.id case
+        split at hbody
+        . -- oRightIdx = rightIdx case
+          have ⟨ heq1, heq2 ⟩ : nDest = dest ∧ nScanning = scanning := by
+            subst next; cases hnexteq; simp
+          subst next heq1 heq2
+          simp [isBreak] at h_i_c
+          simp [offsetToIndex, isBreak] at h_tbd
+          obtain ⟨ _, _, h_tbd ⟩ := h_tbd j (by omega) (by omega)
+          apply h_tbd
+        . -- oRightIdx ≠ rightIdx case
+          have ⟨ heq1, heq2 ⟩ : nDest = dest ∧ nScanning = true := by
+            subst next; cases hnexteq; simp
+          subst next heq1 heq2
+          simp [isBreak] at h_i_c
+          simp [offsetToIndex, isBreak] at h_tbd
+          have hor : ↑j < leftIdx + (1 + ↑i) ∨ ↑j = leftIdx + (1 + ↑i):= by
+            omega
+          cases hor with
+          | inl hlt =>
+            obtain ⟨ _, _, h_tbd ⟩ := h_tbd j (by omega) (by omega)
+            apply h_tbd
+          | inr heq' =>
+            left
+            have h_j_eq : j = (leftIdx + (1 + ↑i)).toNat := by
+              omega
+            subst j
+            rw [heq]
+            constructor
+            . have heq : oLeftIdx = leftIdx := by
+                omega
+              subst heq
+              apply findPtrIdx_eq_ok_inj _ _ hoLeftIdx heqleft
+            . have hneq : other.id ≠ newItem.id := by
+                apply idx_between_id_neq (other := other) (i := (leftIdx + (1 + ↑i)).toNat) harrinv hsameid_consistent heqleft heqright
+                . omega
+                . omega
+                . subst other; simp
+              unfold ActorId at *
+              omega
+    . -- oLeftIdx > leftIdx case
+      split at hbody
+      . -- scanning = false case
+        have ⟨ heq1, heq2 ⟩ : nDest = leftIdx + (1 + ↑i) + 1 ∧ nScanning = scanning := by
+          subst next; cases hnexteq; simp
+        subst next heq1 heq2
+        simp [isBreak] at h_i_c
+        omega
+      . -- scanning = true case
+        have ⟨ heq1, heq2 ⟩ : nDest = dest ∧ nScanning = true := by
+            subst next; cases hnexteq; simp
+        subst next heq1 heq2
+        simp [isBreak] at h_i_c
+        simp [offsetToIndex, isBreak] at h_tbd
+        have hor : ↑j < leftIdx + (1 + ↑i) ∨ ↑j = leftIdx + (1 + ↑i):= by
+          omega
+        cases hor with
+        | inl hlt =>
+          obtain ⟨ _, _, h_tbd ⟩ := h_tbd j (by omega) (by omega)
+          apply h_tbd
+        | inr heq' =>
+          right
+          have heq_other_arr_j : arr[j] = other := by
+            subst other
+            have heq : j = (leftIdx + (1 + ↑i)).toNat := by
+              omega
+            subst j; simp
+          have hor : YjsLeq' (ArrSet (newItem :: arr.toList)) arr[j].origin arr[nDest.toNat] ∨ YjsLt' (ArrSet (newItem :: arr.toList)) arr[nDest.toNat] arr[j].origin:= by
+            apply YjsLeq'_or_YjsLt' <;> try assumption
+            . rw [heq_other_arr_j]; assumption
+            . simp [ArrSet]
+          cases hor with
+          | inr hlt =>
+            assumption
+          | inl hleq =>
+            a
+
+
+
+
+
+
 
 theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A)
   (arr : Array (YjsItem A))
