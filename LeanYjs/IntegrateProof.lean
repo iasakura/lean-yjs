@@ -548,10 +548,11 @@ theorem idx_between_id_neq {i : ℕ} {newItem other : YjsItem A} {arr : Array (Y
   (hrightIdx : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
   (h_leftIdx_lt_i : leftIdx < i)
   (h_i_lt_rightIdx : i < rightIdx)
-  (h_i_lt_arr_size : i < arr.size)
-  (heq : other = arr[i]) :
+  (heq : arr[i]? = some other) :
   other.id ≠ newItem.id := by
   intros hcontra
+  rw [getElem?_eq_some_iff] at heq
+  obtain ⟨ _, heq ⟩ := heq
   have hor : YjsLeq' (ArrSet arr.toList) other newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin other := by
     apply hsameid_consistent other
     subst other; simp [ArrSet]
