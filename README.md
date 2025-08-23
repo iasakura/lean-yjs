@@ -4,7 +4,7 @@ This project provides a formal verification of the Yjs integration algorithm usi
 
 ## Overview
 
-This work focuses on the formal verification of Yjs's `integrate` operation, which is the core algorithm responsible for maintaining consistency when integrating new operations into a shared document state. The project is currently **under development**.
+This work focuses on the formal verification of Yjs's `integrate` operation, which is the core algorithm responsible for maintaining consistency when integrating new operations into a shared document state.
 
 ## Goal
 
@@ -18,16 +18,6 @@ This work aims to clarify these aspects and formally verify the correctness of t
 - **Commutativity**: Operations can be integrated in any order and produce the same result
 
 Note: Convergence (strong eventual consistency) follows from these properties but is not explicitly proven in this work.
-
-## Current Status
-
-**Under Development**
-
-- [x] Core data structures and operations defined
-- [x] Integration algorithm implemented
-- [x] Item ordering definition and total ordering proof
-- [ ] Preservation proof (work in progress)
-- [x] Commutativity proof
 
 ## References
 
