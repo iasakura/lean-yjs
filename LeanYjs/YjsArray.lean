@@ -1134,3 +1134,86 @@ theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other ne
       subst no
       apply YjsLt'.ltConflict
       apply ConflictLt'.ltOriginSame <;> try assumption
+
+omit [DecidableEq A] in theorem YjsLt_subset_in (P : ItemSet A) :
+  IsClosedItemSet Q ->
+  Q x -> Q y ->
+  -- (∀x, Q x -> P x) ->
+  YjsLt P h x y → YjsLt Q h x y := by
+  intros hclosed hx hy hlt
+  revert hlt x y
+  apply Nat.strongRec' (p := fun h => ∀ x y, Q x -> Q y -> YjsLt P h x y → YjsLt Q h x y)
+  intros n ih x y hx hy hlt
+  cases hlt with
+  | ltOrigin h x o r id c hPitem hleq =>
+    apply YjsLt.ltOrigin <;> try assumption
+    cases hleq with
+    | leqSame _ hPx =>
+      apply YjsLeq.leqSame; assumption
+    | leqLt h _ _ hlt =>
+      apply YjsLeq.leqLt; try assumption
+      apply ih <;> try assumption
+      omega
+      apply hclosed.closedLeft; assumption
+  | ltRightOrigin h x o r id c hPitem hleq =>
+    apply YjsLt.ltRightOrigin <;> try assumption
+    cases hleq with
+    | leqSame _ hPx =>
+      apply YjsLeq.leqSame; assumption
+    | leqLt h _ _ hlt =>
+      apply YjsLeq.leqLt ; try assumption
+      apply ih <;> try assumption
+      omega
+      apply hclosed.closedRight; assumption
+  | ltConflict h i1 i2 hlt =>
+    apply YjsLt.ltConflict; try assumption
+    cases hlt with
+    | ltOriginDiff h1 h2 h3 h4 l1 l2 l3 l4 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+      apply ConflictLt.ltOriginDiff <;> try assumption
+      . apply ih<;> try assumption
+        . simp [max4]; omega
+        . apply hclosed.closedLeft; assumption
+        . apply hclosed.closedLeft; assumption
+      . apply ih<;> try assumption
+        . simp [max4]; omega
+        . apply hclosed.closedRight; assumption
+      . apply ih<;> try assumption
+        . simp [max4]; omega
+        . apply hclosed.closedLeft; assumption
+      . apply ih<;> try assumption
+        . simp [max4]; omega
+        . apply hclosed.closedRight; assumption
+    | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 hidlt =>
+      apply ConflictLt.ltOriginSame <;> try assumption
+      . apply ih<;> try assumption
+        . omega
+        . apply hclosed.closedRight; assumption
+      . apply ih <;> try assumption
+        . omega
+        . apply hclosed.closedRight; assumption
+  | ltOriginOrder hpx hpy hlt =>
+    apply YjsLt.ltOriginOrder <;> try assumption
+
+omit [DecidableEq A] in theorem YjsLt'_subset_in (P : ItemSet A) :
+  IsClosedItemSet Q ->
+  Q x -> Q y ->
+  YjsLt' P x y → YjsLt' Q x y := by
+  intros hclosed hx hy hlt
+  obtain ⟨ h, hlt ⟩ := hlt
+  exists h
+  apply YjsLt_subset_in P hclosed hx hy hlt
+
+omit [DecidableEq A] in theorem YjsLeq'_subset_in (P : ItemSet A) :
+  IsClosedItemSet Q ->
+  Q x -> Q y ->
+  YjsLeq' P x y → YjsLeq' Q x y := by
+  intros hclosed hx hy hleq
+  apply yjs_leq'_imp_eq_or_yjs_lt' at hleq
+  cases hleq with
+  | inl heq =>
+    subst heq
+    exists 0
+    apply YjsLeq.leqSame; assumption
+  | inr hlt =>
+    apply YjsLt'_subset_in P hclosed hx hy at hlt
+    apply YjsLeq'.leqLt _ _ _ hlt

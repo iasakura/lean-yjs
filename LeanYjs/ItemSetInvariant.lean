@@ -61,6 +61,12 @@ theorem not_ptr_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : 
         apply hinv.origin_not_leq; assumption
       apply ih (o.size) (by simp [YjsPtr.size, YjsItem.size] at hsize; omega) _ o (refl _) hlt
 
+theorem not_ptr_lt'_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ (o : YjsPtr A), ¬ YjsLt' P o YjsPtr.first := by
+  intros hinv o hlt
+  obtain ⟨ _, hlt ⟩ := hlt
+  apply not_ptr_lt_first hinv _ o at hlt
+  assumption
+
 theorem not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
   intros hinv h o
   generalize hsize : o.size = size
