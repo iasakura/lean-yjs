@@ -1649,6 +1649,7 @@ lemma findPtrIdx_lt_size_getElem {p : YjsPtr A} :
     simp
 
 structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
+  not_mem : (∀ x ∈ arr, x ≠ newItem)
   origin_in : ArrSet arr.toList newItem.origin
   rightOrigin_in : ArrSet arr.toList newItem.rightOrigin
   origin_lt_rightOrigin : YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin
@@ -1660,7 +1661,6 @@ structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
       x.id = newItem.id →
       YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
         YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
-  not_mem : (∀ x ∈ arr, x ≠ newItem)
 
 theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
@@ -1668,7 +1668,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
   -> integrate newItem arr = Except.ok newArr
   -> ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList := by
   intros harrinv h_InsertOk hintegrate
-  obtain ⟨ horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent, hneq ⟩ :=
+  obtain ⟨ hneq, horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent ⟩ :=
     h_InsertOk
   unfold integrate at hintegrate
 
@@ -1969,8 +1969,19 @@ theorem insertOk_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
   -> InsertOk arr1 x
   -> InsertOk arr2 x := by
   intros harrinv1 harrinv2 h_arr1_subset_arr2 h_id_neq h_InsertOk
-  obtain ⟨ horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent, hneq ⟩ := h_InsertOk
+  obtain ⟨ hneq, horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent ⟩ := h_InsertOk
   constructor <;> try assumption
+    . intros y hy_in_arr1 hy_eq_x
+    generalize hy_in_arr1_eq : decide (y ∈ arr1) = hy_in_arr1
+    cases hy_in_arr1 with
+    | true =>
+      rw [decide_eq_true_eq] at hy_in_arr1_eq
+      apply hneq y hy_in_arr1_eq hy_eq_x
+    | false =>
+      rw [decide_eq_false_iff_not] at hy_in_arr1_eq
+      replace h_id_neq := h_id_neq y hy_in_arr1 hy_in_arr1_eq
+      subst x
+      contradiction
   . apply subset_ArrSet h_arr1_subset_arr2
     assumption
   . apply subset_ArrSet h_arr1_subset_arr2
@@ -2031,17 +2042,6 @@ theorem insertOk_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
       . intros
         apply subset_ArrSet h_arr1_subset_arr2; assumption
       apply hleq
-  . intros y hy_in_arr1 hy_eq_x
-    generalize hy_in_arr1_eq : decide (y ∈ arr1) = hy_in_arr1
-    cases hy_in_arr1 with
-    | true =>
-      rw [decide_eq_true_eq] at hy_in_arr1_eq
-      apply hneq y hy_in_arr1_eq hy_eq_x
-    | false =>
-      rw [decide_eq_false_iff_not] at hy_in_arr1_eq
-      replace h_id_neq := h_id_neq y hy_in_arr1 hy_in_arr1_eq
-      subst x
-      contradiction
 
 theorem insertIdxIfInBounds_insertOk (arr : Array (YjsItem A)) (a x : YjsItem A) :
   YjsArrInvariant arr.toList
