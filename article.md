@@ -86,6 +86,7 @@ integrateの検証ではループ不変量を設計し、なぜdestまで戻る�
 
 ### 3.1 形式検証の基本方針
 
+(TODO: LLM)
 - なぜ Lean4 を選択したか -> 10年前学生時代にCoqのみを使っていたが、別の定理証明支援系を使いたくなった、LLMの恩恵が受けられるかも？（結果としてCopilotの補完以外使うことはほとんど無かった）
 - アルゴリズム -> https://github.com/josephg/reference-crdts
   - 双方向連結リスト形式のアルゴリズムは定理証明支援系での形式化は本質的でない難しさを生む
@@ -138,11 +139,67 @@ integrateの検証ではループ不変量を設計し、なぜdestまで戻る�
 
 ### 5.1 順序関係の基本性質
 
-- 推移性の証明（`yjs_lt_trans`）
-- 反対称性の証明（`yjs_lt_anti_symm`）
 - 全順序性の証明（`yjs_lt_total`）
+- 推移性の証明（`yjs_lt_trans`)/ 反対称性の証明（`yjs_lt_anti_symm`）
+
+これらはitemのサイズに対する数学的帰納法を用いることで証明できます。
+反対称律 (\forall a b, a < b -> b < a -> False) の方はa, bのサイズの和に対する帰納法、
+推移律 (\forall a b c, a < b -> b < c -> a < c) の方はa, b, cのサイズの和に対する帰納法を用います。
+
+これら2つの性質は一方の順序関係の定義によって一方の性質が楽になるがもう一方の性質の証明が難しくなります。
+規則の推移閉包をとることで推移律の証明は容易になるのですが、反対称律をサイズに対する数学的帰納法で示すことは難しくなります。なぜなら、前提のうちの1つ、例えばa < bが推移律で導かれるケースではa < c, c < aという形の前提が出てきてしまい、項のサイズが小さくならないためです。
+一方で推移閉包をとらずに規則を小さく保つことで反対称律は証明しやすくなりますが、今度は推移律を自力で証明する必要があります。
+結果としては後者のやり方でうまくいきましたが、しばらく前者のやり方にこだわっていたためなかなか証明が進まず苦労しました。
+(プログラミング言語の形式かなんかでは推移閉包をとって定義とするのは自然なやり方なので、それにこだわってしまったという背景があります。)
 
 ### 5.2 integrate アルゴリズムの健全性
+
+```
+theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
+  YjsArrInvariant arr1.toList
+  -> a.id ≠ b.id
+  -> InsertOk arr1 a
+  -> InsertOk arr1 b
+  -> integrate a arr1 = Except.ok arr2
+  -> integrate b arr2 = Except.ok arr3
+  -> integrate b arr1 = Except.ok arr2'
+  -> integrate a arr2' = Except.ok arr3'
+  -> arr3 = arr3' := by
+```
+
+主定理は、挿入が順序によらないことを証明しました。InsertOkと言う性質は、arr1に対して不正な操作で生成されたItemでは無いことを仮定しています。
+
+```
+structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
+  not_mem : (∀ x ∈ arr, x ≠ newItem)
+  origin_in : ArrSet arr.toList newItem.origin
+  rightOrigin_in : ArrSet arr.toList newItem.rightOrigin
+  origin_lt_rightOrigin : YjsLt' (ArrSet arr.toList) newItem.origin newItem.rightOrigin
+  reachable_YjsLeq' : (∀ (x : YjsPtr A),
+      OriginReachable (YjsPtr.itemPtr newItem) x →
+      YjsLeq' (ArrSet arr.toList) x newItem.origin ∨ YjsLeq' (ArrSet arr.toList) newItem.rightOrigin x)
+  id_eq_YjsLeq' : (∀ (x : YjsItem A),
+      ArrSet arr.toList (YjsPtr.itemPtr x) →
+      x.id = newItem.id →
+      YjsLeq' (ArrSet arr.toList) (YjsPtr.itemPtr x) newItem.origin ∨
+        YjsLeq' (ArrSet arr.toList) newItem.rightOrigin (YjsPtr.itemPtr x))
+
+```
+1. not_mem -> aが未挿入であること
+2. origin_in/rightOrigin_in -> aのorigin/rightOriginがすでにリストに存在すること
+3. origin_lt_rightOrigin -> aのorigin < bのoriginであること
+4. reachable_YjsLeq -> xからorigin/rightOriginを通じて到達可能である要素は、aとconflictしないこと
+5. id_eq_YjsLeq' -> xと同じclientIDを持つ要素は、aとconflictしないこと
+
+1~3は分かりやすいと思います。1は (TODO: LLM), 2は挿入時に隣り合っていた要素はintegrate時にも隣り合うこと、つまり因果性の仮定です。3は前述した循環を許さないためです。
+4, 5はわかりづらいのですが、これは到達可能な要素や同じClientIdを持つ要素は挿入時に配列に存在しているはずなので、これらとconflictすることはないという仮定になります。
+これも因果性の仮定 (localに依存していた要素はremoteでも印が順序を保つ) になります。
+
+これらの仮定を満たさないItemがintegrateの入力となってしまうと、全順序型も保てずに収束しなくなります。
+当然insert等のYjsのAPIから生成されたItemはこれらの仮定を満たすべきですが[^1]、悪意のあるクライアントからこれらのパケットが送られてくる可能性があります。
+これはすなわちYjsがビザンチン耐性が無いこと (悪意のあるピアや故障したピアから送られてくるパケットに対する耐性が無い) を示しています。
+
+[^1]:  証明は今後の課題です。
 
 - `integrate_sound`定理の意味
 - ループ不変条件（`loop_invariant`）の設計
