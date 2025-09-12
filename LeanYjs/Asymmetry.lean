@@ -99,7 +99,7 @@ theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : Item
   . simp [YjsItem.size]; omega
   constructor <;> assumption
 
-theorem yjs_lt_anti_symm {A} [DecidableEq A] {P : ItemSet A} :
+theorem yjs_lt_asymm {A} [DecidableEq A] {P : ItemSet A} :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
   ∀ (x y : YjsPtr A), YjsLt' P x y -> YjsLt' P y x -> False := by
@@ -186,4 +186,4 @@ theorem yjs_lt_of_not_leq {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInva
       assumption
     | leqLt h _ _ hlt =>
       constructor; assumption
-  apply yjs_lt_anti_symm hP inv x y hltxy hlt
+  apply yjs_lt_asymm hP inv x y hltxy hlt

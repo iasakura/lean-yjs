@@ -3,7 +3,7 @@ import LeanYjs.ActorId
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
-import LeanYjs.AntiSymmetry
+import LeanYjs.Asymmetry
 
 import Mathlib.Order.Defs.Unbundled
 
@@ -77,7 +77,7 @@ theorem no_cross_origin {x y : YjsItem A} :
               apply YjsLeq.leqSame
               . apply hP.closedLeft; assumption
             by_contra
-            apply yjs_lt_anti_symm hP hinv y.origin y hltorigin hlt
+            apply yjs_lt_asymm hP hinv y.origin y hltorigin hlt
           | inl heq =>
             obtain ⟨ yo, yr, yid, yc ⟩ := y
             simp [YjsItem.origin] at heq
@@ -113,9 +113,9 @@ theorem no_cross_origin {x y : YjsItem A} :
               cases hleq with
               | inl heq =>
                 rw [heq] at hlt
-                cases yjs_lt_anti_symm hP hinv _ _ hlt hlt
+                cases yjs_lt_asymm hP hinv _ _ hlt hlt
               | inr hlt' =>
-                cases yjs_lt_anti_symm hP hinv _ _ hlt hlt'
+                cases yjs_lt_asymm hP hinv _ _ hlt hlt'
           apply yjs_leq_p_trans hinv _ _ _ _ _ hP hleq
           assumption
         | inr hlt =>

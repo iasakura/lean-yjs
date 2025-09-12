@@ -5,7 +5,7 @@ import LeanYjs.ItemOrder
 import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality
 import LeanYjs.Transitivity
-import LeanYjs.AntiSymmetry
+import LeanYjs.Asymmetry
 import LeanYjs.Integrate
 
 variable {A : Type}
@@ -525,7 +525,7 @@ theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
               intros a hlt
               rw [<-hseteq_all a]; assumption
 
-            cases yjs_lt_anti_symm hclosed2 hinv2 x y hlt3 hlt1
+            cases yjs_lt_asymm hclosed2 hinv2 x y hlt3 hlt1
 
       subst heq
       congr

@@ -9,7 +9,7 @@ import LeanYjs.ItemOrder
 import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality
 import LeanYjs.Transitivity
-import LeanYjs.AntiSymmetry
+import LeanYjs.Asymmetry
 import LeanYjs.Integrate
 import LeanYjs.YjsArray
 import LeanYjs.NoCrossOrigin
