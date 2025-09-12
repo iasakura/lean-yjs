@@ -78,7 +78,7 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
 
 1. **Find boundaries**: Locate the indices of `origin` and `rightOrigin` in the array
 2. **Scan between boundaries**: Examine each item between the insertion boundaries
-3. **Conflict resolution**: 
+3. **Conflict resolution**:
    - If `oLeftIdx < leftIdx`: Current item should come before newItem (break)
    - If `oLeftIdx == leftIdx`: Items have same origin, use actor ID for ordering
    - If `oRightIdx == rightIdx`: Items have same rightOrigin, determines final position
@@ -100,6 +100,7 @@ inductive OriginLt {A} : YjsPtr A -> YjsPtr A -> Prop where
 ```
 
 This defines the basic ordering between boundary elements and items. Intuitively:
+
 - `first` comes before any item
 - Any item comes before `last`
 - `first` comes before `last`
@@ -180,11 +181,10 @@ structure ItemSetInvariant where
 
 These invariants are crucial because **without them, the ordering would not be a total order**. For example:
 
-- Without `origin_not_leq`: An item could have `origin = rightOrigin`, violating antisymmetry
+- Without `origin_not_leq`: An item could have `origin = rightOrigin`, violating asymmetry
 - Without `same_id_ordered`: Two items with the same ID could be incomparable, violating totality
 
 The invariants eliminate pathological cases that would break the mathematical properties needed for a total order.
-
 
 ## Total Order Proofs
 
@@ -212,16 +212,16 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
 
 Proves that if `x < y` and `y < z`, then `x < z`.
 
-### Antisymmetry ([`LeanYjs/AntiSymmetry.lean`](LeanYjs/AntiSymmetry.lean))
+### Asymmetry ([`LeanYjs/Asymmetry.lean`](LeanYjs/Asymmetry.lean))
 
 ```lean
-theorem yjs_lt_anti_symm {A} [DecidableEq A] {P : ItemSet A} :
+theorem yjs_lt_asymm {A} [DecidableEq A] {P : ItemSet A} :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
   ∀ (x y : YjsPtr A), YjsLt' P x y -> YjsLt' P y x -> False
 ```
 
-Proves that if `x < y`, then `¬(y < x)`, establishing antisymmetry.
+Proves that if `x < y`, then `¬(y < x)`, establishing asymmetry.
 
 These three properties together establish that the ordering is a strict total order.
 
@@ -240,6 +240,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
 ```
 
 This theorem states that if:
+
 1. The input array satisfies the Yjs array invariants
 2. The new item satisfies the insertion preconditions (`InsertOk`)
 3. The integrate function succeeds
@@ -272,6 +273,7 @@ def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rig
 ```
 
 This invariant ensures that:
+
 1. All items before `dest` are ordered before `newItem`
 2. All items in the "to be determined" region have specific ordering properties
 3. When scanning mode is active, we're looking at items with the same origin
