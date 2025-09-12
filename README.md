@@ -19,6 +19,10 @@ This work aims to clarify these aspects and formally verify the correctness of t
 
 Note: Convergence (strong eventual consistency) follows from these properties but is not explicitly proven in this work.
 
+## Documentation
+
+For detailed technical information about the formalization, see [TECHNICAL.md](TECHNICAL.md).
+
 ## References
 
 - [Yjs Documentation](https://docs.yjs.dev/)
