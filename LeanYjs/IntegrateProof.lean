@@ -1971,7 +1971,7 @@ theorem insertOk_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
   intros harrinv1 harrinv2 h_arr1_subset_arr2 h_id_neq h_InsertOk
   obtain ⟨ hneq, horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent ⟩ := h_InsertOk
   constructor <;> try assumption
-    . intros y hy_in_arr1 hy_eq_x
+  . intros y hy_in_arr1 hy_eq_x
     generalize hy_in_arr1_eq : decide (y ∈ arr1) = hy_in_arr1
     cases hy_in_arr1 with
     | true =>
