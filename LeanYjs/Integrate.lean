@@ -1,5 +1,5 @@
 import LeanYjs.Item
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 import LeanYjs.ItemOrder
 
 inductive IntegrateError where

@@ -1,6 +1,6 @@
 import LeanYjs.Item
 import LeanYjs.ItemSet
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality

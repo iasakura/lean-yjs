@@ -4,7 +4,7 @@ import Mathlib.Tactic.ExtractGoal
 import LeanYjs.ListExtra
 import LeanYjs.Item
 import LeanYjs.ItemSet
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality
@@ -802,7 +802,7 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
                 . omega
                 . omega
                 . subst other; simp
-              unfold ActorId at *
+              unfold ClientId at *
               omega
     . -- oLeftIdx > leftIdx case
       split at hbody
@@ -2087,7 +2087,7 @@ theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Ar
   -> integrate b arr1 = Except.ok arr2'
   -> integrate a arr2' = Except.ok arr3'
   -> arr3 = arr3' := by
-  intros harrinv haid_neq_bid h_InsertOk_a h_InsertOk_b hintegrate_a hintegrate_b hintegrate_b' hintegrate_a'
+  intros harrinv hcid_neq_bid h_InsertOk_a h_InsertOk_b hintegrate_a hintegrate_b hintegrate_b' hintegrate_a'
 
   have ⟨ idx2, h_idx2, arr2_insertIdx, arr2_inv ⟩ : ∃ idx ≤ arr1.size, arr2 = arr1.insertIdxIfInBounds idx a ∧ YjsArrInvariant arr2.toList := by
     apply YjsArrInvariant_integrate a arr1 arr2
@@ -2109,7 +2109,7 @@ theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Ar
     subst arr2'
     apply insertIdxIfInBounds_insertOk <;> try assumption
     intros heq
-    rw [heq] at haid_neq_bid
+    rw [heq] at hcid_neq_bid
     contradiction
 
   have ⟨ idx3, h_idx3, arr3_insertIdx,  arr3_inv ⟩ : ∃ idx ≤ arr2.size, arr3 = arr2.insertIdxIfInBounds idx b ∧ YjsArrInvariant arr3.toList := by

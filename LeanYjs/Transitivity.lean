@@ -1,5 +1,5 @@
 import LeanYjs.Item
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
@@ -178,7 +178,7 @@ theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInva
           constructor
           apply YjsLt.ltConflict
           apply ConflictLt.ltOriginSame <;> try assumption
-          unfold ActorId at *
+          unfold ClientId at *
           omega
 
 theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :

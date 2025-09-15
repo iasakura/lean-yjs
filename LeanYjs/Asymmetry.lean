@@ -1,4 +1,4 @@
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 import LeanYjs.Item
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
@@ -34,7 +34,7 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
       . simp [YjsPtr.size, YjsItem.size]; omega
       constructor <;> (constructor; assumption)
     | ltOriginSame _ _ _ _ o r id c =>
-      unfold ActorId at *
+      unfold ClientId at *
       omega
 
 theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :

@@ -1,5 +1,5 @@
 import LeanYjs.Item
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetInvariant
@@ -220,7 +220,7 @@ theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
                 | leqSame _ =>
                   -- rw [heq] at hlt_yo_x hlt_x_yo hlt_x_yr
                   have hid : xid < yid ∨ yid < xid ∨ xid = yid := by
-                    unfold ActorId; omega
+                    unfold ClientId; omega
                   cases hid with
                   | inl hlt =>
                     left

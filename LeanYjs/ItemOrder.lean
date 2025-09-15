@@ -1,6 +1,6 @@
 import LeanYjs.Item
 import LeanYjs.ItemSet
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 
 import Mathlib.Tactic.ApplyAt
 import Mathlib.Data.Nat.Basic

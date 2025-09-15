@@ -1,4 +1,4 @@
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 
 variable (A : Type) [DecidableEq A]
 
@@ -10,7 +10,7 @@ inductive YjsPtr : Type where
   deriving Repr, DecidableEq
 
 inductive YjsItem : Type where
-| item (origin : YjsPtr) (rightOrigin : YjsPtr) : ActorId -> A -> YjsItem
+| item (origin : YjsPtr) (rightOrigin : YjsPtr) : ClientId -> A -> YjsItem
 deriving Repr, DecidableEq
 end
 
@@ -31,9 +31,9 @@ def YjsItem.size {A : Type} : YjsItem A -> Nat
     origin.size + rightOrigin.size + 2
 end
 
-instance : BEq ActorId where
+instance : BEq ClientId where
   beq x y := by
-    unfold ActorId at x y
+    unfold ClientId at x y
     apply Nat.beq x y
 
 instance : BEq (YjsItem A) where
@@ -50,7 +50,7 @@ instance : LawfulBEq (YjsItem A) := by
 instance : Coe (YjsItem A) (YjsPtr A) where
   coe item := YjsPtr.itemPtr item
 
-def YjsItem.id {A : Type} : YjsItem A -> ActorId
+def YjsItem.id {A : Type} : YjsItem A -> ClientId
 | YjsItem.item _ _ id _ => id
 
 -- The theorem you requested: excluded middle for YjsItem equality

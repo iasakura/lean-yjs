@@ -1,5 +1,5 @@
 import LeanYjs.Item
-import LeanYjs.ActorId
+import LeanYjs.ClientId
 
 import Mathlib.Data.Set.Basic
 

@@ -25,7 +25,7 @@ inductive YjsPtr : Type where
   | last : YjsPtr
 
 inductive YjsItem : Type where
-| item (origin : YjsPtr) (rightOrigin : YjsPtr) : ActorId -> A -> YjsItem
+| item (origin : YjsPtr) (rightOrigin : YjsPtr) : ClientId -> A -> YjsItem
 end
 ```
 
@@ -33,7 +33,7 @@ end
 - **YjsItem**: Represents actual content items with:
   - `origin`: Pointer to the item this was inserted after
   - `rightOrigin`: Pointer to the item this was inserted before
-  - `ActorId`: Unique identifier for the actor/client that created this item
+  - `ClientId`: Unique identifier for the actor/client that created this item
   - `A`: The actual content/data of the item
 
 The `first` and `last` pointers serve as sentinel values representing the beginning and end of the document structure.
