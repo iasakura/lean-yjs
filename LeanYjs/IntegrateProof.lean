@@ -1,7 +1,7 @@
 import Mathlib.Tactic.WLOG
 import Mathlib.Tactic.ExtractGoal
 
-import LeanYjs.ListExtra
+import LeanYjs.ListLemmas
 import LeanYjs.Item
 import LeanYjs.ItemSet
 import LeanYjs.ClientId

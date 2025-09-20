@@ -9,7 +9,7 @@ variable {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P}
 
 theorem conflict_lt_x_origin_lt_y {A} {P : ItemSet A} (x : YjsItem A) y :
   IsClosedItemSet P ->
-  ConflictLt P h x y -> YjsLt' P x.origin y := by
+  ConflictLt h x y -> YjsLt' x.origin y := by
   intros hclosed hlt
   cases hlt with
   | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
@@ -18,36 +18,25 @@ theorem conflict_lt_x_origin_lt_y {A} {P : ItemSet A} (x : YjsItem A) y :
     constructor
     simp [YjsItem.origin] at *
     apply YjsLt.ltOrigin <;> try assumption
-    . apply yjs_lt_p1 at hlt2
-      assumption
-    . apply YjsLeq.leqSame
-      apply yjs_lt_p1 at hlt2
-      apply hclosed.closedLeft at hlt2
-      assumption
+    apply YjsLeq.leqSame
 
 theorem conflict_lt_y_origin_lt_x {A} {P : ItemSet A} x (y : YjsItem A) :
   IsClosedItemSet P ->
-  ConflictLt P h x y -> YjsLt' P y.origin x := by
+  ConflictLt h x y -> YjsLt' y.origin x := by
   intros hclosed hlt
   cases hlt with
   | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
     constructor
     apply YjsLt.ltOrigin
-    . apply yjs_lt_p1; assumption
     . right; assumption
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor
     simp [YjsItem.origin] at *
     apply YjsLt.ltOrigin <;> try assumption
-    . apply yjs_lt_p1 at hlt1
-      assumption
-    . apply YjsLeq.leqSame
-      apply yjs_lt_p1 at hlt1
-      apply hclosed.closedLeft at hlt1
-      assumption
+    apply YjsLeq.leqSame
 
-theorem conflict_lt_y_lt_x_right_origin {A} {P : ItemSet A} (x : YjsItem A) y :
-  ConflictLt P h x y -> YjsLt' P y x.rightOrigin := by
+theorem conflict_lt_y_lt_x_right_origin {A} (x : YjsItem A) y :
+  ConflictLt h x y -> YjsLt' y x.rightOrigin := by
   intros hlt
   cases hlt with
   | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
@@ -55,8 +44,8 @@ theorem conflict_lt_y_lt_x_right_origin {A} {P : ItemSet A} (x : YjsItem A) y :
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor; assumption
 
-theorem conflict_lt_x_lt_y_right_origin {A} {P : ItemSet A} x (y : YjsItem A) :
-  ConflictLt P h x y -> YjsLt' P x y.rightOrigin := by
+theorem conflict_lt_x_lt_y_right_origin {A} x (y : YjsItem A) :
+  ConflictLt h x y -> YjsLt' x y.rightOrigin := by
   intros hlt
   cases hlt with
   | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
@@ -67,54 +56,50 @@ theorem conflict_lt_x_lt_y_right_origin {A} {P : ItemSet A} x (y : YjsItem A) :
 theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y z : YjsPtr A),
+  P x ->
+    P y ->
+      P z ->
   (∀ m < x.size + y.size + z.size,
   ∀ (x y z : YjsPtr A),
     P x →
       P y →
         P z →
-          ∀ (h0 : ℕ), YjsLt P h0 x y → ∀ (h1 : ℕ), YjsLt P h1 y z → x.size + y.size + z.size = m → ∃ h, YjsLt P h x z) ->
-  ConflictLt P h1 x y -> ConflictLt P h2 y z -> YjsLt' P x z := by
-  intros hclosed x y z ih hxy hyz
-  have hP : P x := by
-    apply conflict_lt_p1; assumption
-  have hy : P y := by
-    apply conflict_lt_p2; assumption
-  have hz : P z := by
-    apply conflict_lt_p2; assumption
+          ∀ (h0 : ℕ), YjsLt h0 x y → ∀ (h1 : ℕ), YjsLt h1 y z → x.size + y.size + z.size = m → ∃ h, YjsLt h x z) ->
+  ConflictLt h1 x y -> ConflictLt h2 y z -> YjsLt' x z := by
+  intros hclosed x y z hpx hpy hpz ih hxy hyz
   have ⟨ ⟨ xo, xr, xid, xc ⟩, heqx ⟩ : ∃ x' : YjsItem A, x = YjsPtr.itemPtr x' := by
     cases hxy <;> (constructor; eq_refl)
   have ⟨ ⟨ zo, zr, zid, zc ⟩, heqz ⟩ : ∃ z' : YjsItem A, z = YjsPtr.itemPtr z' := by
     cases hyz <;> (constructor; eq_refl)
   subst heqx heqz
   have hltxrz :
-    YjsLeq' P xr (YjsItem.item zo zr zid zc) ∨ YjsLt' P (YjsItem.item zo zr zid zc) xr := by
+    YjsLeq' xr (YjsItem.item zo zr zid zc) ∨ YjsLt' (YjsItem.item zo zr zid zc) xr := by
     apply yjs_lt_total <;> try assumption
     apply hclosed.closedRight; assumption
   have hltxzo :
-    YjsLeq' P (YjsItem.item xo xr xid xc) zo ∨ YjsLt' P zo (YjsItem.item xo xr xid xc) := by
+    YjsLeq' (YjsItem.item xo xr xid xc) zo ∨ YjsLt' zo (YjsItem.item xo xr xid xc) := by
     apply yjs_lt_total <;> try assumption
     apply hclosed.closedLeft; assumption
 
-  have hyzr : YjsLt' P y zr := by
+  have hyzr : YjsLt' y zr := by
     cases hyz <;> try (constructor; assumption)
 
-  have hxoy : YjsLt' P xo y := by
+  have hxoy : YjsLt' xo y := by
     cases hxy <;> try (constructor; assumption)
     constructor
     apply YjsLt.ltOrigin <;> try assumption
     left
-    apply hclosed.closedLeft; assumption
 
-  have hltxzr : YjsLt' P (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) zr := by
+  have hltxzr : YjsLt' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) zr := by
     obtain ⟨ _, hyzr ⟩ := hyzr
-    apply ih (y := y) ((YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + y.size + zr.size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ hP hy (by apply hclosed.closedRight; assumption) <;> try simp
+    apply ih (y := y) ((YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + y.size + zr.size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ hpx hpy (by apply hclosed.closedRight; assumption) <;> try simp
     . apply YjsLt.ltConflict
       assumption
     . assumption
 
-  have hltxoz : YjsLt' P xo (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)) := by
+  have hltxoz : YjsLt' xo (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)) := by
     obtain ⟨ _, hxoy ⟩ := hxoy
-    apply ih (y := y) (xo.size + y.size + (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)).size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ (by apply hclosed.closedLeft; assumption) hy hz <;> try simp
+    apply ih (y := y) (xo.size + y.size + (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)).size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ (by apply hclosed.closedLeft; assumption) hpy hpz <;> try simp
     . assumption
     . apply YjsLt.ltConflict
       assumption
@@ -184,7 +169,7 @@ theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInva
 theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y z : YjsPtr A), P x -> P y -> P z ->
-  YjsLt' P x y -> YjsLt' P y z -> YjsLt' P x z := by
+  YjsLt' x y -> YjsLt' y z -> YjsLt' x z := by
   intros hP x y z hx hy hz hxy hyz
   unfold YjsLt' at *
   obtain ⟨ h0, hxy ⟩ := hxy
@@ -193,10 +178,10 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
   revert x y z h0 h1
   apply @Nat.strongRecOn' (P := fun ts => ∀ x y z,
     P x → P y → P z →
-    ∀ h0, YjsLt P h0 x y → ∀ h1, YjsLt P h1 y z → x.size + y.size + z.size = ts → ∃ h, YjsLt P h x z) total_size
+    ∀ h0, YjsLt h0 x y → ∀ h1, YjsLt h1 y z → x.size + y.size + z.size = ts → ∃ h, YjsLt h x z) total_size
   intros total_size ih x y z hx hy hz h0 hxy h1 hyz hsize
   -- first, we prove the corner cases x = first or y = first/last, or z = last
-  rcases yjs_lt_cases _ _ _ _ _ hxy with
+  rcases yjs_lt_cases _ _ _ _ hxy with
   ⟨ hxeq, hylast | ⟨ y', hy' ⟩ ⟩
   | ⟨ hyeq, _ ⟩
   | hxycases
@@ -205,40 +190,36 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
   -- | hconflict
   . -- x = first and y = last
     subst hylast
-    apply not_last_lt_ptr inv at hyz
-    cases hyz
+    by_contra
+    apply not_last_lt_ptr hP inv _ _ hz at hyz; assumption
   . -- x = first and y = itemPtr y'
     subst hxeq hy'
     cases z with
     | first =>
-      apply not_ptr_lt_first inv at hyz
+      apply not_ptr_lt_first hP inv _ _ hy at hyz
       cases hyz
     | last =>
       exists 0
       apply YjsLt.ltOriginOrder
-      apply hP.baseFirst
-      apply hP.baseLast
       apply OriginLt.lt_first_last
     | itemPtr y' =>
       exists 0
       apply YjsLt.ltOriginOrder
-      apply hP.baseFirst
-      assumption
       apply OriginLt.lt_first
   . -- y = last
-    subst hyeq; apply not_last_lt_ptr inv at hyz
+    subst hyeq; apply not_last_lt_ptr hP inv _ _ hz at hyz
     cases hyz
-  rcases yjs_lt_cases _ _ _ _ _ hyz with
+  rcases yjs_lt_cases _ _ _ _ hyz with
   ⟨ hyeq, _ ⟩
   | ⟨ hzeq, hyfirst | ⟨ y', hy' ⟩ ⟩
   | hyzcases
   . -- y = first
     subst hyeq
-    apply not_ptr_lt_first inv at hxy
+    apply not_ptr_lt_first hP inv _ _ hx at hxy
     cases hxy
   . -- y = first and z = last
     subst hyfirst
-    apply not_ptr_lt_first inv at hxy
+    apply not_ptr_lt_first hP inv _ _ hx at hxy
     cases hxy
   . -- y = itemPtr y' and z = last
     subst hzeq hy'
@@ -246,17 +227,13 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
     | first =>
       exists 0
       apply YjsLt.ltOriginOrder
-      apply hP.baseFirst
-      apply hP.baseLast
       apply OriginLt.lt_first_last
     | last =>
-      apply not_last_lt_ptr inv at hxy
+      apply not_last_lt_ptr hP inv _ _ hy at hxy
       cases hxy
     | itemPtr x' =>
       exists 0
       apply YjsLt.ltOriginOrder
-      assumption
-      apply hP.baseLast
       apply OriginLt.lt_last
   -- then, we prove the main parts
   rcases hxycases with
@@ -291,7 +268,7 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
       simp [YjsItem.origin] at hleq
       cases hyeq
       simp [YjsItem.rightOrigin] at hleq'
-      have ⟨ hor, horlt ⟩ : YjsLt' P o r := by
+      have ⟨ hor, horlt ⟩ : YjsLt' o r := by
         apply inv.origin_not_leq <;> assumption
       cases hleq with
       | leqSame =>
@@ -313,7 +290,7 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
           omega
           apply hP.closedLeft; assumption
         | leqLt h _ _ hlt' =>
-          have ⟨ h', hoz ⟩ : YjsLt' P o z := by
+          have ⟨ h', hoz ⟩ : YjsLt' o z := by
             apply ih (o.size + r.size + z.size) _ o r z _ _ _ _ horlt _ hlt' <;> try assumption
             simp
             simp [YjsItem.size, YjsPtr.size] at hsize
@@ -376,7 +353,7 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
         omega
         apply hP.closedRight; assumption
     . subst hzeq
-      suffices YjsLt' P  x z'.origin by
+      suffices YjsLt' x z'.origin by
         obtain ⟨ h', this ⟩ := this
         obtain ⟨ o, r, id, c ⟩ := z'
         constructor
@@ -394,17 +371,12 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
     . obtain ⟨ _, hxyconflict ⟩ := hxyconflict
       obtain ⟨ _, hyzconflict ⟩ := hyzconflict
       subst hsize
-      apply conflict_lt_trans hP _ _ _ ih hxyconflict hyzconflict; assumption
+      apply conflict_lt_trans hP _ _ _ hx hy hz ih hxyconflict hyzconflict; assumption
 
 theorem yjs_leq_p_trans1 {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
-  IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLt A P h2 y z -> ∃ h, @YjsLt A P h x z := by
-  intros hclosed hleq hlt
-  have hpy : P y := by
-    apply yjs_lt_p1; assumption
-  have hpz : P z := by
-    apply yjs_lt_p2; assumption
-  have hpx : P x := by
-    apply yjs_leq_p1 <;> assumption
+  P x -> P y -> P z ->
+  IsClosedItemSet P -> @YjsLeq A h1 x y -> @YjsLt A h2 y z -> ∃ h, @YjsLt A h x z := by
+  intros hpx hpy hpz hclosed hleq hlt
   cases hleq with
   | leqSame =>
     exists h2
@@ -414,21 +386,17 @@ theorem yjs_leq_p_trans1 {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvar
     constructor; assumption
 
 theorem yjs_leq'_p_trans1 {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A):
-  IsClosedItemSet P -> YjsLeq' P x y -> YjsLt' P y z -> YjsLt' P x z := by
-  intros hclosed hleq hlt
+  P x -> P y -> P z ->
+  IsClosedItemSet P -> YjsLeq' x y -> YjsLt' y z -> YjsLt' x z := by
+  intros hpx hpy hpz hclosed hleq hlt
   obtain ⟨ _, hleq ⟩ := hleq
   obtain ⟨ _, hlt ⟩ := hlt
-  apply yjs_leq_p_trans1 <;> assumption
+  apply yjs_leq_p_trans1 (x := x) (y := y) (z := z) <;> assumption
 
 theorem yjs_leq_p_trans2 {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
-  IsClosedItemSet P -> @YjsLt A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLt A P h x z := by
-  intros hclosed hlt hleq
-  have hpx : P x := by
-    apply yjs_lt_p1 <;> assumption
-  have hpy : P y := by
-    apply yjs_lt_p2; assumption
-  have hpz : P z := by
-    apply yjs_leq_p2 <;> assumption
+  P x -> P y -> P z ->
+  IsClosedItemSet P -> @YjsLt A h1 x y -> @YjsLeq A h2 y z -> ∃ h, @YjsLt A h x z := by
+  intros hpx hpy hpz hclosed hlt hleq
   cases hleq with
   | leqSame =>
     exists h1
@@ -438,15 +406,17 @@ theorem yjs_leq_p_trans2 {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvar
     constructor; assumption
 
 theorem yjs_leq'_p_trans2 {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A):
-  IsClosedItemSet P -> YjsLt' P x y -> YjsLeq' P y z -> YjsLt' P x z := by
-  intros hclosed hlt hleq
+  P x -> P y -> P z ->
+  IsClosedItemSet P -> YjsLt' x y -> YjsLeq' y z -> YjsLt' x z := by
+  intros hpx hpy hpz hclosed hlt hleq
   obtain ⟨ _, hlt ⟩ := hlt
   obtain ⟨ _, hleq ⟩ := hleq
-  apply yjs_leq_p_trans2 <;> assumption
+  apply yjs_leq_p_trans2 (x := x) (y := y) (z := z) <;> assumption
 
 theorem yjs_leq_p_trans {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A) h1 h2:
-  IsClosedItemSet P -> @YjsLeq A P h1 x y -> @YjsLeq A P h2 y z -> ∃ h, @YjsLeq A P h x z := by
-  intros hclosed hleq1 hleq2
+  P x -> P y -> P z ->
+  IsClosedItemSet P -> @YjsLeq A h1 x y -> @YjsLeq A h2 y z -> ∃ h, @YjsLeq A h x z := by
+  intros hpx hpy hpz hclosed hleq1 hleq2
   cases hleq1 with
   | leqSame =>
     exists h2
@@ -457,13 +427,7 @@ theorem yjs_leq_p_trans {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvari
       right
       assumption
     | leqLt h _ _ hlt =>
-      have hpx : P x := by
-        apply yjs_lt_p1 <;> assumption
-      have hpy : P y := by
-        apply yjs_lt_p2; assumption
-      have hpz : P z := by
-        apply yjs_lt_p2; assumption
-      have ⟨ _, hlt ⟩ : YjsLt' P x z := by
+      have ⟨ _, hlt ⟩ : YjsLt' x z := by
         apply yjs_lt_trans (y := y) <;> try assumption
         constructor; assumption
         constructor; assumption
@@ -472,8 +436,9 @@ theorem yjs_leq_p_trans {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvari
       assumption
 
 theorem yjs_leq'_p_trans {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y z : YjsPtr A):
-  IsClosedItemSet P -> YjsLeq' P x y -> YjsLeq' P y z -> YjsLeq' P x z := by
-  intros hclosed hleq1 hleq2
+  P x -> P y -> P z ->
+  IsClosedItemSet P -> YjsLeq' x y -> YjsLeq' y z -> YjsLeq' x z := by
+  intros hpx hpy hpz hclosed hleq1 hleq2
   obtain ⟨ _, hleq1 ⟩ := hleq1
   obtain ⟨ _, hleq2 ⟩ := hleq2
-  apply yjs_leq_p_trans inv x y z _ _ hclosed hleq1 hleq2
+  apply yjs_leq_p_trans inv x y z _ _ hpx hpy hpz hclosed hleq1 hleq2

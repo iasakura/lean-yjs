@@ -7,10 +7,11 @@ import LeanYjs.Totality
 import LeanYjs.Transitivity
 
 theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
+  IsClosedItemSet P ->
   ItemSetInvariant P ->
-  ∀ (x y : YjsPtr A), ConflictLt' P x y -> ConflictLt' P y x ->
-  ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
-  intros inv x y hltxy hltyx
+  ∀ (x y : YjsPtr A), P x -> P y -> ConflictLt' x y -> ConflictLt' y x ->
+  ∃ (x' y' : YjsPtr A), P x' ∧ P y' ∧ x'.size + y'.size < x.size + y.size ∧ YjsLt' x' y' ∧ YjsLt' y' x' := by
+  intros hP inv x y hpx hpy hltxy hltyx
   obtain ⟨ _, hltxy ⟩ := hltxy
   obtain ⟨ _, hltyx ⟩ := hltyx
   cases hltxy with
@@ -18,11 +19,19 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
     cases hltyx with
     | ltOriginDiff _ _ _ _ _ _ _ _ _ _ _ _ hlt1' _ _ _ =>
       exists o1, o2
-      constructor;
+      constructor
+      . apply hP.closedLeft at hpx; assumption
+      constructor
+      . apply hP.closedLeft at hpy; assumption
+      constructor
       . simp [YjsPtr.size, YjsItem.size]; omega
       constructor <;> (constructor; assumption)
     | ltOriginSame _ _ _ _ o r id c =>
       exists o1, o1
+      constructor
+      . apply hP.closedLeft at hpx; assumption
+      constructor
+      . apply hP.closedLeft at hpy; assumption
       constructor;
       . simp [YjsPtr.size, YjsItem.size]; omega
       constructor <;> (constructor; assumption)
@@ -31,6 +40,10 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
     | ltOriginDiff _ _ _ _ o1 o2 r1' r2' id1' id2' c1' c2' hlt1' hlt2' hlt3' hlt4' =>
       exists o, o
       constructor;
+      . apply hP.closedLeft at hpx; assumption
+      constructor;
+      . apply hP.closedLeft at hpy; assumption
+      constructor
       . simp [YjsPtr.size, YjsItem.size]; omega
       constructor <;> (constructor; assumption)
     | ltOriginSame _ _ _ _ o r id c =>
@@ -38,25 +51,19 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
       omega
 
 theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :
+  P x -> P y ->
   IsClosedItemSet P ->
-  YjsLeq' P x.rightOrigin y →
-  YjsLt' P y x →
-  ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
-  intros hP hxrleq hxy
-  have hpx : P x := by
-    apply yjs_lt'_p2 hxy
-  have hpy : P y := by
-    apply yjs_lt'_p1 hxy
+  YjsLeq' x.rightOrigin y →
+  YjsLt' y x →
+  ∃ (x' y' : YjsPtr A), P x' ∧ P y' ∧ x'.size + y'.size < x.size + y.size ∧ YjsLt' x' y' ∧ YjsLt' y' x' := by
+  intros hpx hpy hP hxrleq hxy
   obtain ⟨ o, r, id, c ⟩ := x
-  have hyxr : YjsLt' P y r := by
-    apply yjs_lt_trans (y := (YjsItem.item o r id c)) <;> try assumption
-    . apply hP.closedRight
-      apply yjs_lt'_p2
-      assumption
+  have hyxr : YjsLt' y r := by
+    apply yjs_lt_trans hP (y := (YjsItem.item o r id c)) <;> try assumption
+    . apply hP.closedRight at hpx; assumption
     . constructor; apply YjsLt.ltRightOrigin <;> try assumption
       left
-      apply hP.closedRight; assumption
-  have hrylt : YjsLt' P r y := by
+  have hrylt : YjsLt' r y := by
     obtain ⟨ h, hxrleq ⟩ := hxrleq
     cases hxrleq with
     | leqSame =>
@@ -65,29 +72,27 @@ theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv 
       constructor; assumption
   exists r, y
   constructor
+  . apply hP.closedRight at hpx; assumption
+  constructor
+  . assumption
+  constructor
   . simp [YjsItem.size]; omega
   constructor <;> assumption
 
 theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsPtr A) (y : YjsItem A) :
+  P x -> P y ->
   IsClosedItemSet P ->
-  YjsLeq' P x y.origin →
-  YjsLt' P y x →
-  ∃ x' y', x'.size + y'.size < x.size + y.size ∧ YjsLt' P x' y' ∧ YjsLt' P y' x' := by
-  intros hP hxrleq hxy
-  have hpx : P x := by
-    apply yjs_lt'_p2 hxy
-  have hpy : P y := by
-    apply yjs_lt'_p1 hxy
+  YjsLeq' x y.origin →
+  YjsLt' y x →
+  ∃ (x' y' : YjsPtr A), P x' ∧ P y' ∧ x'.size + y'.size < x.size + y.size ∧ YjsLt' x' y' ∧ YjsLt' y' x' := by
+  intros hpx hpy hP hxrleq hxy
   obtain ⟨ o, r, id, c ⟩ := y
-  have hyxr : YjsLt' P o x := by
-    apply yjs_lt_trans (y := (YjsItem.item o r id c)) <;> try assumption
-    . apply hP.closedLeft
-      apply yjs_lt'_p1
-      assumption
+  have hyxr : YjsLt' o x := by
+    apply yjs_lt_trans hP (y := (YjsItem.item o r id c)) <;> try assumption
+    . apply hP.closedLeft at hpy; assumption
     . constructor; apply YjsLt.ltOrigin <;> try assumption
       left
-      apply hP.closedLeft; assumption
-  have hrylt : YjsLt' P x o := by
+  have hrylt : YjsLt' x o := by
     obtain ⟨ h, hxrleq ⟩ := hxrleq
     cases hxrleq with
     | leqSame heq =>
@@ -96,26 +101,25 @@ theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : Item
       constructor; assumption
   exists x, o
   constructor
+  . assumption
+  constructor
+  . apply hP.closedLeft at hpy; assumption
+  constructor
   . simp [YjsItem.size]; omega
   constructor <;> assumption
 
 theorem yjs_lt_asymm {A} [DecidableEq A] {P : ItemSet A} :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
-  ∀ (x y : YjsPtr A), YjsLt' P x y -> YjsLt' P y x -> False := by
-  intros hP inv x y hltxy hltyx
+  ∀ (x y : YjsPtr A), P x -> P y -> YjsLt' x y -> YjsLt' y x -> False := by
+  intros hP inv x y hpx hpy hltxy hltyx
   generalize hsize : x.size + y.size = size
   revert x y
   apply Nat.strongRecOn' (P := fun size =>
-    ∀ (x y : YjsPtr A), YjsLt' P x y → YjsLt' P y x → x.size + y.size = size → False)
-  intros size ih x y hltxy hltyx hsize
+    ∀ (x y : YjsPtr A), P x -> P y -> YjsLt' x y → YjsLt' y x → x.size + y.size = size → False)
+  intros size ih x y hpx hpy hltxy hltyx hsize
 
-  have hpx : P x := by
-    apply yjs_lt'_p1 hltxy
-  have hpy : P y := by
-    apply yjs_lt'_p2 hltxy
-
-  obtain hltxy' := yjs_lt'_cases _ _ _ _ hltxy
+  obtain hltxy' := yjs_lt'_cases _ _ _ hltxy
   rcases hltxy' with
   ⟨ hyfirst, _ ⟩ |
   ⟨ hxlast, _ ⟩ |
@@ -124,25 +128,23 @@ theorem yjs_lt_asymm {A} [DecidableEq A] {P : ItemSet A} :
   hltxy'
   . subst hyfirst
     obtain ⟨ h, hltyx ⟩ := hltyx
-    apply not_ptr_lt_first inv
-    assumption
+    apply not_ptr_lt_first hP inv (o := y) <;> assumption
   . subst hxlast
     obtain ⟨ h, hltyx ⟩ := hltyx
-    apply not_last_lt_ptr inv
-    assumption
+    apply not_last_lt_ptr hP inv (o := x) <;> assumption
   . subst hxeq
-    obtain ⟨ x', y', hsize', hltxy', hltyx' ⟩ :=
-      yjs_leq_right_origin_decreases inv x y hP hxrleq hltyx
-    apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp)
+    obtain ⟨ x', y', hpx', hpy', hsize', hltxy', hltyx' ⟩ :=
+      yjs_leq_right_origin_decreases inv x y hpx hpy hP hxrleq hltyx
+    apply ih (x'.size + y'.size) _ x' y' hpx' hpy' hltxy' hltyx' (by simp)
     simp [YjsPtr.size] at hsize
     omega
   . subst hyeq
-    obtain ⟨ x', y', hsize', hltxy', hltyx ⟩ :=
-      yjs_leq_origin_decreases inv x y hP hyoleq hltyx
-    apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx (by simp)
+    obtain ⟨ x', y', hpx', hpy', hsize', hltxy', hltyx ⟩ :=
+      yjs_leq_origin_decreases inv x y hpx hpy hP hyoleq hltyx
+    apply ih (x'.size + y'.size) _ x' y' hpx' hpy' hltxy' hltyx (by simp)
     simp [YjsPtr.size] at hsize
     omega
-  . obtain hltyx' := yjs_lt'_cases _ _ _ _ hltyx
+  . obtain hltyx' := yjs_lt'_cases _ _ _ hltyx
     rcases hltyx' with
     ⟨ hxfirst, _ ⟩ |
     ⟨ hylast, _ ⟩ |
@@ -151,39 +153,38 @@ theorem yjs_lt_asymm {A} [DecidableEq A] {P : ItemSet A} :
     hltyx'
     . subst hxfirst
       obtain ⟨ h, hltxy ⟩ := hltxy
-      apply not_ptr_lt_first inv
-      assumption
+      apply not_ptr_lt_first hP inv (o := x) <;> assumption
     . subst hylast
       obtain ⟨ h, hltxy ⟩ := hltxy
-      apply not_last_lt_ptr inv
-      assumption
+      apply not_last_lt_ptr hP inv (o := y) <;> assumption
     . subst hyeq
-      obtain ⟨ x', y', hsize', hltxy', hltyx' ⟩ :=
-        yjs_leq_right_origin_decreases inv y x hP hyrleq hltxy
-      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp)
+      obtain ⟨ x', y', hpx', hpy', hsize', hltxy', hltyx' ⟩ :=
+        yjs_leq_right_origin_decreases inv y x hpy hpx hP hyrleq hltxy
+      apply ih (x'.size + y'.size) _ x' y' hpx' hpy' hltxy' hltyx' (by simp)
       simp [YjsPtr.size] at hsize
       omega
     . subst hxeq
-      obtain ⟨ x', y', hsize', hltxy', hltyx ⟩ :=
-        yjs_leq_origin_decreases inv y x hP hxoleq hltxy
-      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx (by simp)
+      obtain ⟨ x', y', hpx', hpy', hsize', hltxy', hltyx ⟩ :=
+        yjs_leq_origin_decreases inv y x hpy hpx hP hxoleq hltxy
+      apply ih (x'.size + y'.size) _ x' y' hpx' hpy' hltxy' hltyx (by simp)
       simp [YjsPtr.size] at hsize
       omega
-    . obtain ⟨ x', y', hsize', hltxy', hltyx' ⟩ :=
-        yjs_lt_conflict_lt_decreases inv x y hltxy' hltyx'
-      apply ih (x'.size + y'.size) _ x' y' hltxy' hltyx' (by simp)
+    . obtain ⟨ x', y', hpx', hpy', hsize', hltxy', hltyx' ⟩ :=
+        yjs_lt_conflict_lt_decreases hP inv x y hpx hpy hltxy' hltyx'
+      apply ih (x'.size + y'.size) _ x' y' hpx' hpy' hltxy' hltyx' (by simp)
       omega
 
 theorem yjs_lt_of_not_leq {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x y : YjsPtr A) :
   IsClosedItemSet P ->
-  YjsLt' P x y → ¬ YjsLeq' P y x := by
-  intros hP hltxy
+  P x -> P y ->
+  YjsLt' x y → ¬ YjsLeq' y x := by
+  intros hP hpx hpy hltxy
   by_contra hltyx
-  have hlt : YjsLt' P y x := by
+  have hlt : YjsLt' y x := by
     obtain ⟨ h, hltyx ⟩ := hltyx
     cases hltyx with
     | leqSame =>
       assumption
     | leqLt h _ _ hlt =>
       constructor; assumption
-  apply yjs_lt_asymm hP inv x y hltxy hlt
+  apply yjs_lt_asymm hP inv x y hpx hpy hltxy hlt
