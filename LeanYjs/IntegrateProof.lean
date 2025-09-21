@@ -234,7 +234,7 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
               have harrin : ArrSet arr.toList (YjsItem.item o (YjsPtr.itemPtr ro) id c) := by
                 rw [<-heq]
                 simp [ArrSet]
-              apply YjsLt.ltRightOrigin <;> try assumption
+              apply YjsLt.ltRightOrigin
               apply YjsLeq.leqSame
 
             have hltj : j < arr.size := by
@@ -506,9 +506,9 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
         apply findPtrIdx_eq_ok_inj _ _ heqleft hoLeftIdx
       rw [<-heq]
       obtain ⟨ o, r, id, c ⟩ := newItem
-      apply YjsLt'.ltOrigin <;> try assumption
-      . simp [YjsItem.origin]
-        exists 0; apply YjsLeq.leqSame
+      apply YjsLt'.ltOrigin
+      simp [YjsItem.origin]
+      exists 0; apply YjsLeq.leqSame
     . intros; simp; right; assumption
     . simp
   . -- leftIdx < oLeftIdx cases
@@ -572,6 +572,8 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
 
 
 theorem idx_between_id_neq {i : ℕ} {newItem other : YjsItem A} {arr : Array (YjsItem A)}
+  (horigin : ArrSet arr.toList newItem.origin)
+  (hrorigin : ArrSet arr.toList newItem.rightOrigin)
   (harrinv : YjsArrInvariant arr.toList)
   (hsameid_consistent :
     ∀ (x : YjsItem A),
@@ -601,7 +603,7 @@ theorem idx_between_id_neq {i : ℕ} {newItem other : YjsItem A} {arr : Array (Y
       . omega
     apply yjs_lt_of_not_leq harrinv.item_set_inv _ _ harrinv.closed at hleq
     . contradiction
-    . sorry -- findPtrIdx arr origin = Except.ok leftIdx -> ArrSet arr originが必要
+    . assumption
     . subst other; simp [ArrSet]
     . assumption
   | inr hleq =>
@@ -610,13 +612,13 @@ theorem idx_between_id_neq {i : ℕ} {newItem other : YjsItem A} {arr : Array (Y
       . omega
       . subst other
         rw [findPtrIdx_getElem]; assumption
-    have arr_newItem_rightOrigin : ArrSet arr.toList newItem.rightOrigin := by
-      sorry
-    apply yjs_lt_of_not_leq harrinv.item_set_inv _ _ harrinv.closed (by subst other; simp [ArrSet]) arr_newItem_rightOrigin hlt at hleq
+    apply yjs_lt_of_not_leq harrinv.item_set_inv _ _ harrinv.closed (by subst other; simp [ArrSet]) hrorigin hlt at hleq
     contradiction
 
 theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin {A : Type}
   [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
+  (horigin : ArrSet arr.toList newItem.origin)
+  (hrorigin : ArrSet arr.toList newItem.rightOrigin)
   (hsameid_consistent :
     ∀ (x : YjsItem A),
       ArrSet arr.toList (YjsPtr.itemPtr x) →
@@ -753,7 +755,7 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
               subst heq
               apply findPtrIdx_eq_ok_inj _ _ hoLeftIdx heqleft
             . have hneq : other.id ≠ newItem.id := by
-                apply idx_between_id_neq (other := other) (i := (leftIdx + (1 + ↑i)).toNat) harrinv hsameid_consistent heqleft heqright
+                apply idx_between_id_neq (other := other) (i := (leftIdx + (1 + ↑i)).toNat) horigin hrorigin harrinv hsameid_consistent heqleft heqright
                 . omega
                 . omega
                 . subst other; simp
@@ -1093,7 +1095,7 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
         | inl hleq =>
           have hle_leftIdx_oLeftIdx : leftIdx ≤ oLeftIdx := by
             apply YjsLeq'_findPtrIdx_leq _ _ (x := newItem.origin) (y := other.origin) _ harrinv _ _ _ heqleft hoLeftIdx
-            . sorry
+            . assumption
             . assumption
             . assumption
           omega
@@ -1207,7 +1209,7 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
     subst hitem
     obtain ⟨ o, r, id, c ⟩ := newItem
     simp [YjsItem.rightOrigin]
-    apply YjsLt'.ltRightOrigin <;> try simpa
+    apply YjsLt'.ltRightOrigin
     apply YjsLeq'.leqSame
 
 theorem loopInv_preserve1
@@ -1438,7 +1440,7 @@ theorem loopInv_preserve1
   constructor
   . -- extract_goal using nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin
     apply nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin
-      newItem arr hsameid_consistent harrinv
+      newItem arr horigin hrorigin hsameid_consistent harrinv
       leftIdx heqleft rightIdx heqright hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx
       oRightIdx hoRightIdx dest scanning h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hrightIdx hlt hinv
       hbody hidx hdest_current h_not_scanning h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq
