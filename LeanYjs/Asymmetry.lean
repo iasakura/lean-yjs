@@ -20,7 +20,7 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
     | ltOriginDiff _ _ _ _ _ _ _ _ _ _ _ _ hlt1' _ _ _ =>
       exists o1, o2
       constructor
-      . apply hP.closedLeft at hpx; assumption
+      . closeClosed
       constructor
       . apply hP.closedLeft at hpy; assumption
       constructor
