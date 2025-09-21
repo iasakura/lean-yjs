@@ -10,20 +10,20 @@ variable {A : Type} [BEq A]
 variable (P : ItemSet A)
 
 structure ItemSetInvariant where
-  origin_not_leq : ∀ (o r c id), P (YjsItem.item o r id c) ->
-    YjsLt' P o r
-  origin_nearest_reachable : ∀ (o r c id x),
+  origin_not_leq : ∀ (o r : YjsPtr A) c id, P (YjsItem.item o r id c) ->
+    YjsLt' o r
+  origin_nearest_reachable : ∀ (o r : YjsPtr A) c id x,
     P (YjsItem.item o r id c) ->
-    OriginReachable (YjsItem.item o r id c) x ->
-    (YjsLeq' P x o) ∨ (YjsLeq' P r x)
+    OriginReachable (A := A) (YjsItem.item o r id c) x ->
+    (YjsLeq' x o) ∨ (YjsLeq' r x)
   same_id_ordered : ∀ (x y : YjsItem A),
     P x -> P y ->
     x ≠ y ->
     x.id = y.id ->
-    YjsLeq' P x y.origin ∨
-    YjsLeq' P y x.origin ∨
-    YjsLeq' P x.rightOrigin y ∨
-    YjsLeq' P y.rightOrigin x
+    YjsLeq' x y.origin ∨
+    YjsLeq' y x.origin ∨
+    YjsLeq' x.rightOrigin y ∨
+    YjsLeq' y.rightOrigin x
 
 @[simp] theorem origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.origin := by
   intros hclosed x px
@@ -37,75 +37,79 @@ structure ItemSetInvariant where
   simp [YjsItem.rightOrigin] at *
   apply hclosed.closedRight <;> assumption
 
-theorem not_ptr_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h o YjsPtr.first := by
-  intros hinv h o
+theorem not_ptr_lt_first {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvariant P -> ∀ h (o : YjsPtr A), P o -> ¬ YjsLt h o YjsPtr.first := by
+  intros hclosed hinv h o hpo
   generalize hsize : o.size = size
   revert o h
-  apply @Nat.strongRecOn' (P := fun s => ∀ h (o : YjsPtr A), o.size = s -> ¬ @YjsLt A P h o YjsPtr.first) size
-  intros n ih h o hsize hlt
+  apply @Nat.strongRecOn' (P := fun s => ∀ h (o : YjsPtr A), P o -> o.size = s -> ¬ YjsLt h o YjsPtr.first) size
+  intros n ih h o hpo hsize hlt
   cases hlt with
   | ltConflict h _ _ hlt =>
     cases hlt
-  | ltOriginOrder o _ po pf hlt =>
+  | ltOriginOrder o _ hlt =>
     cases hlt
-  | ltRightOrigin h o r id c po hp hlt =>
+  | ltRightOrigin h o r id c hp hlt =>
     cases hlt with
     | leqLt h _ _ hlt =>
       have hsize' : r.size < n := by
         simp [YjsPtr.size, YjsItem.size] at *
         omega
       apply ih _ hsize' h r <;> try assumption
-      simp
+      . apply hclosed.closedRight at hpo; assumption
+      . simp
     | leqSame =>
-      have ⟨ _, hlt ⟩ : YjsLt' P o YjsPtr.first := by
-        apply hinv.origin_not_leq; assumption
-      apply ih (o.size) (by simp [YjsPtr.size, YjsItem.size] at hsize; omega) _ o (refl _) hlt
+      have ⟨ _, hlt ⟩ : YjsLt' o YjsPtr.first := by
+        apply hinv.origin_not_leq <;> try assumption
+      apply ih (o.size) (by simp [YjsPtr.size, YjsItem.size] at hsize; omega) _ o _ (refl _) hlt
+      apply hclosed.closedLeft at hpo; assumption
 
-theorem not_ptr_lt'_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ (o : YjsPtr A), ¬ YjsLt' P o YjsPtr.first := by
-  intros hinv o hlt
+theorem not_ptr_lt'_first {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvariant P -> ∀ (o : YjsPtr A), P o -> ¬ YjsLt' o YjsPtr.first := by
+  intros hclosed hinv o hpo hlt
   obtain ⟨ _, hlt ⟩ := hlt
-  apply not_ptr_lt_first hinv _ o at hlt
+  apply not_ptr_lt_first hclosed hinv _ o hpo at hlt
   assumption
 
-theorem not_last_lt_ptr {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h (o : YjsPtr A), ¬ @YjsLt A P h YjsPtr.last o := by
-  intros hinv h o
+theorem not_last_lt_ptr {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvariant P -> ∀ h (o : YjsPtr A), P o -> ¬ @YjsLt A h YjsPtr.last o := by
+  intros hclosed hinv h o hpo
   generalize hsize : o.size = size
   revert o h
-  apply @Nat.strongRecOn' (P := fun size => ∀ (h : ℕ) (o : YjsPtr A), o.size = size → ¬YjsLt P h YjsPtr.last o) size
-  intros n ih h o hsize hlt
+  apply @Nat.strongRecOn' (P := fun size => ∀ (h : ℕ) (o : YjsPtr A), P o -> o.size = size → ¬YjsLt h YjsPtr.last o) size
+  intros n ih h o hpo hsize hlt
   cases hlt with
   | ltConflict h _ _ hlt =>
     cases hlt
-  | ltOriginOrder _ _ _ hpo hlt =>
+  | ltOriginOrder _  hpo hlt =>
     cases hlt
-  | ltOrigin h x o r id c hpo hlt =>
+  | ltOrigin h x o r id c hlt =>
     cases hlt with
     | leqLt h _ _ hlt =>
       have hsize' : o.size < n := by
         simp [YjsPtr.size, YjsItem.size] at *
         omega
       apply ih _ hsize' h o <;> try assumption
-      simp
+      . apply hclosed.closedLeft at hpo; assumption
+      . simp
     | leqSame _ =>
-      have ⟨ h', hlt ⟩ : YjsLt' P YjsPtr.last r := by
+      have ⟨ h', hlt ⟩ : YjsLt' YjsPtr.last r := by
         apply hinv.origin_not_leq; assumption
       have hsize' : r.size < n := by
         simp [YjsPtr.size, YjsItem.size] at *
         omega
       apply ih r.size hsize' h' r <;> try assumption
-      simp
+      . apply hclosed.closedRight at hpo; assumption
+      . simp
 
-theorem not_last_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.first := by
+theorem not_last_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A h YjsPtr.last YjsPtr.first := by
   intros hinv h
-  apply @Nat.strongRecOn' (P := fun h => ¬ @YjsLt A P h YjsPtr.last YjsPtr.first)
+  apply @Nat.strongRecOn' (P := fun h => ¬ @YjsLt A h YjsPtr.last YjsPtr.first)
   intros n ih hlt
   cases hlt with
   | ltConflict h _ _ hlt =>
     cases hlt
-  | ltOriginOrder _ _ _ _ hlt =>
+  | ltOriginOrder _ _ hlt =>
     cases hlt
 
-theorem not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.first YjsPtr.first := by
+theorem not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A h YjsPtr.first YjsPtr.first := by
   intros hinv h hlt
   have h: @OriginLt A YjsPtr.first YjsPtr.first := by
     cases hlt with
@@ -115,7 +119,7 @@ theorem not_first_lt_first {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬
       assumption
   cases h with
 
-theorem not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A P h YjsPtr.last YjsPtr.last := by
+theorem not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @YjsLt A h YjsPtr.last YjsPtr.last := by
   intros hinv h hlt
   have h: @OriginLt A YjsPtr.last YjsPtr.last := by
     cases hlt with
