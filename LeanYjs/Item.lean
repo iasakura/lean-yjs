@@ -20,6 +20,9 @@ def YjsItem.origin {A : Type} : YjsItem A -> YjsPtr A
 def YjsItem.rightOrigin {A : Type} : YjsItem A -> YjsPtr A
   | YjsItem.item _ rightOrigin _ _ => rightOrigin
 
+def YjsItem.content {A : Type} : YjsItem A -> A
+  | YjsItem.item _ _ _ content => content
+
 mutual
 def YjsPtr.size {A : Type} : YjsPtr A -> Nat
   | YjsPtr.itemPtr item => item.size + 1
