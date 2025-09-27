@@ -4,10 +4,12 @@ import Std.Data.HashMap
 import LeanYjs.Item
 import LeanYjs.YString
 import LeanYjs.Integrate
+import LeanYjs.Logger
 
 open Lean
 open Lean.Json
 open Std
+open LeanYjs
 
 inductive NdjsonCommand where
   | insert (clientId index : Nat) (char : Char)
@@ -54,15 +56,40 @@ def applySync (state : ClientState) (src dst : Nat) : Except String ClientState 
   let _ : DecidableEq Item := @instDecidableEqYjsItem _ instDecidableEqChar
   let fromDoc := state.getD src YString.new
   let target := state.getD dst YString.new
-  let contents ← fromDoc.contents.foldlM (m := Except String) (fun acc item =>
-    if acc.any (fun existing => decide (existing = item)) then
-      pure acc
-    else
-      match integrate item acc with
-      | Except.ok newAcc => pure newAcc
-      | Except.error err => Except.error (renderIntegrateError err)
-  ) target.contents
-  return state.insert dst { contents := contents }
+  let initial := target.contents
+  let todo := fromDoc.contents.toList.filter fun item =>
+    not (initial.any (fun existing => existing = item))
+
+  let rec integrateLoop (dest : Array Item) (queue : List Item) (fuel : Nat) : Except String (Array Item) :=
+    match fuel with
+    | 0 => Except.error (renderIntegrateError IntegrateError.notFound)
+    | Nat.succ fuel' =>
+      match queue with
+      | [] => pure dest
+      | _ => do
+        let process := fun (state : Array Item × List Item × Bool) (item : Item) => do
+          let (d, remaining, progressed) := state
+          if d.any (fun existing => decide (existing = item)) then
+            pure (d, remaining, progressed)
+          else
+            match integrate item d with
+            | Except.ok newDest => pure (newDest, remaining, true)
+            | Except.error IntegrateError.notFound => pure (d, item :: remaining, progressed)
+            | Except.error err => Except.error (renderIntegrateError err)
+
+        let (dest', remaining, progressed) ← queue.foldlM process (dest, [], false)
+        if remaining.isEmpty then
+          pure dest'
+        else if progressed then
+          integrateLoop dest' remaining.reverse fuel'
+        else
+          Except.error (renderIntegrateError IntegrateError.notFound)
+
+  let maxFuel := todo.length + 1
+  let contents ← integrateLoop initial todo maxFuel
+  let stateWithFrom := state.insert src fromDoc
+  let updatedTarget : YString := { contents := contents }
+  return stateWithFrom.insert dst updatedTarget
 
 def applyCommand (state : ClientState) (cmd : NdjsonCommand) : Except String ClientState :=
   match cmd with
@@ -77,7 +104,7 @@ def runCommandsIO (commands : Array NdjsonCommand) : IO ClientState := do
   let (_, state) ← commands.foldlM
     (fun (acc : Nat × ClientState) cmd => do
       let (idx, st) := acc
-      IO.eprintln s!"Executing command {idx}: {reprStr cmd}"
+      logDebug s!"Executing command {idx}: {reprStr cmd}"
       match applyCommand st cmd with
       | Except.ok newState =>
         pure (idx + 1, newState)
@@ -108,8 +135,9 @@ def stateToJson (state : ClientState) : Json :=
   Json.mkObj pairs
 
 def main : IO Unit := do
+  configureFromEnv
   let commands ← readCommands
-  IO.eprintln s!"Received {commands.size} command(s)."
+  logInfo s!"Received {commands.size} command(s)."
   let state ← runCommandsIO commands
   let output := stateToJson state
   IO.println output.compress

@@ -2,14 +2,21 @@
   "name": "yjs_sandbox",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "type": "module",
+  "main": "index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run --test-timeout 30000"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.2",
+    "fast-check": "^3.13.1"
   }
 }
