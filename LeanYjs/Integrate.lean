@@ -4,6 +4,7 @@ import LeanYjs.ItemOrder
 
 inductive IntegrateError where
 | notFound : IntegrateError
+| outOfBounds : Nat → Nat → IntegrateError
 
 variable {A: Type} [DecidableEq A]
 

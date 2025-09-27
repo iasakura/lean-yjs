@@ -12,3 +12,4 @@ import LeanYjs.Asymmetry
 import LeanYjs.Integrate
 import LeanYjs.YjsArray
 import LeanYjs.IntegrateProof
+import LeanYjs.Logger
