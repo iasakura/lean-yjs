@@ -11,5 +11,8 @@ import LeanYjs.Transitivity
 import LeanYjs.Asymmetry
 import LeanYjs.Integrate
 import LeanYjs.YjsArray
+import LeanYjs.YjsArray.Invariant
+import LeanYjs.Integrate.Loop
+import LeanYjs.Integrate.LoopInvariant
 import LeanYjs.IntegrateProof
 import LeanYjs.Logger

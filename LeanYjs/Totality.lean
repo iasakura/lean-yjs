@@ -237,19 +237,16 @@ theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
                       apply ConflictLt.ltOriginSame <;> try assumption
                     | inr heq =>
                       rw [<-heqx, <-heqy, heq]
-                      have heqneq : (YjsItem.item xo xr yid xc) = (YjsItem.item xo yr yid yc) ∨ (YjsItem.item xo xr yid xc) ≠ (YjsItem.item xo yr yid yc) := by apply yjsItem_decidable_eq
-                      cases heqneq with
-                      | inl heq =>
-                        left
+                      by_cases heqneq : (YjsItem.item xo xr yid xc) = (YjsItem.item xo yr yid yc)
+                      . left
                         exists 0
                         cases heq
-                        rw [<-heq]
+                        rw [<-heqneq]
                         left
-                      | inr hneq =>
-                        rw [<-heq]
+                      . rw [<-heq]
                         rw [<-heq] at hy
                         rw [<-heq] at *
-                        cases inv.same_id_ordered (YjsItem.item xo xr xid xc) (YjsItem.item xo yr xid yc) hx hy hneq heq with
+                        cases inv.same_id_ordered (YjsItem.item xo xr xid xc) (YjsItem.item xo yr xid yc) hx hy heqneq heq with
                         | inl hlt =>
                           obtain ⟨ h, hlt ⟩ := hlt
                           have ⟨ h', hlt ⟩ : ∃ h', YjsLt h' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) (YjsPtr.itemPtr (YjsItem.item xo yr xid yc)) := by

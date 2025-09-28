@@ -55,11 +55,3 @@ instance : Coe (YjsItem A) (YjsPtr A) where
 
 def YjsItem.id {A : Type} : YjsItem A -> ClientId
 | YjsItem.item _ _ id _ => id
-
--- The theorem you requested: excluded middle for YjsItem equality
--- This follows from the law of excluded middle in classical logic
-theorem yjsItem_decidable_eq (x y : YjsItem A) : x = y ∨ x ≠ y := by
-  classical
-  by_cases h : x = y
-  · left; exact h
-  · right; exact h

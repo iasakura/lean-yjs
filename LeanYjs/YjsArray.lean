@@ -1,3 +1,4 @@
+import LeanYjs.YjsArray.Invariant
 import LeanYjs.Item
 import LeanYjs.ItemSet
 import LeanYjs.ClientId
@@ -8,486 +9,137 @@ import LeanYjs.Transitivity
 import LeanYjs.Asymmetry
 import LeanYjs.Integrate
 
+section YjsArrInvariant
+
+theorem idx_lt_getElem_YjsLt' (arr : Array (YjsItem A)) (i j : Nat) :
+  YjsArrInvariant arr.toList ->
+  (hij : i < j) ->
+  (hjsize : j < arr.size) ->
+  YjsLt' (A := A) arr[i] arr[j] := by
+  intros hinv hij hjsize
+  apply List.Pairwise_idx_lt_p (P := fun x y => YjsLt' (YjsPtr.itemPtr x) y) <;> try assumption
+  apply hinv.sorted
+
+theorem idx_leq_getElem_YjsLeq' (arr : Array (YjsItem A)) (i j : Nat) :
+  YjsArrInvariant arr.toList ->
+  (hij : i ≤ j) ->
+  (hjsize : j < arr.size) ->
+  YjsLeq' (A := A) arr[i] arr[j] := by
+  intros hinv hij hjsize
+  rw [Nat.le_iff_lt_or_eq] at hij
+  cases hij with
+  | inl hij =>
+    have ⟨ _, hlt ⟩ : YjsLt' (A := A) arr[i] arr[j] := by
+      apply idx_lt_getElem_YjsLt' arr i j hinv hij hjsize
+    constructor
+    right
+    assumption
+  | inr heq =>
+    subst heq
+    exists 0
+    apply YjsLeq.leqSame
+
+theorem YjsArrayInvariant_lt_neq (arr : Array (YjsItem A)) (i j : Nat) :
+  YjsArrInvariant arr.toList ->
+  (hilt : i < arr.size) ->
+  (hjlt : j < arr.size) ->
+  i < j ->
+  arr[i] ≠ arr[j] := by
+  intros hinv hilt hjlt hij
+  apply List.Pairwise_idx_lt_p (P := fun x y => x ≠ y) arr.toList i j hinv.unique hij hilt hjlt
+
+theorem getElem_YjsLt'_idx_lt [DecidableEq A] (arr : Array (YjsItem A)) (i j : Nat) :
+  YjsArrInvariant arr.toList ->
+  (hi_lt : i < arr.size) -> (hj_lt : j < arr.size) ->
+  YjsLt' (A := A) arr[i] arr[j] ->
+  i < j := by
+  intros hinv hi_lt hj_lt hlt
+  have hij_or : i < j ∨ i ≥ j := by
+    apply Nat.lt_or_ge
+  cases hij_or with
+  | inl hij => assumption
+  | inr hij =>
+    have hleq : YjsLeq' (A := A) arr[j] arr[i] := by
+      apply idx_leq_getElem_YjsLeq' arr j i hinv hij hi_lt
+    by_contra
+    apply yjs_lt_of_not_leq hinv.item_set_inv _ _ hinv.closed _ _ hlt hleq
+    simp [ArrSet]
+    simp [ArrSet]
+
+end YjsArrInvariant
+
+section FindPtrIdx
+
 variable {A : Type}
 variable [DecidableEq A]
 
-def ArrSet (arr : List (YjsItem A)) : YjsPtr A -> Prop :=
-  fun a => match a with
-  | YjsPtr.itemPtr item => item ∈ arr
-  | YjsPtr.first => True
-  | YjsPtr.last => True
-
-def ArrSetClosed (arr : List (YjsItem A)) : Prop :=
-  IsClosedItemSet (ArrSet arr)
-
-omit [DecidableEq A] in theorem arr_set_closed_push (arr : List (YjsItem A)) (item : YjsItem A) :
-  ArrSetClosed arr ->
-  ArrSet arr item.origin ->
-  ArrSet arr item.rightOrigin ->
-  ArrSetClosed (item :: arr) := by
-  intros hclosed horigin hright
-  constructor <;> try simp [ArrSet]
-  . intros o r id c hor
-    cases o with
-    | itemPtr item' =>
-      simp
-      cases hor with
-      | inr hitem =>
-        right
-        apply hclosed.closedLeft at hitem
-        assumption
-      | inl heq =>
-        subst heq
-        right
-        assumption
-    | first =>
-      simp
-    | last =>
-      simp
-  . intros o r id c hor
-    cases r with
-    | itemPtr item' =>
-      simp
-      cases hor with
-      | inr hitem =>
-        right
-        apply hclosed.closedRight at hitem
-        assumption
-      | inl heq =>
-        subst heq
-        right
-        assumption
-    | first =>
-      simp
-    | last =>
-      simp
-
-omit [DecidableEq A] in theorem arr_set_item_exists_index (arr arr' : List (YjsItem A)) (item : YjsItem A) :
-  ArrSetClosed arr' ->
-  ArrSet arr item ->
-  (∃ l, l ++ arr = arr') ->
-  ∃ i : Fin arr.length, arr[i] = item := by
-  intros hclosed hitem hsublist
-  induction arr with
-  | nil =>
-    simp [ArrSet] at hitem
-  | cons head arr ih =>
-    simp [ArrSet] at hitem
-    cases hitem with
-    | inl heq =>
-      subst heq
-      have zero_lt_len : 0 < (item :: arr).length := by simp
-      exists Fin.mk 0 zero_lt_len
-    | inr hin =>
-      have hsublist' : ∃ l', l' ++ arr = arr' := by
-        obtain ⟨ l, heq ⟩ := hsublist
-        exists (l ++ [head])
-        rw [List.append_assoc]
-        simp; assumption
-      obtain ⟨ i, hi ⟩ := ih hin hsublist'
-      let i' : Fin ((head :: arr).length) := by
-        simp
-        apply Fin.addNat i 1
-      exists i'
-
-omit [DecidableEq A] in theorem arr_set_closed_exists_index_for_origin :
-  ∀ (arr : List (YjsItem A)) (item : YjsItem A),
-  ArrSetClosed arr ->
-  ArrSet arr item ->
-  item.origin = YjsPtr.first ∨ item.origin = YjsPtr.last ∨ ∃ i : Fin arr.length, arr[i] = item.origin := by
-  intros arr item hclosed hitem
-  obtain ⟨ o, r, id, c ⟩ := item
-  apply hclosed.closedLeft at hitem
-  simp [YjsItem.origin]
-  cases o with
+theorem findPtrIdx_ge_minus_1 {arr : Array (YjsItem A)} (item : YjsPtr A) :
+  findPtrIdx item arr = Except.ok idx
+  -> idx ≥ -1 := by
+  intros hfind
+  unfold findPtrIdx at hfind
+  cases item with
   | first =>
-    left; simp
-  | last =>
-    right; left; simp
-  | itemPtr o =>
-    right; right
-    obtain ⟨ i, h ⟩ := arr_set_item_exists_index arr arr o hclosed hitem (by exists [])
-    exists i
+    simp at hfind
+    cases hfind
     simp
-    assumption
+  | last =>
+    simp at hfind
+    cases hfind
+    omega
+  | itemPtr item =>
+    simp at hfind
+    generalize heq : Array.findIdx? (fun i => decide (i = item)) arr = idx at hfind
+    cases idx with
+    | none =>
+      cases hfind
+    | some idx =>
+      cases hfind
+      omega
 
-omit [DecidableEq A] in theorem arr_set_closed_exists_index_for_right_origin :
-  ∀ (arr : List (YjsItem A)) (item : YjsItem A),
-  ArrSetClosed arr ->
-  ArrSet arr item ->
-  item.rightOrigin = YjsPtr.first ∨ item.rightOrigin = YjsPtr.last ∨ ∃ i : Fin arr.length, arr[i] = item.rightOrigin := by
-  intros arr item hclosed hitem
-  obtain ⟨ o, r, id, c ⟩ := item
-  apply hclosed.closedRight at hitem
-  simp [YjsItem.rightOrigin]
-  cases r with
+theorem findPtrIdx_le_size {arr : Array (YjsItem A)} (item : YjsPtr A) :
+  findPtrIdx item arr = Except.ok idx
+  -> idx ≤ arr.size := by
+  intros hfind
+  unfold findPtrIdx at hfind
+  cases item with
   | first =>
-    left; simp
+    simp at hfind
+    cases hfind
+    omega
   | last =>
-    right; left; simp
-  | itemPtr o =>
-    right; right
-    obtain ⟨ i, h ⟩ := arr_set_item_exists_index arr arr o hclosed hitem (by exists [])
-    exists i
+    simp at hfind
+    cases hfind
     simp
-    assumption
+  | itemPtr item =>
+    simp at hfind
+    generalize heq : Array.findIdx? (fun i => decide (i = item)) arr = idx at hfind
+    cases idx with
+    | none =>
+      cases hfind
+    | some idx =>
+      cases hfind
+      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
+      obtain ⟨ _, _ ⟩ := heq
+      simp
+      omega
 
--- omit [DecidableEq A] in theorem yjs_lt_mono (P Q : ItemSet A) (x y : YjsPtr A) :
---   IsClosedItemSet P ->
---   ItemSetInvariant P ->
---   (∀ a, P a -> Q a) ->
---   YjsLt h x y ->
---   YjsLt h x y := by
---   intros hclosedP hinvP hsubset
---   intros hlt
---   revert hlt x y
---   apply Nat.strongRec' (p := fun h => ∀ x y, YjsLt h x y → YjsLt h x y)
---   intros n ih x y hlt
---   cases hlt with
---   | ltOriginOrder _  _ hlt =>
---     apply YjsLt.ltOriginOrder
---     . assumption
---   | ltConflict _ _ _ hlt =>
---     cases hlt with
---     | ltOriginDiff =>
---       apply YjsLt.ltConflict
---       apply ConflictLt.ltOriginDiff
---       all_goals (apply ih; unfold max4; omega)
---       all_goals (assumption)
---     | ltOriginSame =>
---       apply YjsLt.ltConflict
---       apply ConflictLt.ltOriginSame <;> try assumption
---   | ltOrigin _ _ _ _ _ _ hlt =>
---     apply YjsLt.ltOrigin
---     . cases hlt with
---       | leqSame =>
---         apply YjsLeq.leqSame
---       | leqLt =>
---         apply YjsLeq.leqLt
---         apply ih <;> try assumption
---         omega
---   | ltRightOrigin _ _ _ _ _ _ hlt =>
---     apply YjsLt.ltRightOrigin
---     . cases hlt with
---       | leqSame =>
---         apply YjsLeq.leqSame
---       | leqLt =>
---         apply YjsLeq.leqLt
---         apply ih <;> try assumption
---         omega
-
--- omit [DecidableEq A] in theorem yjs_lt'_mono :
---   ∀ (P Q : ItemSet A) (x y : YjsPtr A),
---   IsClosedItemSet P ->
---   ItemSetInvariant P ->
---   (∀ a, P a -> Q a) ->
---   YjsLt' x y -> YjsLt' x y := by
---   intros P Q x y hclosedP hinvP hsubset hlt
---   obtain ⟨ _, hlt ⟩ := hlt
---   constructor
---   apply yjs_lt_mono P Q x y hclosedP hinvP hsubset hlt
-
--- omit [DecidableEq A] in theorem yjs_leq'_mono :
---   ∀ (P Q : ItemSet A) (x y : YjsPtr A),
---   IsClosedItemSet P ->
---   ItemSetInvariant P ->
---   (∀ a, P a -> Q a) ->
---   YjsLeq' x y -> YjsLeq' x y := by
---   intros P Q x y hclosedP hinvP hsubset hleq
---   obtain ⟨ _, hleq ⟩ := hleq
---   cases hleq with
---   | leqSame =>
---     exists 0
---     apply YjsLeq.leqSame
---   | leqLt =>
---     constructor
---     apply YjsLeq.leqLt
---     apply yjs_lt_mono P Q x y hclosedP hinvP hsubset
---     assumption
-
-theorem ItemSetInvariant.eq_set {A} (P Q : ItemSet A) :
-  IsClosedItemSet P →
-  ItemSetInvariant P →
-  (∀x, P x ↔ Q x) →
-  ItemSetInvariant Q := by
-  intros hPclosed hP hiff
+theorem findPtrIdx_getElem (arr : Array (YjsItem A)) (i :  ℕ) :
+  YjsArrInvariant arr.toList ->
+  (hlt : i < arr.size) ->
+  findPtrIdx arr[i] arr = Except.ok ↑i := by
+  intros hinv hlt
+  simp [findPtrIdx]
+  suffices Array.findIdx? (fun x => x = arr[i]) arr = some i by
+    rw [this]
+    eq_refl
+  rw [Array.findIdx?_eq_some_iff_getElem]
   constructor
-  . intros o r c id hq
-    rw [<-hiff] at *
-    apply hP.origin_not_leq <;> assumption
-  . intros o r c id x hq hreachable
-    rw [<-hiff] at *
-    apply hP.origin_nearest_reachable <;> assumption
-  . intros x y hx hy hineq hid
-    rw [<-hiff] at *
-    apply hP.same_id_ordered <;> assumption
-
-theorem push_subset {A} (arr : List (YjsItem A)) (a : YjsItem A) :
-  ∀ x, ArrSet arr x -> ArrSet (a :: arr) x := by
-  intros x hin
-  unfold ArrSet at *
-  simp
-  cases x <;> (simp at *)
-  right; assumption
-
-theorem reachable_in {A} (arr : List (YjsItem A)) (a : YjsPtr A) :
-  IsClosedItemSet (ArrSet arr) ->
-  ∀ x, OriginReachable a x -> ArrSet arr a -> ArrSet arr x := by
-  intros hclosed x hreach hin
-  induction hreach with
-  | reachable_head x a y step h ih =>
-    cases step with
-    | reachable =>
-      simp [ArrSet] at hin
-      apply hclosed.closedLeft at hin
-      apply ih
-      assumption
-    | reachable_right =>
-      simp [ArrSet] at hin
-      apply hclosed.closedRight at hin
-      apply ih
-      assumption
-  | reachable_single _ _ hstep =>
-    cases hstep with
-    | reachable =>
-      simp [ArrSet] at hin
-      apply hclosed.closedLeft at hin
-      assumption
-    | reachable_right =>
-      simp [ArrSet] at hin
-      apply hclosed.closedRight at hin
-      assumption
-
-omit [DecidableEq A] in theorem item_set_invariant_push (arr : List (YjsItem A)) (item : YjsItem A) :
-  ItemSetInvariant (ArrSet arr) ->
-  ArrSetClosed arr ->
-  YjsLt' item.origin item.rightOrigin ->
-  (∀ x, OriginReachable item x -> YjsLeq' x item.origin ∨ YjsLeq' item.rightOrigin x) ->
-  (∀ x : YjsItem A, ArrSet arr x -> x.id = item.id -> YjsLeq' x item.origin ∨ YjsLeq' item.rightOrigin x) ->
-  ItemSetInvariant (ArrSet (item :: arr)) := by
-  intros hinv hclosed horigin hreach hsameid
-  apply ItemSetInvariant.mk
-  . intros o r c id hitem
-    simp [ArrSet] at hitem
-    cases hitem with
-    | inr hin =>
-      apply hinv.origin_not_leq at hin; assumption
-    | inl heq =>
-      subst heq
-      assumption
-  . intros o r c id x hin hreachable
-    simp [ArrSet] at hin
-    cases hin with
-    | inr hin =>
-      apply hinv.origin_nearest_reachable _ _ _ _ _ hin hreachable
-    | inl heq =>
-      subst heq
-      simp [YjsItem.origin, YjsItem.rightOrigin] at *
-      apply hreach _ hreachable
-  . intros x y hinx hiny hineq hid
-    simp [ArrSet] at *
-    cases hinx with
-    | inr hinx =>
-      cases hiny with
-      | inr hiny =>
-        apply hinv.same_id_ordered _ _ hinx hiny hineq hid
-      | inl hleq =>
-        subst hleq
-        cases hsameid _ hinx hid with
-        | inl hleq =>
-          left; assumption
-        | inr hleq =>
-          right
-          right
-          right
-          assumption
-    | inl hinx =>
-      subst hinx
-      cases hiny with
-      | inr hiny =>
-        cases hsameid _ hiny (by rw [hid]) with
-        | inl hleq =>
-          right
-          left
-          assumption
-        | inr hleq =>
-          right
-          right
-          left
-          assumption
-      | inl heqy =>
-        subst heqy
-        cases hineq (refl _)
-
-structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
-  closed : IsClosedItemSet (ArrSet arr)
-  item_set_inv : ItemSetInvariant (ArrSet arr)
-  sorted : List.Pairwise (fun (x y : YjsItem A) => YjsLt' (A := A) x y) arr
-  unique : List.Pairwise (fun x y => x ≠ y) arr
-
-theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
-  YjsArrInvariant xs_all ->
-  YjsArrInvariant ys_all ->
-  (∀ a, ArrSet xs_all a ↔ ArrSet ys_all a) ->
-  (∃ t, t ++ xs = xs_all) ->
-  (∃ t, t ++ ys = ys_all) ->
-  (∀ x, ArrSet xs x ↔ ArrSet ys x) ->
-  xs = ys := by
-  intros hinv1 hinv2 hseteq_all hsubset1 hsubset2 hseteq
-  obtain ⟨ hclosed1, hinv1, hsort1, huniq1 ⟩ := hinv1
-  obtain ⟨ hclosed2, hinv2, hsort2, huniq2 ⟩ := hinv2
-
-  revert ys
-
-  induction xs with
-  | nil =>
-    intros ys hsubset2 hseteq
-    cases ys with
-    | nil => eq_refl
-    | cons y ys =>
-      obtain hitem := hseteq y
-      simp [ArrSet] at hitem
-  | cons x xs ih =>
-    intros ys hsubset2 hseteq
-    cases ys with
-    | nil =>
-      obtain hitem := hseteq x
-      simp [ArrSet] at hitem
-    | cons y ys =>
-      have hmin1 : ∀ a ∈ xs, YjsLt' (A := A) x a := by
-        obtain ⟨ t, heq ⟩ := hsubset1
-        subst heq
-        rw [List.pairwise_append] at hsort1
-        obtain ⟨ _, hsort1, _ ⟩ := hsort1
-        simp at hsort1
-        obtain ⟨ hsort1, _ ⟩ := hsort1
-        assumption
-      have hmin2 : ∀ a ∈ ys, YjsLt' (A := A) y a := by
-        obtain ⟨ t, heq ⟩ := hsubset2
-        subst heq
-        rw [List.pairwise_append] at hsort2
-        obtain ⟨ _, hsort2, _ ⟩ := hsort2
-        simp at hsort2
-        obtain ⟨ hsort2, _ ⟩ := hsort2
-        assumption
-
-      have heq : x = y := by
-        have hlt1 : x = y ∨ YjsLt' (A := A) y x := by
-          cases yjsItem_decidable_eq A x y with
-          | inl heq =>
-            left; assumption
-          | inr hneq =>
-            obtain ⟨ hinx, _ ⟩ := hseteq x
-            have hinx : x = y ∨ x ∈ ys:= by
-              simp [ArrSet] at hinx
-              assumption
-            cases hinx with
-            | inl heq =>
-              left; assumption
-            | inr hinx =>
-              apply hmin2 at hinx
-              obtain ⟨ _, hinx ⟩ := hinx
-              right
-              constructor
-              assumption
-
-        have hlt2 : x = y ∨ YjsLt' (A := A) x y := by
-          cases yjsItem_decidable_eq A x y with
-          | inl heq =>
-            subst heq; left; eq_refl
-          | inr hneq =>
-            obtain ⟨ _, hinx ⟩ := hseteq y
-            have hiny : y = x ∨ y ∈ xs:= by
-              simp [ArrSet] at hinx
-              assumption
-            cases hiny with
-            | inl heq =>
-              subst heq; left; eq_refl
-            | inr hiny =>
-              apply hmin1 at hiny
-              obtain ⟨ _, hiny ⟩ := hiny
-              right
-              constructor
-              assumption
-
-        cases hlt1 with
-        | inl heq =>
-          assumption
-        | inr hlt1 =>
-          cases hlt2 with
-          | inl heq =>
-            assumption
-          | inr hlt2 =>
-            obtain ⟨ tx, heq1 ⟩ := hsubset1
-            obtain ⟨ ty, heq2 ⟩ := hsubset2
-            subst heq1 heq2
-            cases yjs_lt_asymm hclosed2 hinv2 x y (by rw [<-hseteq_all]; simp [ArrSet]) (by simp [ArrSet]) hlt2 hlt1
-
-      subst heq
-      congr
-
-      apply ih
-      . obtain ⟨ t, heq ⟩ := hsubset1
-        subst heq
-        exists (t ++ [x])
-        simp
-      . obtain ⟨ t, heq ⟩ := hsubset2
-        subst heq
-        exists (t ++ [x])
-        simp
-      . intros a
-        simp [ArrSet] at *
-        cases a with
-        | first =>
-          simp
-        | last =>
-          simp
-        | itemPtr a =>
-          specialize hseteq a
-          simp at *
-          obtain ⟨ t, heq ⟩ := hsubset1
-          subst heq
-          obtain ⟨ t', heq ⟩ := hsubset2
-          subst heq
-          rw [List.pairwise_append] at huniq1
-          rw [List.pairwise_append] at huniq2
-          simp at *
-          obtain ⟨ _, ⟨ huniq1, _ ⟩, _ ⟩ := huniq1
-          obtain ⟨ _, ⟨ huniq2, _ ⟩ , _ ⟩ := huniq2
-          constructor
-          . intros hin
-            obtain hneq := huniq1 _ hin
-            have h : a = x ∨ a ∈ ys := by
-              rw [<-hseteq]
-              right; assumption
-            cases h with
-            | inl heq =>
-              subst heq
-              cases hneq (refl _)
-            | inr hin =>
-              assumption
-          . intros hin
-            obtain hneq := huniq2 _ hin
-            have h : a = x ∨ a ∈ xs := by
-              rw [hseteq]
-              right; assumption
-            cases h with
-            | inl heq =>
-              subst heq
-              cases hneq (refl _)
-            | inr hin =>
-              assumption
-
-theorem same_yjs_set_unique (xs ys : List (YjsItem A)) :
-  YjsArrInvariant xs ->
-  YjsArrInvariant ys ->
-  (∀ a, ArrSet xs a ↔ ArrSet ys a) ->
-  xs = ys := by
-  intros hinv1 hinv2 hseteq
-  apply same_yjs_set_unique_aux xs ys xs ys hinv1 hinv2 hseteq
-  . exists []
-  . exists []
-  . apply hseteq
+  constructor
+  . simp
+  . intros j hij heq
+    apply YjsArrayInvariant_lt_neq arr j i hinv (by omega) hlt hij (by simp at heq; assumption)
+  . assumption
 
 theorem findPtrIdx_item_exists (arr : Array (YjsItem A)) (x : YjsItem A) :
   findPtrIdx x arr = Except.ok i ->
@@ -504,58 +156,6 @@ theorem findPtrIdx_item_exists (arr : Array (YjsItem A)) (x : YjsItem A) :
     rw [Array.getElem?_eq_getElem]
     rw [decide_eq_true_eq] at h1
     simp; assumption
-
-theorem idx_lt_pairwise {α} {P : α -> α -> Prop} (xs : List α) (i j : Nat) :
-  List.Pairwise (fun (x y : α) => P x y) xs ->
-  i < j ->
-  (hlt_x : i < xs.length) ->
-  (hlt_y : j < xs.length) ->
-  P (xs[i]) (xs[j]) := by
-  revert i j
-  induction xs with
-  | nil =>
-    intros i j hpair hlt_ij hlt_x hlt_y
-    simp [List.length] at hlt_x
-  | cons x xs ih =>
-    intros i j hpair hlt_ij hlt_x hlt_y
-    simp at *
-    cases i <;> cases j <;> try omega
-    . simp
-      obtain ⟨ h, _ ⟩ := hpair
-      apply h; simp
-    . simp
-      apply ih
-      . obtain ⟨ _, hpair ⟩ := hpair
-        apply hpair
-      . omega
-
-omit [DecidableEq A] in theorem getElem_lt_YjsLt' (arr : Array (YjsItem A)) (i j : Nat) :
-  YjsArrInvariant arr.toList ->
-  (hij : i < j) ->
-  (hjsize : j < arr.size) ->
-  YjsLt' (A := A) arr[i] arr[j] := by
-  intros hinv hij hjsize
-  apply idx_lt_pairwise (P := fun x y => YjsLt' (YjsPtr.itemPtr x) y) <;> try assumption
-  apply hinv.sorted
-
-omit [DecidableEq A] in theorem getElem_leq_YjsLeq' (arr : Array (YjsItem A)) (i j : Nat) :
-  YjsArrInvariant arr.toList ->
-  (hij : i ≤ j) ->
-  (hjsize : j < arr.size) ->
-  YjsLeq' (A := A) arr[i] arr[j] := by
-  intros hinv hij hjsize
-  rw [Nat.le_iff_lt_or_eq] at hij
-  cases hij with
-  | inl hij =>
-    have ⟨ _, hlt ⟩ : YjsLt' (A := A) arr[i] arr[j] := by
-      apply getElem_lt_YjsLt' arr i j hinv hij hjsize
-    constructor
-    right
-    assumption
-  | inr heq =>
-    subst heq
-    exists 0
-    apply YjsLeq.leqSame
 
 theorem findPtrIdx_lt_YjsLt' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
   YjsArrInvariant arr.toList ->
@@ -653,7 +253,7 @@ theorem findPtrIdx_lt_YjsLt' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
       obtain ⟨ _, hfindy ⟩ := hfindy
       subst hfindy
 
-      apply idx_lt_pairwise (P := fun x y => YjsLt' (YjsPtr.itemPtr x) y)
+      apply List.Pairwise_idx_lt_p (P := fun x y => YjsLt' (YjsPtr.itemPtr x) y)
       . apply hinv.sorted
       . cases i <;> cases heqx
         cases j <;> cases heqy
@@ -663,7 +263,7 @@ theorem findPtrIdx_lt_YjsLt' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
 theorem findPtrIdx_eq_ok_inj {arr : Array (YjsItem A)} (x y : YjsPtr A) :
   findPtrIdx x arr = Except.ok i →
   findPtrIdx y arr = Except.ok i →
-   x = y := by
+  x = y := by
   intros heq_x heq_y
   cases x with
   | first =>
@@ -749,25 +349,7 @@ theorem findPtrIdx_leq_YjsLeq' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
     subst x
     apply YjsLeq'.leqSame
 
-theorem getElem_YjsLt'_index_lt (arr : Array (YjsItem A)) (i j : Nat) :
-  YjsArrInvariant arr.toList ->
-  (hi_lt : i < arr.size) -> (hj_lt : j < arr.size) ->
-  YjsLt' (A := A) arr[i] arr[j] ->
-  i < j := by
-  intros hinv hi_lt hj_lt hlt
-  have hij_or : i < j ∨ i ≥ j := by
-    apply Nat.lt_or_ge
-  cases hij_or with
-  | inl hij => assumption
-  | inr hij =>
-    have hleq : YjsLeq' (A := A) arr[j] arr[i] := by
-      apply getElem_leq_YjsLeq' arr j i hinv hij hi_lt
-    by_contra
-    apply yjs_lt_of_not_leq hinv.item_set_inv _ _ hinv.closed _ _ hlt hleq
-    simp [ArrSet]
-    simp [ArrSet]
-
-lemma YjsLt'_findPtrIdx_lt (i j : ℤ) (x y : YjsPtr A) (arr : Array (YjsItem A)) :
+lemma YjsLt'_findPtrIdx_idx_lt (i j : ℤ) (x y : YjsPtr A) (arr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList ->
   ArrSet arr.toList x -> ArrSet arr.toList y ->
   YjsLt' (A := A) x y ->
@@ -835,7 +417,7 @@ lemma YjsLt'_findPtrIdx_lt (i j : ℤ) (x y : YjsPtr A) (arr : Array (YjsItem A)
           simp
           subst hgetElemLeft
           subst hgetElemRight
-          apply getElem_YjsLt'_index_lt _ _ _ hinv _ _ hlt
+          apply getElem_YjsLt'_idx_lt _ _ _ hinv _ _ hlt
 
 theorem YjsLeq'_findPtrIdx_leq (i j : ℤ) (x y : YjsPtr A) (arr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList ->
@@ -854,85 +436,7 @@ theorem YjsLeq'_findPtrIdx_leq (i j : ℤ) (x y : YjsPtr A) (arr : Array (YjsIte
     simp
   | inr hlt =>
     suffices h : i < j by omega
-    apply YjsLt'_findPtrIdx_lt _ _ _ _ _ hinv harrx harry hlt hleft hright
-
-omit [DecidableEq A] in theorem YjsArrayInvariant_lt_neq (arr : Array (YjsItem A)) (i j : Nat) :
-  YjsArrInvariant arr.toList ->
-  (hilt : i < arr.size) ->
-  (hjlt : j < arr.size) ->
-  i < j ->
-  arr[i] ≠ arr[j] := by
-  intros hinv hilt hjlt hij
-  apply idx_lt_pairwise (P := fun x y => x ≠ y) arr.toList i j hinv.unique hij hilt hjlt
-
-theorem findPtrIdx_getElem (arr : Array (YjsItem A)) (i :  ℕ) :
-  YjsArrInvariant arr.toList ->
-  (hlt : i < arr.size) ->
-  findPtrIdx arr[i] arr = Except.ok ↑i := by
-  intros hinv hlt
-  simp [findPtrIdx]
-  suffices Array.findIdx? (fun x => x = arr[i]) arr = some i by
-    rw [this]
-    eq_refl
-  rw [Array.findIdx?_eq_some_iff_getElem]
-  constructor
-  constructor
-  . simp
-  . intros j hij heq
-    apply YjsArrayInvariant_lt_neq arr j i hinv (by omega) hlt hij (by simp at heq; assumption)
-  . assumption
-
-
-theorem findPtrIdx_ge_minus_1 {arr : Array (YjsItem A)} (item : YjsPtr A) :
-  findPtrIdx item arr = Except.ok idx
-  -> idx ≥ -1 := by
-  intros hfind
-  unfold findPtrIdx at hfind
-  cases item with
-  | first =>
-    simp at hfind
-    cases hfind
-    simp
-  | last =>
-    simp at hfind
-    cases hfind
-    omega
-  | itemPtr item =>
-    simp at hfind
-    generalize heq : Array.findIdx? (fun i => decide (i = item)) arr = idx at hfind
-    cases idx with
-    | none =>
-      cases hfind
-    | some idx =>
-      cases hfind
-      omega
-
-theorem findPtrIdx_le_size {arr : Array (YjsItem A)} (item : YjsPtr A) :
-  findPtrIdx item arr = Except.ok idx
-  -> idx ≤ arr.size := by
-  intros hfind
-  unfold findPtrIdx at hfind
-  cases item with
-  | first =>
-    simp at hfind
-    cases hfind
-    omega
-  | last =>
-    simp at hfind
-    cases hfind
-    simp
-  | itemPtr item =>
-    simp at hfind
-    generalize heq : Array.findIdx? (fun i => decide (i = item)) arr = idx at hfind
-    cases idx with
-    | none =>
-      cases hfind
-    | some idx =>
-      cases hfind
-      rw [Array.findIdx?_eq_some_iff_findIdx_eq] at heq
-      obtain ⟨ _, _ ⟩ := heq
-      simp
-      omega
+    apply YjsLt'_findPtrIdx_idx_lt _ _ _ _ _ hinv harrx harry hlt hleft hright
 
 theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other newItem : YjsItem A} :
   (∀i, i ∈ arr → i ∈ ls) ->
@@ -988,3 +492,31 @@ theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other ne
       subst no
       apply YjsLt'.ltConflict
       apply ConflictLt'.ltOriginSame <;> try assumption
+
+lemma findPtrIdx_lt_size_getElem {p : YjsPtr A} :
+  findPtrIdx p arr = Except.ok idx →
+  0 ≤ idx ->
+  (h : idx.toNat < arr.size) →
+  arr[idx.toNat] = p := by
+  intros hfind hlt hsize
+  unfold findPtrIdx at hfind
+  cases p with
+  | first =>
+    simp at hfind
+    cases hfind
+    omega
+  | last =>
+    simp at hfind
+    cases hfind
+    omega
+  | itemPtr p =>
+    simp at hfind
+    generalize heq : Array.findIdx? (fun i => decide (i = p)) arr = idxOpt at hfind
+    cases idxOpt <;> cases hfind
+    rw [Array.findIdx?_eq_some_iff_getElem] at heq
+    obtain ⟨ h, heq, _ ⟩ := heq
+    simp at heq
+    subst p
+    simp
+
+end FindPtrIdx

@@ -128,3 +128,20 @@ theorem not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @
     | ltOriginOrder _ _ hlt =>
       assumption
   cases h with
+
+theorem ItemSetInvariant.eq_set {A} (P Q : ItemSet A) :
+  IsClosedItemSet P →
+  ItemSetInvariant P →
+  (∀ x, P x ↔ Q x) →
+  ItemSetInvariant Q := by
+  intros hPclosed hP hiff
+  constructor
+  · intros o r c id hq
+    rw [<-hiff] at *
+    apply hP.origin_not_leq <;> assumption
+  · intros o r c id x hq hreachable
+    rw [<-hiff] at *
+    apply hP.origin_nearest_reachable <;> assumption
+  · intros x y hx hy hneq hid
+    rw [<-hiff] at *
+    apply hP.same_id_ordered <;> assumption

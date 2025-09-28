@@ -57,3 +57,27 @@ theorem List.Pairwise_weaken {A : Type} {R Q : A -> A -> Prop} [DecidableEq A] (
   apply hweak
   apply hpair
   assumption
+
+theorem List.Pairwise_idx_lt_p {α} {P : α -> α -> Prop} (xs : List α) (i j : Nat) :
+  List.Pairwise (fun (x y : α) => P x y) xs ->
+  i < j ->
+  (hlt_x : i < xs.length) ->
+  (hlt_y : j < xs.length) ->
+  P (xs[i]) (xs[j]) := by
+  revert i j
+  induction xs with
+  | nil =>
+    intros i j hpair hlt_ij hlt_x hlt_y
+    simp [List.length] at hlt_x
+  | cons x xs ih =>
+    intros i j hpair hlt_ij hlt_x hlt_y
+    simp at *
+    cases i <;> cases j <;> try omega
+    . simp
+      obtain ⟨ h, _ ⟩ := hpair
+      apply h; simp
+    . simp
+      apply ih
+      . obtain ⟨ _, hpair ⟩ := hpair
+        apply hpair
+      . omega
