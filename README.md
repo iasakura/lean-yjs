@@ -30,6 +30,3 @@ For detailed technical information about the formalization, see [TECHNICAL.md](T
 - [Reference CRDT Implementations](https://github.com/josephg/reference-crdts)
 - [Lean 4 Manual](https://leanprover.github.io/lean4/doc/)
 
-## License
-
-MIT
