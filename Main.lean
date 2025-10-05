@@ -53,7 +53,6 @@ def applyInsert (state : ClientState) (clientId index : Nat) (char : Char) : Exc
     Except.error (renderIntegrateError err)
 
 def applySync (state : ClientState) (src dst : Nat) : Except String ClientState := do
-  let _ : DecidableEq Item := @instDecidableEqYjsItem _ instDecidableEqChar
   let fromDoc := state.getD src YString.new
   let target := state.getD dst YString.new
   let initial := target.contents

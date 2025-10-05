@@ -159,7 +159,7 @@ theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
           apply YjsLt.ltRightOrigin <;> assumption
         | inr hltxyr =>
           have hleq : (∃ h, YjsLeq h (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)) xo) ∨
-  ∃ h, YjsLt h xo (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)) := by
+            ∃ h, YjsLt h xo (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)) := by
             apply ih ((YjsPtr.itemPtr (YjsItem.item yo yr yid yc)).size + xo.size) _ _ _ hy hxo _ <;> try assumption
             . simp [YjsPtr.size, YjsItem.size] at *
               omega
@@ -173,7 +173,7 @@ theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
             apply YjsLt.ltOrigin <;> assumption
           | inr hltxoy =>
             have hleq : (∃ h, YjsLeq h xr (YjsPtr.itemPtr (YjsItem.item yo yr yid yc))) ∨
-  ∃ h, YjsLt h (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)) xr := by
+              ∃ h, YjsLt h (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)) xr := by
               apply ih (xr.size + (YjsPtr.itemPtr (YjsItem.item yo yr yid yc)).size) <;> try assumption
               . simp [YjsPtr.size, YjsItem.size] at *
                 omega
@@ -237,7 +237,10 @@ theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
                       apply ConflictLt.ltOriginSame <;> try assumption
                     | inr heq =>
                       rw [<-heqx, <-heqy, heq]
-                      have heqneq : (YjsItem.item xo xr yid xc) = (YjsItem.item xo yr yid yc) ∨ (YjsItem.item xo xr yid xc) ≠ (YjsItem.item xo yr yid yc) := by apply yjsItem_decidable_eq
+                      have heqneq : (YjsItem.item xo xr yid xc) = (YjsItem.item xo yr yid yc) ∨ (YjsItem.item xo xr yid xc) ≠ (YjsItem.item xo yr yid yc) := by
+                        cases (inferInstance : Decidable (YjsItem.item xo xr yid xc = YjsItem.item xo yr yid yc)) with
+                        | isTrue _ => left; assumption
+                        | isFalse _ => right; assumption
                       cases heqneq with
                       | inl heq =>
                         left

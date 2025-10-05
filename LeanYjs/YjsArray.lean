@@ -373,10 +373,10 @@ theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
 
       have heq : x = y := by
         have hlt1 : x = y ∨ YjsLt' (A := A) y x := by
-          cases yjsItem_decidable_eq A x y with
-          | inl heq =>
+          cases (inferInstance : Decidable (x = y)) with
+          | isTrue heq =>
             left; assumption
-          | inr hneq =>
+          | isFalse hneq =>
             obtain ⟨ hinx, _ ⟩ := hseteq x
             have hinx : x = y ∨ x ∈ ys:= by
               simp [ArrSet] at hinx
@@ -392,10 +392,10 @@ theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
               assumption
 
         have hlt2 : x = y ∨ YjsLt' (A := A) x y := by
-          cases yjsItem_decidable_eq A x y with
-          | inl heq =>
+          cases (inferInstance : Decidable (x = y)) with
+          | isTrue heq =>
             subst heq; left; eq_refl
-          | inr hneq =>
+          | isFalse hneq =>
             obtain ⟨ _, hinx ⟩ := hseteq y
             have hiny : y = x ∨ y ∈ xs:= by
               simp [ArrSet] at hinx

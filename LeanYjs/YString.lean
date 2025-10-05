@@ -2,7 +2,7 @@ import LeanYjs.Item
 import LeanYjs.ClientId
 import LeanYjs.Integrate
 
-def Item := YjsItem Char
+abbrev Item := YjsItem Char
 structure YString : Type where
   contents : Array Item
 
