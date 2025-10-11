@@ -1,0 +1,81 @@
+% YjsLt derivation rules (standalone includable snippet)
+% Assumes amsmath/mathtools are available from the main paper.
+
+% Notation helpers
+\providecommand{\first}{\mathsf{first}}
+\providecommand{\last}{\mathsf{last}}
+\providecommand{\itemptr}[4]{\mathsf{item}(#1,#2,#3,#4)} % (o,r,id,c)
+% Compact relations: x <_o y (origin order), x <_c y (conflict order)
+\newcommand{\lto}{\mathrel{<_{\!o}}}
+\newcommand{\ltc}{\mathrel{<_{\!c}}}
+
+% Judgment forms
+\newcommand{\ltjudg}[4]{#1,\; #2 \vdash #3 < #4}
+\newcommand{\ltcjudg}[4]{#1,\; #2 \vdash #3 \, \ltc \, #4}
+\newcommand{\leqjudg}[4]{#1,\; #2 \vdash #3 \le #4}
+
+% We now use mathpartir's \inferrule* so no custom \Rule is needed.
+
+% Utility
+\providecommand{\maxfour}[4]{\max(#1,#2,#3,#4)}
+
+% --- Base ordering between special pointers and items ---
+% Encodes Lean's OriginLt as <_o with three axioms
+\begin{mathpar}
+  \inferrule*[right=Origin-First]{}{\first \, \lto \, \itemptr{o}{r}{\mathit{id}}{c}}
+  \and
+  \inferrule*[right=Origin-Last]{}{\itemptr{o}{r}{\mathit{id}}{c} \, \lto \, \last}
+  \and
+  \inferrule*[right=Origin-FL]{}{\first \, \lto \, \last}
+\end{mathpar}
+
+% --- Main strict order: N, P ⊢ x < y ---
+% Place Lt-OriginOrder and Lt-Conflict side-by-side and centered
+\begin{mathpar}
+  \inferrule*[right=Lt-OriginOrder]{x\in P \\ y\in P \\ x \, \lto \, y}{\ltjudg{0}{P}{x}{y}}
+  \and
+  \inferrule*[right=Lt-Conflict]{\ltcjudg{N}{P}{x}{y}}{\ltjudg{N+1}{P}{x}{y}}
+\end{mathpar}
+
+% Left/right-origin propagation (stacked vertically to avoid overflow; centered)
+\[
+  \inferrule*[right=Lt-LeftOrigin]{\itemptr{o}{r}{\mathit{id}}{c}\in P \\ \leqjudg{N}{P}{x}{o}}{\ltjudg{N+1}{P}{x}{\itemptr{o}{r}{\mathit{id}}{c}}}
+\]
+\[
+  \inferrule*[right=Lt-RightOrigin]{\itemptr{o}{r}{\mathit{id}}{c}\in P \\ \leqjudg{N}{P}{r}{x}}{\ltjudg{N+1}{P}{\itemptr{o}{r}{\mathit{id}}{c}}{x}}
+\]
+
+% --- Non-strict order: N, P ⊢ x ≤ y ---
+% Lean: YjsLeq P N x y (place side-by-side and centered)
+\begin{mathpar}
+  \inferrule*[right=Leq-Refl]{x\in P}{\leqjudg{N}{P}{x}{x}}
+  \and
+  \inferrule*[right=Leq-FromLt]{\ltjudg{N}{P}{x}{y}}{\leqjudg{N+1}{P}{x}{y}}
+\end{mathpar}
+
+% --- Conflict ordering between concurrent inserts (<_c) ---
+% Lean: ConflictLt P N i1 i2
+% Different left-origins
+\[
+  \inferrule*[right=Conf-OriginDiff]{
+    \ltjudg{N_1}{P}{\ell_2}{\ell_1} \\
+    \ltjudg{N_2}{P}{\itemptr{\ell_1}{r_1}{\mathit{id}_1}{c_1}}{r_2} \\
+    \ltjudg{N_3}{P}{\ell_1}{\itemptr{\ell_2}{r_2}{\mathit{id}_2}{c_2}} \\
+    \ltjudg{N_4}{P}{\itemptr{\ell_2}{r_2}{\mathit{id}_2}{c_2}}{r_1}
+  }{\ltcjudg{\bigl(\maxfour{N_1}{N_2}{N_3}{N_4}+1\bigr)}{P}{\itemptr{\ell_1}{r_1}{\mathit{id}_1}{c_1}}{\itemptr{\ell_2}{r_2}{\mathit{id}_2}{c_2}}}
+\]
+
+% Same left-origin: tie-break by increasing id
+\[
+  \inferrule*[right=Conf-OriginSame]{
+    \ltjudg{N_1}{P}{\itemptr{\ell}{r_1}{\mathit{id}_1}{c_1}}{r_2} \\
+    \ltjudg{N_2}{P}{\itemptr{\ell}{r_2}{\mathit{id}_2}{c_2}}{r_1} \\
+    \mathit{id}_1 < \mathit{id}_2
+  }{\ltcjudg{\bigl(\max(N_1,N_2)+1\bigr)}{P}{\itemptr{\ell}{r_1}{\mathit{id}_1}{c_1}}{\itemptr{\ell}{r_2}{\mathit{id}_2}{c_2}}}
+\]
+
+% Notes:
+% - P is an ItemSet; we write x∈P as membership (Lean: P x).
+% - N is a stratification index mirroring the Lean constructors; it
+%   enables well-founded recursion and does not affect the semantic order.
+% - first/last are the sentinel pointers; items carry (origin, rightOrigin, id, content).

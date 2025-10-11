@@ -1,0 +1,115 @@
+% LeanYjs paper scaffold
+\documentclass[11pt]{article}
+
+% Encoding and language basics (kept simple for portability)
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+
+% Math and symbols
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+
+% Layout and graphics
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{microtype}
+
+% Lists and tables
+\usepackage{enumitem}
+\usepackage{booktabs}
+
+% Hyperlinks and clever refs
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue,
+  pdftitle={Lean-Yjs: Placeholder Title},
+  pdfauthor={Your Name}
+}
+\usepackage[nameinlink,capitalize]{cleveref}
+
+% Citations via natbib + BibTeX (arXiv-friendly)
+\usepackage[square,sort,comma,numbers]{natbib}
+
+% Code listings (no external deps like minted/pygmentize)
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\small,
+  numbers=left,
+  numberstyle=\scriptsize, 
+  numbersep=8pt,
+  showstringspaces=false,
+  keywordstyle=\color{blue!70!black},
+  commentstyle=\color{green!40!black},
+  stringstyle=\color{orange!60!black},
+  frame=single,
+  framerule=0.3pt,
+  breaklines=true
+}
+
+% Theorem environments
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% User macros
+\newcommand{\Lean}{\textsf{Lean}}  % example macro
+\newcommand{\Yjs}{\textsf{Yjs}}
+
+\title{Lean-Yjs: Formalizing Yjs Item Order in Lean}
+\author{Your Name}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This is a minimal scaffold for a paper accompanying the Lean-Yjs project. Replace this abstract with your own.
+\end{abstract}
+
+\section{Introduction}
+Briefly introduce collaborative editing CRDTs, the \Yjs{} data model, and the motivation for formal verification in \Lean{}.
+
+\paragraph{Contributions.} List key contributions, e.g., a formal item order, totality/antisymmetry/transitivity proofs, and an integration invariant.
+
+\section{Background}
+Summarize the YATA lineage and how \Yjs{} differs (e.g., right-origin tie-breaking). Cite prior work \citep{yata}.
+
+\section{Item Order}
+Define the item order used by \Yjs{}, its edge-cases, and how it deviates from simplified presentations.
+
+\begin{definition}[Item order]
+Provide a crisp, math-level definition consistent with the mechanized version.
+\end{definition}
+
+\begin{theorem}[Totality]
+State and sketch proof ideas. Refer to mechanized proof scripts.
+\end{theorem}
+
+\section{Integration Invariant}
+Describe the loop invariant guaranteeing that inserts preserve structure.
+
+\section{Evaluation}
+Optional: discuss scale of proofs, proof engineering choices, and limitations.
+
+\section{Related Work}
+Place the result among CRDT verification efforts and editor concurrency.
+
+\section{Conclusion}
+Summarize findings and potential future directions.
+
+\paragraph{Artifacts.} Repository: \url{https://github.com/iasakura/lean-yjs}.
+
+\bibliographystyle{unsrtnat}
+\bibliography{refs}
+
+\end{document}
+
