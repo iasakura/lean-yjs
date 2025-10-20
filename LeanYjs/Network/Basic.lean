@@ -53,6 +53,11 @@ structure YjsOperationNetwork A [DecidableEq A] [Message A] extends CausalNetwor
   histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.id = i
   histories_InsertOk : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
     interpHistory hist1 = Except.ok array → InsertOk array e
+  -- This assumption is not assumed in the paper, but it is necessary for the ensuring total order of Yjs items and for my proof.
+  -- It is also a reasonable assumption because in a real Yjs implementation, a client would apply item same time at the time of creation of the item by library API (e.g., insert).
+  histories_deliver_broadcast_ordered : forall e1 e2 i,
+    locallyOrdered this i (Event.Broadcast e1) (Event.Broadcast e2) →
+    locallyOrdered this i (Event.Deliver e1) (Event.Broadcast e2)
 
 theorem YjsOperationNetwork_converge : forall {A} [DecidableEq A] [Message A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : Array (YjsItem A)),
   let hist_i := network.toNodeHistories.histories i
