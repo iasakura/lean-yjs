@@ -1,6 +1,10 @@
+import Mathlib.Data.Nat.Basic
 import Mathlib.Order.Defs.PartialOrder
+import Mathlib.Tactic.ApplyAt
+import Mathlib.Tactic.Use
+import Mathlib.Tactic.CongrExclamation
 
-import LeanYjs.Network.Basic
+-- import LeanYjs.Network.Basic
 
 abbrev CausalOrder A := PartialOrder A
 
@@ -137,7 +141,6 @@ omit [Operation A] in theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : 
         simp
       | inr h_mem_tail =>
         apply ih h_consistent_tail h_mem_tail
-
 
 theorem hb_concurrent_foldr {ops₀ ops₁ : List A} :
   concurrent_commutative hb (ops₀ ++ a :: ops₁) →

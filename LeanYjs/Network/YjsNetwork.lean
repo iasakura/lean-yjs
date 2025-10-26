@@ -1,52 +1,20 @@
-import Init.Data.List
-
-import LeanYjs.ClientId
 import LeanYjs.Item
+import LeanYjs.Integrate
 import LeanYjs.IntegrateProof
+import LeanYjs.Network.CausalNetwork
+import LeanYjs.Network.CausalOrder
 
-namespace Network
+section YjsNetwork
 
-class Message (A : Type) where
-  messageId : A → String
-
-inductive Event (A : Type) : Type where
-  | Broadcast : A → Event A
-  | Deliver : A → Event A
-  deriving Inhabited, Repr, BEq, DecidableEq, Hashable
-
-def Event.id {A} [Message A] : Event A → String
-  | Event.Broadcast a => Message.messageId a
-  | Event.Deliver a => Message.messageId a
-
-structure NodeHistories (E : Type) where
-  histories : ClientId → List E
-  event_distinct : forall i, (histories i).Nodup
-
-def locallyOrdered {E} [DecidableEq E] (histories : NodeHistories E) (i : ClientId) (e1 e2 : E) : Prop :=
-  e1 ∈ histories.histories i ∧ e2 ∈ histories.histories i ∧
-  (histories.histories i).idxOf? e1 < (histories.histories i).idxOf? e2
-
-structure NetworkBase A [DecidableEq A] [Message A] extends NodeHistories (Event A) where
-  deliver_has_a_cause : forall {i e}, Event.Deliver e ∈ histories i → ∃ j, Event.Broadcast e ∈ histories j
-  deliver_locally : forall {i e}, Event.Deliver e ∈ histories i →
-    locallyOrdered toNodeHistories i (Event.Broadcast e) (Event.Deliver e)
-  msg_id_unique : forall {mi mj i j}, Event.Broadcast mi ∈ histories i → Event.Broadcast mj ∈ histories j → Message.messageId mi = Message.messageId mj → i = j ∧ mi = mj
-
-inductive HappensBefore {A} [DecidableEq A] [Message A] (network : NetworkBase A) : A → A → Prop
-  | broadcast_broadcast_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) → HappensBefore network e1 e2
-  | broadcast_deliver_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Deliver e2) → HappensBefore network e1 e2
-  | trans : HappensBefore network e1 e2 → HappensBefore network e2 e3 → HappensBefore network e1 e3
-
-structure CausalNetwork A [DecidableEq A] [Message A] extends NetworkBase A where
-  causal_delivery : forall {i e1 e2}, Event.Deliver e2 ∈ histories i → HappensBefore toNetworkBase e1 e2 → locallyOrdered toNodeHistories i (Event.Deliver e1) (Event.Deliver e2)
-  -- This assumption is not assumed in the paper, but it is necessary for the ensuring total order of Yjs items and for my proof.
-  -- It is also a reasonable assumption because in a real Yjs implementation, a client would apply item same time at the time of creation of the item by library API (e.g., insert).
-  histories_deliver_broadcast_ordered : forall (e1 e2 : A) i,
-    locallyOrdered toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) →
-    locallyOrdered toNodeHistories i (Event.Deliver e1) (Event.Broadcast e2)
+open Network
 
 instance [Message A]: Message (YjsItem A) where
   messageId item := Message.messageId item.content
+
+instance [DecidableEq A] : Operation (YjsItem A) where
+  State := Array (YjsItem A)
+  Error := IntegrateError
+  effect item state := integrate item state
 
 def interpOps {A} [DecidableEq A] [Message A] (items : List (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) :=
   List.foldlM (init := #[]) (f := fun acc item => integrate item acc) items
@@ -109,4 +77,4 @@ theorem YjsOperationNetwork_converge : forall {A} [DecidableEq A] [Message A] (n
     | cons ev_j hist_j_tail =>
       sorry
 
-end Network
+end YjsNetwork
