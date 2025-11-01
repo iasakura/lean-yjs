@@ -1,6 +1,7 @@
 import Init.Data
 import Init.Data.List.Basic
 
+import LeanYjs.ListLemmas
 import LeanYjs.ClientId
 import LeanYjs.Network.CausalOrder
 
@@ -195,129 +196,10 @@ theorem hb_consistent_local_history i :
   simp
 end OperationNetwork
 
-
-theorem List.filterMap_getElem? : forall {A B} (f : A → Option B) (l : List A) (i : Nat),
-  (i < (l.filterMap f).length) →
-  ∃ a, a ∈ l ∧ f a = (l.filterMap f)[i]? := by
-  intros A B f l i hlt
-  generalize h_l_filterMap : l.filterMap f = l' at *
-  induction l generalizing l' i with
-  | nil =>
-    simp [List.filterMap] at h_l_filterMap
-    subst l'; simp at hlt
-  | cons a l ih =>
-    simp [List.filterMap_cons] at h_l_filterMap
-    generalize h_f_a : f a = fa at h_l_filterMap
-    cases fa with
-    | none =>
-      simp at h_l_filterMap
-      have ⟨a, h_a_mem, h_a ⟩ : ∃a ∈ l, f a = l'[i]? := by
-        apply ih _ _ h_l_filterMap
-        assumption
-      use a
-      constructor
-      . simp; right; assumption
-      . assumption
-    | some b =>
-      simp at h_l_filterMap
-      cases h_l_filterMap
-      simp at hlt
-      cases i with
-      | zero =>
-        use a
-        rw [h_f_a]
-        simp
-      | succ i =>
-        simp at hlt
-        have ⟨ a, h_mem, h_ih ⟩ : ∃ a ∈ l, f a = (List.filterMap f l)[i]? := by
-          apply ih i (List.filterMap f l) _ hlt; simp
-        use a; simp
-        constructor;
-        . right; assumption
-        . assumption
-
-theorem List.filterMap_getElem_index : forall {A B} (f : A → Option B) (l : List A),
-  ∃map : Nat → Nat,
-    (∀i, i < (List.filterMap f l).length → ∃ x, (List.filterMap f l)[i]? = f x ∧ l[map i]? = some x) ∧
-    (∀i j, i < (List.filterMap f l).length → j < (List.filterMap f l).length →
-      map i = map j → i = j) := by
-  intros A B f l
-  induction l with
-  | nil =>
-    use fun _ => 0
-    constructor
-    . intros i hlt
-      simp at hlt
-    . intros i j hlt_i hlt_j h_eq
-      simp at hlt_i
-  | cons a l ih =>
-    obtain ⟨ map, h_map_eq, h_map_inj ⟩ := ih
-    simp [List.filterMap_cons]
-    generalize h_f_a : f a = fa at *
-    cases fa with
-    | none =>
-      use (fun x => map x + 1)
-      simp
-      constructor
-      . intros i hlt
-        specialize h_map_eq i hlt
-        obtain ⟨ x, h_f_x, h_l_map_i ⟩ := h_map_eq
-        use x
-      . apply h_map_inj
-    | some b =>
-      simp
-      use fun x =>
-        if x = 0 then 0 else map (x - 1) + 1
-      constructor
-      . intros i hlt
-        cases i with
-        | zero =>
-          use a
-          rw [h_f_a]
-          simp
-        | succ i =>
-          specialize h_map_eq i (by omega)
-          obtain ⟨ x, h_f_x, h_l_map_i ⟩ := h_map_eq
-          use x
-          constructor
-          . assumption
-          . assumption
-      . intros i j hlt_i hlt_j h_eq
-        cases i with
-        | zero =>
-          cases j with
-          | zero =>
-            rfl
-          | succ j =>
-            simp at h_eq
-        | succ i =>
-          cases j with
-          | zero =>
-            simp at h_eq
-          | succ j =>
-            simp at h_eq
-            apply h_map_inj at h_eq
-            . omega
-            . omega
-            . omega
-
-theorem getElem_eq_iff_getElem?_eq (l : List A) (i j : Nat) (hlt_i : i < l.length) (hlt_j : j < l.length) :
-  l[i] = l[j] ↔ l[i]? = l[j]? := by
-  constructor
-  . intros h_eq
-    rw [List.getElem_eq_iff] at h_eq
-    rw [h_eq]
-    simp
-  . intros h_eq
-    rw [List.getElem?_eq_getElem hlt_i] at h_eq
-    rw [List.getElem?_eq_getElem hlt_j] at h_eq
-    simp at h_eq
-    assumption
-
 theorem toDeliverMessages_Nodup [DecidableEq A] [Message A] (network : CausalNetwork A) : (network.toDeliverMessages i).Nodup := by
   rw [List.nodup_iff_pairwise_ne, List.pairwise_iff_getElem]
   intros idx1 idx2 h_idx1_lt_length h_idx2_lt_length h_idx1_lt_idx2 h_eq
-  rw [getElem_eq_iff_getElem?_eq] at h_eq
+  rw [List.getElem_eq_iff_getElem?_eq] at h_eq
   let f := fun ev =>
     match ev with
     | Event.Deliver a => some $ CausalNetworkElem.mk (network := network) a
@@ -380,7 +262,7 @@ theorem toDeliverMessages_Nodup [DecidableEq A] [Message A] (network : CausalNet
   | inl h_idx1'_lt_idx2' =>
     obtain h_neq := h_pairwise idx1' idx2' h_map_idx1_lt_length h_map_idx2_lt_length h_idx1'_lt_idx2'
     apply h_neq
-    rw [getElem_eq_iff_getElem?_eq]
+    rw [List.getElem_eq_iff_getElem?_eq]
     rw [h_a_eq, h_b_eq, h_a_eq_b]
   | inr h_idx1'_ge_idx2' =>
     have h_idx'_le_idx2' : idx1' > idx2' ∨ idx1' = idx2' := by omega
@@ -388,7 +270,7 @@ theorem toDeliverMessages_Nodup [DecidableEq A] [Message A] (network : CausalNet
     | inl h_idx1'_lt_idx2' =>
       obtain h_neq := h_pairwise idx2' idx1' h_map_idx2_lt_length h_map_idx1_lt_length h_idx1'_lt_idx2'
       apply h_neq
-      rw [getElem_eq_iff_getElem?_eq]
+      rw [List.getElem_eq_iff_getElem?_eq]
       rw [h_b_eq, h_a_eq, h_a_eq_b]
     | inr h_idx1'_eq_idx2' =>
       subst h_a_eq_b
