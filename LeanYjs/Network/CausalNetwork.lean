@@ -89,6 +89,12 @@ section OperationNetwork
 variable [Operation A] [Message A] [DecidableEq A]
 variable (network : CausalNetwork A)
 
+instance [Operation A] : Operation (CausalNetworkElem A network) where
+  State := Operation.State A
+  Error := Operation.Error A
+  effect (a : CausalNetworkElem A network) : Operation.State A → Except (Operation.Error A) (Operation.State A) :=
+    Operation.effect a.elem
+
 def CausalNetwork.toDeliverMessages (network : CausalNetwork A) (i : ClientId) : List (CausalNetworkElem A network) :=
   network.toNodeHistories.histories i |>.filterMap (fun ev => match ev with
     | Event.Deliver a => some (CausalNetworkElem.mk a)

@@ -22,59 +22,90 @@ def interpOps {A} [DecidableEq A] [Message A] (items : List (YjsItem A)) : Excep
 def interpHistory {A} [DecidableEq A] [Message A] (history : List (Event (YjsItem A))) : Except IntegrateError (Array (YjsItem A)) :=
   interpOps (history.filterMap (fun ev => match ev with | Event.Deliver it => some it | _ => none))
 
+def interpDeliveredOps {A} [DecidableEq A] [Message A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)) : Except IntegrateError (Array (YjsItem A)) :=
+  let deliveredItems := items.map (fun item => item.elem)
+  interpOps deliveredItems
+
 structure YjsOperationNetwork A [DecidableEq A] [Message A] extends CausalNetwork (YjsItem A) where
   histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.id = i
   histories_InsertOk : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
     interpHistory hist1 = Except.ok array → InsertOk array e
 
-theorem YjsOperationNetwork_converge : forall {A} [DecidableEq A] [Message A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : Array (YjsItem A)),
-  let hist_i := network.toNodeHistories.histories i
-  let hist_j := network.toNodeHistories.histories j
-  interpHistory hist_i = Except.ok res₀ →
-  interpHistory hist_j = Except.ok res₁ →
+theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] [Message A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)) (init : Array (YjsItem A)) :
+  List.foldlM (fun acc item => integrate item acc) init (List.map (fun item => item.elem) items) =
+  List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) init := by
+  induction items generalizing init with
+  | nil =>
+    simp
+    eq_refl
+  | cons item items ih =>
+    simp [effect_comp, bind, Except.bind, Operation.effect]
+    generalize h_init' : integrate item.elem init = init' at *
+    cases init' with
+    | error err =>
+      simp
+    | ok state' =>
+      simp
+      rw [ih]
+      eq_refl
+
+theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] [Message A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)),
+  interpDeliveredOps items =
+  List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) #[] := by
+  intros A _ _ network items
+  simp [interpDeliveredOps, interpOps]
+  rw [foldlM_foldr_effect_comp_eq]
+
+theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] [Message A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : Array (YjsItem A)),
+  let hist_i := network.toDeliverMessages i
+  let hist_j := network.toDeliverMessages j
+  interpDeliveredOps hist_i = Except.ok res₀ →
+  interpDeliveredOps hist_j = Except.ok res₁ →
   (∀ item, item ∈ hist_i ↔ item ∈ hist_j) →
   res₀ = res₁
   := by
   intros A _ _ network i j res₀ res₁ hist_i hist_j h_res₀ h_res₁ h_hist_mem
 
-  subst hist_i
-  subst hist_j
+  subst hist_i hist_j
 
-  generalize h_hist_i_eq : network.toNodeHistories.histories i = hist_i at *
-  generalize h_hist_j_eq : network.toNodeHistories.histories j = hist_j at *
+  let hb : CausalOrder (CausalNetworkElem (YjsItem A) network.toCausalNetwork) := inferInstance
+  have h_consistent_i : hb_consistent hb (network.toCausalNetwork.toDeliverMessages i) := by
+    apply hb_consistent_local_history
+  have h_consistent_j : hb_consistent hb (network.toCausalNetwork.toDeliverMessages j) := by
+    apply hb_consistent_local_history
 
-  generalize h_hist_i_len_eq : hist_i.length = len_hist_i at *
+  have h_noDup_i : (network.toCausalNetwork.toDeliverMessages i).Nodup := by
+    sorry
+  have h_noDup_j : (network.toCausalNetwork.toDeliverMessages j).Nodup := by
+    sorry
 
-  revert i j network res₀ res₁ h_res₀ h_res₁ h_hist_mem h_hist_i_eq h_hist_j_eq h_hist_i_len_eq hist_i hist_j
-
-  induction len_hist_i with
-  | zero =>
-    intros i j network res₀ res₁ hist_i h_hist_i_eq h_res₀ hist_j h_hist_j_eq h_res₁ h_hist_mem h_hist_i_len_eq
-    rw [List.length_eq_zero_iff] at h_hist_i_len_eq
-    subst h_hist_i_len_eq
-    cases hist_j with
-    | nil =>
-      simp [interpHistory, interpOps] at h_res₀ h_res₁
-      cases h_res₀
-      cases h_res₁
-      rfl
-    | cons ev hist_j_tail =>
-      simp at h_hist_mem
-      obtain ⟨ h_mem, _ ⟩ := h_hist_mem ev
-      contradiction
-  | succ len_hist_i ih =>
-    intros i j network res₀ res₁ hist_i h_hist_i_eq h_res₀ hist_j h_hist_j_eq h_res₁ h_hist_mem h_hist_i_len_eq
-    have h_hist_i_pos : 0 < hist_i.length := by
-      omega
-    rw [List.length_pos_iff_exists_cons] at h_hist_i_pos
-    replace ⟨ ev_i, hist_i, h_hist_i_eq' ⟩ := h_hist_i_pos
-    subst h_hist_i_eq'
-    cases hist_j with
-    | nil =>
-      simp at h_hist_mem
-      obtain ⟨ h_mem, _ ⟩ := h_hist_mem ev_i
-      contradiction
-    | cons ev_j hist_j_tail =>
+  have h_hist_mem_delivered_messages : ∀ (a : CausalNetworkElem (YjsItem A) network.toCausalNetwork),
+    a ∈ network.toDeliverMessages i ↔ a ∈ network.toDeliverMessages j := by
+      intro a
+      obtain ⟨ a_elem ⟩ := a
+      simp [CausalNetwork.toDeliverMessages]
       sorry
 
+  have h_effectt_eq :
+    (List.map (fun a => Operation.effect a) (network.toCausalNetwork.toDeliverMessages i) |> List.foldr effect_comp (fun s => Except.ok s)) =
+    (List.map (fun a => Operation.effect a) (network.toCausalNetwork.toDeliverMessages j) |> List.foldr effect_comp (fun s => Except.ok s)) := by
+      apply hb_consistent_effect_convergent hb
+        (network.toCausalNetwork.toDeliverMessages i)
+        (network.toCausalNetwork.toDeliverMessages j)
+        (fun s => Except.ok s)
+        h_consistent_i
+        h_consistent_j
+        (by sorry)
+        h_noDup_i
+        h_noDup_j
+        h_hist_mem
+
+  rw [interpDeliveredMessages_foldr_effect_comp_eq] at h_res₀ h_res₁
+
+  have h_res_ok_eq : Except.ok (ε := IntegrateError) res₀ = Except.ok res₁ := by
+    rw [<-h_res₀, <-h_res₁]
+    rw [h_effectt_eq]
+
+  cases h_res_ok_eq
+  simp
 end YjsNetwork
