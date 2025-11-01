@@ -6,7 +6,7 @@ import LeanYjs.Network.CausalOrder
 
 section YjsNetwork
 
-open Network
+open CausalNetwork
 
 instance [Message A]: Message (YjsItem A) where
   messageId item := Message.messageId item.content
@@ -75,9 +75,10 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] [Message A] (
     apply hb_consistent_local_history
 
   have h_noDup_i : (network.toCausalNetwork.toDeliverMessages i).Nodup := by
-    sorry
+    apply CausalNetwork.toDeliverMessages_Nodup
+
   have h_noDup_j : (network.toCausalNetwork.toDeliverMessages j).Nodup := by
-    sorry
+    apply toDeliverMessages_Nodup
 
   have h_hist_mem_delivered_messages : ∀ (a : CausalNetworkElem (YjsItem A) network.toCausalNetwork),
     a ∈ network.toDeliverMessages i ↔ a ∈ network.toDeliverMessages j := by
