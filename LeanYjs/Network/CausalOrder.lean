@@ -211,47 +211,49 @@ by
             . rw [h_ops₁_eq] at h_consistent₁
               assumption
             . simp; right; assumption
-        . subst h_ops₁_eq
-          have h_concurrent : concurrent_commutative hb (ops₁_first ++ a :: ops₁_last) := by
-            sorry
-          have h_a_b_concurrent : hb_concurrent hb a b := by
-            sorry
-          rw [hb_concurrent_foldr hb h_concurrent h_a_concurrent_op₁_first]
-          rw [<-effect_comp_assoc]
-          rw [h_commutative b a]
-          rw [effect_comp_assoc]
-          congr!
-          rw [ih (b :: ops₁_first ++ ops₁_last) init]
+        subst h_ops₁_eq
+        have h_concurrent : concurrent_commutative hb (ops₁_first ++ a :: ops₁_last) := by
+          sorry
+        have h_a_b_concurrent : hb_concurrent hb a b := by
+          sorry
+        rw [hb_concurrent_foldr hb h_concurrent h_a_concurrent_op₁_first]
+        rw [<-effect_comp_assoc]
+        rw [h_commutative b a]
+        rw [effect_comp_assoc]
+        congr!
+        rw [ih (b :: ops₁_first ++ ops₁_last) init]
+        simp
+        . cases h_consistent₀
+          assumption
+        . sorry
+        . intros x y h_x_mem h_ey_mem h_concurrent
+          apply h_commutative
+          simp; right; assumption
+          simp; right; assumption
+          assumption
+        . simp at no_dup₀
+          obtain ⟨ ⟩ := no_dup₀
+          assumption
+        . sorry
+        . intros x
+          constructor
+          . intro h_mem₀
+            have h_mem₀_cons : x ∈ a :: ops₀ := by
+              simp; right; assumption
+            rw [h_mem] at h_mem₀_cons
+            simp at *
+            rcases h_mem₀_cons with h_eq' | ⟨ h | ⟨ h | h ⟩ ⟩
+            . left; assumption
+            . right; left; assumption
+            . subst h; obtain ⟨ h_eq'', _ ⟩ := no_dup₀
+              contradiction
+            . right; right; assumption
+          . sorry
+        . rw [h_mem]
           simp
-          . cases h_consistent₀
-            assumption
-          . sorry
-          . intros x y h_x_mem h_ey_mem h_concurrent
-            apply h_commutative
-            simp; right; assumption
-            simp; right; assumption
-            assumption
-          . simp at no_dup₀
-            obtain ⟨ ⟩ := no_dup₀
-            assumption
-          . sorry
-          . intros x
-            constructor
-            . intro h_mem₀
-              have h_mem₀_cons : x ∈ a :: ops₀ := by
-                simp; right; assumption
-              rw [h_mem] at h_mem₀_cons
-              simp at *
-              rcases h_mem₀_cons with h_eq' | ⟨ h | ⟨ h | h ⟩ ⟩
-              . left; assumption
-              . right; left; assumption
-              . subst h; obtain ⟨ h_eq'', _ ⟩ := no_dup₀
-                contradiction
-              . right; right; assumption
-            . sorry
-          . rw [h_mem]
-            simp
-          . simp
-          . sorry
+        . simp
+        . simp [hb_concurrent] at *
+          obtain ⟨ h_not_le_ab, h_not_le_ba ⟩ := h_a_b_concurrent
+          constructor <;> assumption
 
 end CausalOrder
