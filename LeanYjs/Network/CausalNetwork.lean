@@ -1,11 +1,13 @@
 import Init.Data
 import Init.Data.List.Basic
 
+import Mathlib.Tactic.Cases
+
 import LeanYjs.ListLemmas
 import LeanYjs.ClientId
 import LeanYjs.Network.CausalOrder
 
-namespace CausalNetwork
+namespace NetworkModels
 
 class Message (A : Type) where
   messageId : A → String
@@ -48,6 +50,11 @@ structure CausalNetwork A [DecidableEq A] [Message A] extends NetworkBase A wher
 structure CausalNetworkElem A [DecidableEq A] [Message A] (network : CausalNetwork A) where
   elem : A
 
+lemma HappensBefore_assym [Message A] [DecidableEq A] {network : CausalNetwork A} a b :
+  HappensBefore network.toNetworkBase a b →
+  HappensBefore network.toNetworkBase b a → False := by
+  sorry
+
 instance instCausalNetworkElemCausalOrder [DecidableEq A] [Message A] (network : CausalNetwork A) : CausalOrder (CausalNetworkElem A network) where
   lt a b := HappensBefore network.toNetworkBase a.elem b.elem
   le a b := a = b ∨ HappensBefore network.toNetworkBase a.elem b.elem
@@ -83,10 +90,30 @@ instance instCausalNetworkElemCausalOrder [DecidableEq A] [Message A] (network :
     -- otherwise, if a < a is break down into a < b and b < a and a < b is broadcast_deliver_local, we now have
     -- D(a) <_i B(b) and b < a.
     -- so by causal_delivery, we have D(b) <_i D(a), but it followed by D(b) <_i B(b), it contradicts with deliver_locally.
-    sorry
-  lt_iff_le_not_ge := by sorry
-
-section OperationNetwork
+    apply HappensBefore_assym a.elem b.elem h_ab h_ba
+  lt_iff_le_not_ge := by
+    intros a b
+    constructor
+    . intros h_lt
+      constructor
+      . right; assumption
+      . intro h_ge
+        cases h_ge with
+        | inl h_eq =>
+          subst h_eq
+          apply HappensBefore_assym b.elem b.elem h_lt h_lt
+        | inr h_hb =>
+          apply HappensBefore_assym a.elem b.elem h_lt h_hb
+    . intros h_le_not_ge
+      obtain ⟨ h_le, h_not_ge ⟩ := h_le_not_ge
+      cases h_le with
+      | inr h_hb =>
+        assumption
+      | inl h_eq =>
+        subst a
+        exfalso
+        apply h_not_ge
+        left; simp
 
 variable [Operation A] [Message A] [DecidableEq A]
 variable (network : CausalNetwork A)
@@ -160,41 +187,73 @@ theorem hb_consistent_local_history_aux i ms ms' :
   | nil =>
     simp [hb_consistent.nil]
   | cons h t ih =>
-    conv at h_ms =>
-      lhs
-      rw [List.append_cons]
-      rfl
+    rw [List.append_cons] at h_ms
     apply hb_consistent.cons
     . apply ih (ms ++ [h]) h_ms
     . intros m h_mem h_le
+      have ⟨ t1, t2, h_t_eq ⟩ : ∃ t1 t2, t = t1 ++ [m] ++ t2 := by
+        rw [List.mem_iff_append] at h_mem
+        simp
+        assumption
+      subst h_t_eq
+      replace h_ms : network.toDeliverMessages i =  ms ++ [h] ++ t1 ++ [m] ++ t2 := by
+        rw [←h_ms]
+        simp
+      obtain ⟨ l1, l2, l3, h_history_eq ⟩ := toDeliverMessages_histories network i h_ms
+      have h_locally_ordered : locallyOrdered network.toNodeHistories i (Event.Deliver h.elem) (Event.Deliver m.elem) := by
+        simp [locallyOrdered]
+        use l1, l2, l3
+        rw [h_history_eq]
+        simp
       cases h_le with
       | inr h_lt =>
-        have ⟨ t1, t2, h_t_eq ⟩ : ∃ t1 t2, t = t1 ++ [m] ++ t2 := by
-          rw [List.mem_iff_append] at h_mem
+        apply network.causal_delivery (i := i) at h_lt
+        . -- need locallyOrdered asym, s.t. m < h → h < m → False
+          sorry
+        . rw [h_history_eq]
           simp
-          assumption
-        subst h_t_eq
-        replace h_ms : network.toDeliverMessages i =  ms ++ [h] ++ t1 ++ [m] ++ t2 := by
-          rw [←h_ms]
-          simp
-        obtain ⟨ l1, l2, l3, h_history_eq ⟩ := toDeliverMessages_histories network i h_ms
-        have h_locally_ordered : locallyOrdered network.toNodeHistories i (Event.Deliver h.elem) (Event.Deliver m.elem) := by
-          simp [locallyOrdered]
-          use l1, l2, l3
+      | inl h_eq =>
+        subst h_eq
+        have h_m_idx_eq1 : (network.histories i)[l1.length]? = Event.Deliver m.elem := by
           rw [h_history_eq]
           simp
-        apply network.causal_delivery (i := i) at h_lt
-        . -- need locallyOrdered asym
-          sorry
-        . sorry
-      | inl h_eq =>
-        sorry
+
+        have h_m_idx_eq2 : (network.histories i)[l1.length + 1 + l2.length]? = Event.Deliver m.elem := by
+          rw [h_history_eq]
+          simp
+          rw [List.getElem?_append_right (by omega)]
+          have h_idx_eq : l1.length + 1 + l2.length - l1.length = (l1.length + l2.length - l1.length) + 1 := by omega
+          rw [h_idx_eq]
+          rw [List.getElem?_cons_succ]
+          simp
+
+        rw [List.getElem?_eq_getElem] at h_m_idx_eq1 h_m_idx_eq2
+        . have h_nodup_history := network.event_distinct i
+          rw [List.nodup_iff_pairwise_ne] at h_nodup_history
+          rw [List.pairwise_iff_getElem] at h_nodup_history
+          rw [h_history_eq] at h_nodup_history
+          apply h_nodup_history l1.length (l1.length + 1 + l2.length)
+          . omega
+          . suffices some (l1 ++ [Event.Deliver m.elem] ++ l2 ++ [Event.Deliver m.elem] ++ l3)[l1.length] = some (l1 ++ [Event.Deliver m.elem] ++ l2 ++ [Event.Deliver m.elem] ++ l3)[l1.length + 1 + l2.length] by
+              rw [Option.some_inj] at this
+              assumption
+            rw [<-List.getElem?_eq_getElem]
+            rw [<-List.getElem?_eq_getElem]
+            simp
+            have h_eq : l1.length + 1 + l2.length = l1.length + (l2.length + 1) := by omega
+            rw [h_eq]
+            rw [List.getElem?_append_right (by omega)]
+            simp
+        . rw [h_history_eq]
+          simp
+          omega
+        . rw [h_history_eq]
+          simp
 
 theorem hb_consistent_local_history i :
   hb_consistent (hb := instCausalNetworkElemCausalOrder network) (network.toDeliverMessages i) := by
   apply hb_consistent_local_history_aux network i []
   simp
-end OperationNetwork
 
 theorem toDeliverMessages_Nodup [DecidableEq A] [Message A] (network : CausalNetwork A) : (network.toDeliverMessages i).Nodup := by
   rw [List.nodup_iff_pairwise_ne, List.pairwise_iff_getElem]
@@ -280,4 +339,4 @@ theorem toDeliverMessages_Nodup [DecidableEq A] [Message A] (network : CausalNet
       . assumption
       . assumption
 
-end CausalNetwork
+end NetworkModels

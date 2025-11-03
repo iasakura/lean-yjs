@@ -174,3 +174,34 @@ theorem List.getElem_eq_iff_getElem?_eq (l : List A) (i j : Nat) (hlt_i : i < l.
     rw [List.getElem?_eq_getElem hlt_j] at h_eq
     simp at h_eq
     assumption
+
+theorem List.no_dup_cons_eq (a : A) {ops₀ ops₁ : List A} :
+  (∀ x, x ∈ a :: ops₀ ↔ x ∈ a :: ops₁) →
+  (a :: ops₀).Nodup → (a :: ops₁).Nodup →
+  (∀ x, x ∈ ops₀ ↔ x ∈ ops₁) := by
+  intros h_mem_iff no_dup₀ no_dup₁ x
+  specialize h_mem_iff x
+  simp at h_mem_iff no_dup₀ no_dup₁
+  obtain ⟨ a_not_mem_ops₀, no_dup₀ ⟩ := no_dup₀
+  obtain ⟨ b_not_mem_ops₁, no_dup₁ ⟩ := no_dup₁
+  constructor
+  . intro h_mem_ops₀
+    have h : x = a ∨ x ∈ ops₀ := by
+      right; assumption
+    rw [h_mem_iff] at h
+    cases h with
+    | inl h_eq =>
+      subst h_eq
+      contradiction
+    | inr h_mem_ops₁ =>
+      assumption
+  . intro h_mem_ops₁
+    have h : x = a ∨ x ∈ ops₁ := by
+      right; assumption
+    rw [← h_mem_iff] at h
+    cases h with
+    | inl h_eq =>
+      subst h_eq
+      contradiction
+    | inr h_mem_ops₀ =>
+      assumption

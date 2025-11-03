@@ -80,13 +80,6 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] [Message A] (
   have h_noDup_j : (network.toCausalNetwork.toDeliverMessages j).Nodup := by
     apply toDeliverMessages_Nodup
 
-  have h_hist_mem_delivered_messages : ∀ (a : CausalNetworkElem (YjsItem A) network.toCausalNetwork),
-    a ∈ network.toDeliverMessages i ↔ a ∈ network.toDeliverMessages j := by
-      intro a
-      obtain ⟨ a_elem ⟩ := a
-      simp [CausalNetwork.toDeliverMessages]
-      sorry
-
   have h_effectt_eq :
     (List.map (fun a => Operation.effect a) (network.toCausalNetwork.toDeliverMessages i) |> List.foldr effect_comp (fun s => Except.ok s)) =
     (List.map (fun a => Operation.effect a) (network.toCausalNetwork.toDeliverMessages j) |> List.foldr effect_comp (fun s => Except.ok s)) := by

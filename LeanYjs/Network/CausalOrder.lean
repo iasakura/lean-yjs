@@ -4,6 +4,8 @@ import Mathlib.Tactic.ApplyAt
 import Mathlib.Tactic.Use
 import Mathlib.Tactic.CongrExclamation
 
+import LeanYjs.ListLemmas
+
 -- import LeanYjs.Network.Basic
 
 abbrev CausalOrder A := PartialOrder A
@@ -36,69 +38,12 @@ theorem option_not_lt_same {x : Option ℕ} :
   | some n =>
     simp at h
 
-theorem List.memf_idxOf?_eq_some {a : A} {l : List A} :
-  a ∈ l → ∃ idx, l.idxOf? a = some idx := by
-  induction l with
-  | nil =>
-    simp
-  | cons b l ih =>
-    intro h_mem
-    simp at h_mem
-    cases Decidable.eq_or_ne a b with
-    | inl h_eq =>
-      rw [h_eq]
-      use 0
-      simp [List.idxOf?_cons]
-    | inr h_neq =>
-      have h_mem_tail : a ∈ l := by
-        cases h_mem with
-        | inl => contradiction
-        | inr => assumption
-      specialize ih h_mem_tail
-      obtain ⟨ idx, h_idx ⟩ := ih
-      use idx + 1
-      simp [List.idxOf?_cons, h_idx]
-      intros h_eq
-      subst a
-      contradiction
-
 omit [DecidableEq A] in lemma hb_consistent_tail (a : A) (ops : List A) :
   (h_consistent : hb_consistent hb (a :: ops)) →
   hb_consistent hb ops := by
   intro h_consistent
   cases h_consistent
   assumption
-
-omit [DecidableEq A] theorem no_dup_cons_eq (a : A) {ops₀ ops₁ : List A} :
-  (∀ x, x ∈ a :: ops₀ ↔ x ∈ a :: ops₁) →
-  (a :: ops₀).Nodup → (a :: ops₁).Nodup →
-  (∀ x, x ∈ ops₀ ↔ x ∈ ops₁) := by
-  intros h_mem_iff no_dup₀ no_dup₁ x
-  specialize h_mem_iff x
-  simp at h_mem_iff no_dup₀ no_dup₁
-  obtain ⟨ a_not_mem_ops₀, no_dup₀ ⟩ := no_dup₀
-  obtain ⟨ b_not_mem_ops₁, no_dup₁ ⟩ := no_dup₁
-  constructor
-  . intro h_mem_ops₀
-    have h : x = a ∨ x ∈ ops₀ := by
-      right; assumption
-    rw [h_mem_iff] at h
-    cases h with
-    | inl h_eq =>
-      subst h_eq
-      contradiction
-    | inr h_mem_ops₁ =>
-      assumption
-  . intro h_mem_ops₁
-    have h : x = a ∨ x ∈ ops₁ := by
-      right; assumption
-    rw [← h_mem_iff] at h
-    cases h with
-    | inl h_eq =>
-      subst h_eq
-      contradiction
-    | inr h_mem_ops₀ =>
-      assumption
 
 variable [Operation A]
 
@@ -217,7 +162,7 @@ by
           obtain ⟨ h_no_dup₁ ⟩ := no_dup₁
           assumption
         . subst h_eq
-          apply no_dup_cons_eq _ h_mem no_dup₀ no_dup₁
+          apply List.no_dup_cons_eq _ h_mem no_dup₀ no_dup₁
       . -- Case a ≠ b
         have ⟨ ops₁_first, ops₁_last, h_ops₁_eq ⟩ : ∃ ops₁_first ops₁_last, ops₁ = ops₁_first ++ a :: ops₁_last := by
           have h_a_mem_ops₁ : a ∈ ops₁ := by
