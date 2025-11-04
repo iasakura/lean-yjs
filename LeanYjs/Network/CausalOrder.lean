@@ -22,6 +22,10 @@ variable {A : Type} [DecidableEq A] (hb : CausalOrder A)
 def hb_concurrent (a b : A) : Prop :=
   ¬ (hb.le a b) ∧ ¬ (hb.le b a)
 
+omit [DecidableEq A] in theorem hb_concurrent_symm {a b : A} :
+  hb_concurrent hb a b ↔ hb_concurrent hb b a := by
+  simp [hb_concurrent, and_comm]
+
 inductive hb_consistent : List A → Prop where
   | nil : hb_consistent []
   | cons : ∀ (a : A) (ops : List A),
@@ -178,7 +182,7 @@ by
           assumption
         rw [h_ops₁_eq]
         simp
-        have h_a_concurrent_op₁_first : ∀ x, x ∈ ops₁_first → hb_concurrent hb x a := by
+        have h_a_concurrent_op₁_first : ∀ x, x ∈ b :: ops₁_first → hb_concurrent hb x a := by
           intros x h_mem_ops₁_first
           constructor
           . cases h_consistent₀ with
@@ -186,21 +190,20 @@ by
               apply h_no_lt
               have h_x_in_ops1 : x ∈ b :: ops₁ := by
                 rw [h_ops₁_eq]
-                simp
-                right; left; assumption
+                rw [<-List.cons_append]
+                apply List.mem_append_left
+                assumption
               have x_neq_a : x ≠ a := by
-                intro h_eq'
                 rw [h_ops₁_eq] at no_dup₁
-                rw [List.nodup_cons] at no_dup₁
-                simp at no_dup₁
-                obtain ⟨ _, h_no_dup₁ ⟩ := no_dup₁
-                rw [List.nodup_append] at h_no_dup₁
-                obtain ⟨ _, _, h_no_dup_last ⟩ := h_no_dup₁
-                simp at h_no_dup_last
-                apply h_no_dup_last at h_mem_ops₁_first
-                obtain ⟨ h_eq'', _ ⟩ := h_mem_ops₁_first
-                contradiction
-              rw [← h_mem] at h_x_in_ops1
+                have h_eq' : (b :: (ops₁_first ++ a :: ops₁_last)) = ((b :: ops₁_first) ++ a :: ops₁_last) := by
+                  simp
+                rw [h_eq'] at no_dup₁
+                rw [List.nodup_append] at no_dup₁
+                obtain ⟨ _, _, h_not_a_mem ⟩ := no_dup₁
+                apply h_not_a_mem
+                . assumption
+                . simp
+              rw [←h_mem] at h_x_in_ops1
               simp at h_x_in_ops1
               cases h_x_in_ops1 with
               | inl h_eq' =>
@@ -210,7 +213,7 @@ by
           . apply hb_consistent_concurrent hb a (b :: ops₁_first) ops₁_last
             . rw [h_ops₁_eq] at h_consistent₁
               assumption
-            . simp; right; assumption
+            . assumption
         subst h_ops₁_eq
         -- Here, we have ops₁ = ops₁_first ++ a :: ops₁_last and a || ops₁_first
         have h_concurrent : concurrent_commutative hb (ops₁_first ++ a :: ops₁_last) := by
@@ -222,7 +225,11 @@ by
           . rw [h_mem]; simp
             right; assumption
         have h_a_b_concurrent : hb_concurrent hb a b := by
-          sorry
+          rw [hb_concurrent_symm]
+          apply h_a_concurrent_op₁_first
+          simp
+        have h_a_concurrent_op₁_first : ∀ x, x ∈ ops₁_first → hb_concurrent hb x a := by
+          intros; apply h_a_concurrent_op₁_first; simp; right; assumption
         rw [hb_concurrent_foldr hb h_concurrent h_a_concurrent_op₁_first]
         rw [<-effect_comp_assoc]
         rw [h_commutative b a]
