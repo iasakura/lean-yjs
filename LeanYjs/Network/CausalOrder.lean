@@ -212,8 +212,15 @@ by
               assumption
             . simp; right; assumption
         subst h_ops₁_eq
+        -- Here, we have ops₁ = ops₁_first ++ a :: ops₁_last and a || ops₁_first
         have h_concurrent : concurrent_commutative hb (ops₁_first ++ a :: ops₁_last) := by
-          sorry
+          intros c d h_c_mem h_d_mem h_concurrent
+          simp at h_c_mem h_d_mem
+          apply h_commutative c d _ _ h_concurrent
+          . rw [h_mem]; simp
+            right; assumption
+          . rw [h_mem]; simp
+            right; assumption
         have h_a_b_concurrent : hb_concurrent hb a b := by
           sorry
         rw [hb_concurrent_foldr hb h_concurrent h_a_concurrent_op₁_first]
