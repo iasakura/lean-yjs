@@ -36,7 +36,7 @@ structure NetworkBase A [DecidableEq A] [Message A] extends NodeHistories (Event
 
 inductive HappensBefore {A} [DecidableEq A] [Message A] (network : NetworkBase A) : A → A → Prop
   | broadcast_broadcast_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) → HappensBefore network e1 e2
-  | broadcast_deliver_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Deliver e2) → HappensBefore network e1 e2
+  | broadcast_deliver_local : locallyOrdered network.toNodeHistories i (Event.Deliver e1) (Event.Broadcast e2) → HappensBefore network e1 e2
   | trans : HappensBefore network e1 e2 → HappensBefore network e2 e3 → HappensBefore network e1 e3
 
 structure CausalNetwork A [DecidableEq A] [Message A] extends NetworkBase A where
@@ -50,10 +50,207 @@ structure CausalNetwork A [DecidableEq A] [Message A] extends NetworkBase A wher
 structure CausalNetworkElem A [DecidableEq A] [Message A] (network : CausalNetwork A) where
   elem : A
 
+inductive HappensBeforeOnlyBroadcast {A} [DecidableEq A] [Message A] (network : NetworkBase A) : A → A → Prop
+  | broadcast_broadcast_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) → HappensBeforeOnlyBroadcast network e1 e2
+  | trans : HappensBeforeOnlyBroadcast network e1 e2 → HappensBeforeOnlyBroadcast network e2 e3 → HappensBeforeOnlyBroadcast network e1 e3
+
+abbrev HappensBeforeOrEqual {A} [DecidableEq A] [Message A] (network : NetworkBase A) (a b : A) : Prop :=
+  a = b ∨ HappensBefore network a b
+
+theorem HappensBefore.trans1 {A} [DecidableEq A] [Message A] {network : NetworkBase A} {a b c : A} :
+  HappensBeforeOrEqual network a b →
+  HappensBefore network b c →
+  HappensBefore network a c := by
+  intros h_ab h_bc
+  cases h_ab with
+  | inl h_eq =>
+    subst h_eq
+    assumption
+  | inr h_hb_ab =>
+    apply HappensBefore.trans h_hb_ab h_bc
+
+theorem HappensBefore.trans2 {A} [DecidableEq A] [Message A] {network : NetworkBase A} {a b c : A} :
+  HappensBefore network a b →
+  HappensBeforeOrEqual network b c →
+  HappensBefore network a c := by
+  intros h_ab h_bc
+  cases h_bc with
+  | inl h_eq =>
+    subst h_eq
+    assumption
+  | inr h_hb_bc =>
+    apply HappensBefore.trans h_ab h_hb_bc
+
+theorem HappensBeforeSame_HappensBeforeOnlyBroadcast_or_HappensBeforeDeliver_exists {A} [DecidableEq A] [Message A] {network : CausalNetwork A} (a b : A) :
+  HappensBefore network.toNetworkBase a b →
+  HappensBeforeOnlyBroadcast network.toNetworkBase a b ∨
+  ∃ a' b' i,
+    (HappensBeforeOrEqual network.toNetworkBase a a') ∧
+    locallyOrdered network.toNodeHistories i (Event.Deliver a') (Event.Broadcast b') ∧
+    (HappensBeforeOrEqual network.toNetworkBase b' b) := by
+  intros h_a_hb_a
+  induction h_a_hb_a with
+  | broadcast_broadcast_local h_local =>
+    left
+    apply HappensBeforeOnlyBroadcast.broadcast_broadcast_local h_local
+  | @broadcast_deliver_local i e1 e2 h_local =>
+    right
+    use e1, e2, i
+    simp [HappensBeforeOrEqual]
+    assumption
+  | @trans e1 e2 e3 h_ab h_bc ih_ab ih_bc =>
+    cases ih_ab with
+    | inl h_e2_e2 =>
+      cases ih_bc with
+      | inl h_e3_e3 =>
+        left
+        apply HappensBeforeOnlyBroadcast.trans h_e2_e2 h_e3_e3
+      | inr h_e2_e3 =>
+        obtain ⟨ a', b', i, h_a_e2, h_local, h_b_e3 ⟩ := h_e2_e3
+        right
+        use a', b', i
+        constructor
+        . right
+          apply HappensBefore.trans2 h_ab h_a_e2
+        . constructor
+          . assumption
+          . assumption
+    | inr h_e1_e2 =>
+      obtain ⟨ a', b', i, h_a_e1, h_local, h_b_e2 ⟩ := h_e1_e2
+      right
+      use a', b', i
+      constructor
+      . assumption
+      . constructor
+        . assumption
+        . right
+          apply HappensBefore.trans1 h_b_e2 h_bc
+
+theorem nodup_getElem_unique : forall {A} [DecidableEq A] (l : List A) x idx,
+  l.Nodup →
+  idx < l.length →
+  l[idx]? = some x →
+  ∀ j : Nat, j < l.length → l[j]? = some x → j = idx := by
+  intros A _ l x idx h_nodup h_idx_lt_length h_getElem_eq
+  intros j hlt heq
+  rw [List.nodup_iff_pairwise_ne] at h_nodup
+  rw [List.pairwise_iff_getElem] at h_nodup
+  have h_or : idx < j ∨ idx = j ∨ idx > j := by
+    omega
+  rcases h_or with h_lt | h_eq | h_lt
+  . exfalso
+    apply h_nodup idx j (by omega) (by omega) h_lt
+    rw [List.getElem_eq_iff_getElem?_eq l idx j (by omega), heq, h_getElem_eq]
+  . subst h_eq; simp
+  . exfalso
+    apply h_nodup j idx (by omega) (by omega) (by omega)
+    rw [List.getElem_eq_iff_getElem?_eq l j  idx (by omega), heq, h_getElem_eq]
+
+theorem locallyOrdered_asymm {A} [DecidableEq A] [Message A] {network : NetworkBase A} {i : ClientId} {e1 e2 : Event A} :
+  locallyOrdered network.toNodeHistories i e1 e2 →
+  locallyOrdered network.toNodeHistories i e2 e1 →
+  False := by
+  intros h_e1_e2 h_e2_e1
+  obtain ⟨ l1, l2, l3, h_history_eq1 ⟩ := h_e1_e2
+  obtain ⟨ l1', l2', l3', h_history_eq2 ⟩ := h_e2_e1
+  have h_l1'_1_l2' : l1'.length + 1 + l2'.length = l1.length := by
+    have h_nodup_i := network.toNodeHistories.event_distinct i
+    have h_l1_lt_length : l1.length < (network.histories i).length := by
+      rw [h_history_eq1]
+      simp
+    apply nodup_getElem_unique (network.histories i) e1 l1.length h_nodup_i h_l1_lt_length
+    . rw [h_history_eq1]
+      simp
+    . rw [h_history_eq2]
+      simp
+      omega
+    . rw [h_history_eq2]
+      simp
+      rw [List.getElem?_append_right (by omega)]
+      have h_eq : l1'.length + 1 + l2'.length - l1'.length = l2'.length + 1 := by omega
+      rw [h_eq]
+      rw [List.getElem?_cons_succ]
+      simp
+  have h_l1_1_l2 : l1.length + 1 + l2.length = l1'.length := by
+    have h_nodup_i := network.toNodeHistories.event_distinct i
+    have h_l1'_lt_length : l1'.length < (network.histories i).length := by
+      rw [h_history_eq2]
+      simp
+    apply nodup_getElem_unique (network.histories i) e2 l1'.length h_nodup_i h_l1'_lt_length
+    . rw [h_history_eq2]
+      simp
+    . rw [h_history_eq1]
+      simp
+      omega
+    . rw [h_history_eq1]
+      simp
+      rw [List.getElem?_append_right (by omega)]
+      have h_eq : l1.length + 1 + l2.length - l1.length = l2.length + 1 := by omega
+      rw [h_eq]
+      rw [List.getElem?_cons_succ]
+      simp
+  omega
+
+theorem locallyOrdered_trans {A} [DecidableEq A] [Message A] {network : NetworkBase A} {i : ClientId} {e1 e2 e3 : Event A} :
+  locallyOrdered network.toNodeHistories i e1 e2 →
+  locallyOrdered network.toNodeHistories i e2 e3 →
+  locallyOrdered network.toNodeHistories i e1 e3 := by
+  intros h_e1_e2 h_e2_e3
+  obtain ⟨ l1, l2, l3, h_history_eq1 ⟩ := h_e1_e2
+  obtain ⟨ l1', l2', l3', h_history_eq2 ⟩ := h_e2_e3
+  use l1, (l2 ++ [e2] ++ l2'), l3'
+  have h_length_eq : (l1 ++ [e1] ++ l2).length = l1'.length := by sorry
+  have h_eq : l1' = l1 ++ [e1] ++ l2 := by
+    have h_eq1 : l1 ++ [e1] ++ l2 ++ [e2] ++ l3 = (l1 ++ [e1] ++ l2) ++ ([e2] ++ l3) := by
+      simp
+    have h_eq2 : l1' ++ [e2] ++ l2' ++ [e3] ++ l3' = l1' ++ ([e2] ++ l2' ++ [e3] ++ l3') := by
+      simp
+    rw [h_eq1] at h_history_eq1
+    rw [h_eq2] at h_history_eq2
+    rw [h_history_eq1] at h_history_eq2
+    obtain ⟨ h_eq1, h_eq2 ⟩ := List.append_inj h_history_eq2 h_length_eq
+    subst h_eq1; simp
+  have h_eq' : l1 ++ [e1] ++ (l2 ++ [e2] ++ l2') = l1 ++ [e1] ++ l2 ++ [e2] ++ l2' := by
+    simp
+  rw [h_eq', <-h_eq]
+  assumption
+
+-- suppose a < a
+-- if a < a only consists of broadcast_broadcast_local, then we can conclude a.idx < a.idx, which is a contradiction
+-- otherwise, if a < a is break down into a < b and b < a and a < b is broadcast_deliver_local, we now have
+-- D(a) <_i B(b) and b < a.
+-- so by causal_delivery, we have D(b) <_i D(a), but it followed by D(b) <_i B(b), it contradicts with deliver_locally.
 lemma HappensBefore_assym [Message A] [DecidableEq A] {network : CausalNetwork A} a b :
   HappensBefore network.toNetworkBase a b →
   HappensBefore network.toNetworkBase b a → False := by
-  sorry
+  intros h_ab h_ba
+  have h_aa : HappensBefore network.toNetworkBase a a := by
+    apply HappensBefore.trans h_ab h_ba
+  apply HappensBeforeSame_HappensBeforeOnlyBroadcast_or_HappensBeforeDeliver_exists at h_aa
+  cases h_aa with
+  | inl h_broadcast_only =>
+    sorry
+  | inr h_deliver_exists =>
+    obtain ⟨ a', b', i, h_a_a', h_local, h_b'_a ⟩ := h_deliver_exists
+    have h_mem_deliver_a' : Event.Deliver a' ∈ network.toNetworkBase.histories i := by
+      obtain ⟨ l1, l2, l3, h_history_eq ⟩ := h_local
+      rw [h_history_eq]
+      simp
+    have h_lo_deliver_b_deliver_a : locallyOrdered network.toNodeHistories i (Event.Deliver b') (Event.Deliver a') := by
+      apply network.causal_delivery h_mem_deliver_a'
+      apply HappensBefore.trans1 h_b'_a
+      apply HappensBefore.trans2 h_ab
+      right; apply HappensBefore.trans2 h_ba
+      assumption
+    have h_lo_broadcast_b'_deliver_b' : locallyOrdered network.toNodeHistories i (Event.Broadcast b') (Event.Deliver b') := by
+      have h_mem_deliver_b' : Event.Deliver b' ∈ network.toNetworkBase.histories i := by
+        obtain ⟨ l1, l2, l3, h_history_eq ⟩ := h_lo_deliver_b_deliver_a
+        rw [h_history_eq]
+        simp
+      apply network.deliver_locally h_mem_deliver_b'
+    have h_lo_broadcast_b'_deliver_a' : locallyOrdered network.toNodeHistories i (Event.Broadcast b') (Event.Deliver a') := by
+      apply locallyOrdered_trans h_lo_broadcast_b'_deliver_b' h_lo_deliver_b_deliver_a
+    apply locallyOrdered_asymm h_lo_broadcast_b'_deliver_a' h_local
 
 instance instCausalNetworkElemCausalOrder [DecidableEq A] [Message A] (network : CausalNetwork A) : CausalOrder (CausalNetworkElem A network) where
   lt a b := HappensBefore network.toNetworkBase a.elem b.elem
@@ -85,11 +282,6 @@ instance instCausalNetworkElemCausalOrder [DecidableEq A] [Message A] (network :
           exfalso
           apply this h_hb_ab h_hb_ba
     intros h_ab h_ba
-    -- suppose a < a
-    -- if a < a only consists of broadcast_deliver_local, then we can conclude a.idx < a.idx, which is a contradiction
-    -- otherwise, if a < a is break down into a < b and b < a and a < b is broadcast_deliver_local, we now have
-    -- D(a) <_i B(b) and b < a.
-    -- so by causal_delivery, we have D(b) <_i D(a), but it followed by D(b) <_i B(b), it contradicts with deliver_locally.
     apply HappensBefore_assym a.elem b.elem h_ab h_ba
   lt_iff_le_not_ge := by
     intros a b
