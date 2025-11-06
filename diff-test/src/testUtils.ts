@@ -25,7 +25,7 @@ export type Command = InsertCommand | SyncCommand;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const repoRoot = path.resolve(__dirname, '..');
+export const repoRoot = path.resolve(__dirname, '../..');
 export const leanBinary = path.join(repoRoot, '.lake', 'build', 'bin', 'diff-test-runner');
 
 let buildPromise: Promise<void> | null = null;
