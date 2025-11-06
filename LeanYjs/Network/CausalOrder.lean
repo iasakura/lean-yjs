@@ -6,6 +6,8 @@ import Mathlib.Tactic.CongrExclamation
 
 import LeanYjs.ListLemmas
 
+open List
+
 -- import LeanYjs.Network.Basic
 
 abbrev CausalOrder A := PartialOrder A
@@ -32,6 +34,44 @@ inductive hb_consistent : List A → Prop where
       hb_consistent ops →
       (∀ b, b ∈ ops → ¬ b ≤ a) →
       hb_consistent (a :: ops)
+
+theorem List.sublist_mem {A : Type} {l₁ l₂ : List A} (h_sublist : l₁ <+ l₂) {a : A} :
+  a ∈ l₁ → a ∈ l₂ := by
+  intros h_mem
+  induction h_sublist with
+  | slnil =>
+    assumption
+  | @cons l₁ l₂ x h_sublist ih =>
+    simp
+    right; simp [ih, h_mem]
+  | @cons₂ l₁ l₂ x h_sublist ih =>
+    simp at h_mem |-
+    cases h_mem with
+    | inl h_eq =>
+      left; assumption
+    | inr h_mem =>
+      right; simp [ih, h_mem]
+
+omit [DecidableEq A] in theorem hb_consistent_sublist {ops₀ ops₁ : List A} :
+  hb_consistent hb ops₀ →
+  ops₁ <+ ops₀ →
+  hb_consistent hb ops₁ := by
+  intros h_consistent h_sublist
+  induction h_sublist with
+  | slnil =>
+    assumption
+  | @cons l₁ l₂ x h_sublist ih =>
+    cases h_consistent
+    apply ih; assumption
+  | @cons₂ l₁ l₂ x h_sublist ih =>
+    cases h_consistent with
+    | cons a ops h_consistent_tail h_consistent_h_no_lt =>
+      apply hb_consistent.cons
+      . apply ih; assumption
+      . intros b h_b_mem h_b_leq_x
+        have h_b_mem_l₂ : b ∈ l₂ := by
+          apply List.sublist_mem h_sublist; assumption
+        apply h_consistent_h_no_lt b h_b_mem_l₂ h_b_leq_x
 
 theorem option_not_lt_same {x : Option ℕ} :
   ¬ x < x := by
@@ -60,7 +100,7 @@ def effect_comp (op1 op2 : Effect (A := A)) : Effect (A := A) := fun s => op1 s 
 
 local infix:99 " ▷ " => effect_comp
 
-theorem effect_comp_assoc (op1 op2 op3 : Effect (A := A)) :
+omit [DecidableEq A] in theorem effect_comp_assoc (op1 op2 op3 : Effect (A := A)) :
   effect_comp (effect_comp op1 op2) op3 = effect_comp op1 (effect_comp op2 op3) := by
   funext s
   simp [effect_comp]
@@ -71,7 +111,7 @@ def concurrent_commutative (list : List A) : Prop :=
   ∀ a b, a ∈ list → b ∈ list → hb_concurrent hb a b →
     effect_comp (effect a) (effect b) = effect_comp (effect b) (effect a)
 
-omit [Operation A] in theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
+omit [DecidableEq A] [Operation A] in theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
   hb_consistent hb (ops₀ ++ a :: ops₁) →
   ∀ x, x ∈ ops₀ → ¬a ≤ x := by
   intro h_consistent x h_mem
@@ -91,7 +131,7 @@ omit [Operation A] in theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : 
       | inr h_mem_tail =>
         apply ih h_consistent_tail h_mem_tail
 
-theorem hb_concurrent_foldr {ops₀ ops₁ : List A} :
+omit [DecidableEq A] in theorem hb_concurrent_foldr {ops₀ ops₁ : List A} :
   concurrent_commutative hb (ops₀ ++ a :: ops₁) →
   (∀ x ∈ ops₀, hb_concurrent hb x a) →
   List.foldr (effect_comp (A := A)) (effect a ▷ init) (List.map (fun a => effect a) ops₀) =
@@ -119,7 +159,7 @@ theorem hb_concurrent_foldr {ops₀ ops₁ : List A} :
         right; assumption
     . intros; apply h_concurrent; simp; right; assumption
 
-theorem hb_consistent_effect_convergent (ops₀ ops₁ : List A) (init : Effect)
+omit [DecidableEq A] in theorem hb_consistent_effect_convergent (ops₀ ops₁ : List A) (init : Effect)
   (h_consistent₀ : hb_consistent hb ops₀)
   (h_consistent₁ : hb_consistent hb ops₁)
   (h_commutative : concurrent_commutative hb ops₀)
@@ -239,7 +279,8 @@ by
         simp
         . cases h_consistent₀
           assumption
-        . sorry
+        . apply hb_consistent_sublist _ h_consistent₁
+          simp
         . intros x y h_x_mem h_ey_mem h_concurrent
           apply h_commutative
           simp; right; assumption
@@ -248,7 +289,8 @@ by
         . simp at no_dup₀
           obtain ⟨ ⟩ := no_dup₀
           assumption
-        . sorry
+        . apply Nodup.sublist _ no_dup₁
+          simp
         . intros x
           constructor
           . intro h_mem₀
@@ -262,7 +304,10 @@ by
             . subst h; obtain ⟨ h_eq'', _ ⟩ := no_dup₀
               contradiction
             . right; right; assumption
-          . sorry
+          . grind only [=_ cons_append, = pairwise_append, eq_or_mem_of_mem_cons, = cons_append, →
+            Pairwise.of_cons, = nodup_cons, = nodup_append, = nodup_iff_pairwise_ne,
+            mem_cons_of_mem, mem_cons_self, → eq_nil_of_append_eq_nil, → eq_nil_of_map_eq_nil,
+            mem_append, = pairwise_iff_forall_sublist, = pairwise_middle, cases Or]
         . rw [h_mem]
           simp
         . simp
