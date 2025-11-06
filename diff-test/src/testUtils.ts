@@ -25,8 +25,38 @@ export type Command = InsertCommand | SyncCommand;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const repoRoot = path.resolve(__dirname, '..');
-export const leanBinary = path.join(repoRoot, '.lake', 'build', 'bin', 'lean-yjs');
+export const repoRoot = path.resolve(__dirname, '../..');
+export const leanBinary = path.join(repoRoot, '.lake', 'build', 'bin', 'diff-test-runner');
+
+let buildPromise: Promise<void> | null = null;
+
+export function ensureDiffTestRunnerBuilt(): Promise<void> {
+  if (!buildPromise) {
+    buildPromise = new Promise((resolve, reject) => {
+      const child = spawn('lake', ['build', 'diff-test-runner'], {
+        cwd: repoRoot,
+        stdio: 'inherit',
+      });
+      child.on('error', (error) => {
+        buildPromise = null;
+        reject(error);
+      });
+      child.on('exit', (code, signal) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          buildPromise = null;
+          const detail =
+            code !== null
+              ? `lake build diff-test-runner exited with code ${code}`
+              : `lake build diff-test-runner terminated by signal ${signal ?? 'unknown'}`;
+          reject(new Error(detail));
+        }
+      });
+    });
+  }
+  return buildPromise;
+}
 
 function ensureDoc(map: Map<number, ClientDoc>, clientId: number): ClientDoc {
   const existing = map.get(clientId);

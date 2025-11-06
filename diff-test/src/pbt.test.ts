@@ -1,9 +1,8 @@
 import fc from "fast-check";
-import { describe, test } from "vitest";
-import { expect } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 
 import type { Command, InsertCommand, SyncCommand } from "./testUtils";
-import { normalize, runLean, runYjs } from "./testUtils";
+import { ensureDiffTestRunnerBuilt, normalize, runLean, runYjs } from "./testUtils";
 
 type RawInsert = {
   readonly kind: "insert";
@@ -92,6 +91,10 @@ function materialize(rawCommands: readonly RawCommand[]): Command[] {
 }
 
 describe("Lean ↔︎ Yjs property-based diff", () => {
+  beforeAll(async () => {
+    await ensureDiffTestRunnerBuilt();
+  });
+
   test("Lean faithfully reproduces Yjs behaviour", async () => {
     const property = fc.asyncProperty(rawCommandsArb, async (rawCommands) => {
       const commands = materialize(rawCommands);
@@ -104,7 +107,7 @@ describe("Lean ↔︎ Yjs property-based diff", () => {
           "Lean/Yjs mismatch detected.",
           `Commands: ${JSON.stringify(commands, null, 2)}`,
           `Lean result: ${JSON.stringify(leanResult)}`,
-          `Yjs result: ${JSON.stringify(yjsResult)}`
+          `Yjs result: ${JSON.stringify(yjsResult)}`,
         ].join("\n");
         if (error instanceof Error) {
           throw new Error(detail, { cause: error });
