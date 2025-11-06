@@ -126,7 +126,7 @@ theorem HappensBeforeSame_HappensBeforeOnlyBroadcast_or_HappensBeforeDeliver_exi
         . right
           apply HappensBefore.trans1 h_b_e2 h_bc
 
-theorem nodup_getElem_unique : forall {A} [DecidableEq A] (l : List A) x idx,
+theorem nodup_getElem_unique : forall {A} [DecidableEq A] {l : List A} {x idx},
   l.Nodup →
   idx < l.length →
   l[idx]? = some x →
@@ -146,50 +146,50 @@ theorem nodup_getElem_unique : forall {A} [DecidableEq A] (l : List A) x idx,
     apply h_nodup j idx (by omega) (by omega) (by omega)
     rw [List.getElem_eq_iff_getElem?_eq l j  idx (by omega), heq, h_getElem_eq]
 
+theorem nodup_prefix_unique {A} [DecidableEq A] {lp1 ls1 lp2 ls2 : List A} {x : A} :
+  (lp1 ++ [x] ++ ls1).Nodup →
+  lp1 ++ [x] ++ ls1 = lp2 ++ [x] ++ ls2 →
+  lp1 = lp2 := by
+  intros h_nodup h_eq
+  have h_getElem_lp1_length : (lp1 ++ [x] ++ ls1)[lp1.length]? = some x := by
+    rw [List.append_assoc, List.getElem?_append_right (by simp)]
+    simp
+  have h_getElem_lp2_length : (lp1 ++ [x] ++ ls1)[lp2.length]? = some x := by
+    rw [h_eq, List.append_assoc, List.getElem?_append_right (by simp)]
+    simp
+  have h_lp2_length_eq_lp1_length : lp1.length = lp2.length := by
+    apply nodup_getElem_unique h_nodup (by simp) at h_getElem_lp1_length
+    apply h_getElem_lp1_length _ (by rw [h_eq]; simp) at h_getElem_lp2_length
+    simp [h_getElem_lp2_length]
+  rw [List.append_assoc] at h_eq
+  rw [List.append_assoc] at h_eq
+  obtain ⟨ h_eq1, h_eq2 ⟩ := List.append_inj h_eq h_lp2_length_eq_lp1_length
+  assumption
+
 theorem locallyOrdered_asymm {A} [DecidableEq A] [Message A] {network : NetworkBase A} {i : ClientId} {e1 e2 : Event A} :
   locallyOrdered network.toNodeHistories i e1 e2 →
   locallyOrdered network.toNodeHistories i e2 e1 →
   False := by
   intros h_e1_e2 h_e2_e1
+  have h_nodup_i := network.toNodeHistories.event_distinct i
   obtain ⟨ l1, l2, l3, h_history_eq1 ⟩ := h_e1_e2
   obtain ⟨ l1', l2', l3', h_history_eq2 ⟩ := h_e2_e1
-  have h_l1'_1_l2' : l1'.length + 1 + l2'.length = l1.length := by
-    have h_nodup_i := network.toNodeHistories.event_distinct i
-    have h_l1_lt_length : l1.length < (network.histories i).length := by
-      rw [h_history_eq1]
-      simp
-    apply nodup_getElem_unique (network.histories i) e1 l1.length h_nodup_i h_l1_lt_length
-    . rw [h_history_eq1]
-      simp
-    . rw [h_history_eq2]
-      simp
-      omega
-    . rw [h_history_eq2]
-      simp
-      rw [List.getElem?_append_right (by omega)]
-      have h_eq : l1'.length + 1 + l2'.length - l1'.length = l2'.length + 1 := by omega
-      rw [h_eq]
-      rw [List.getElem?_cons_succ]
-      simp
-  have h_l1_1_l2 : l1.length + 1 + l2.length = l1'.length := by
-    have h_nodup_i := network.toNodeHistories.event_distinct i
-    have h_l1'_lt_length : l1'.length < (network.histories i).length := by
-      rw [h_history_eq2]
-      simp
-    apply nodup_getElem_unique (network.histories i) e2 l1'.length h_nodup_i h_l1'_lt_length
-    . rw [h_history_eq2]
-      simp
-    . rw [h_history_eq1]
-      simp
-      omega
-    . rw [h_history_eq1]
-      simp
-      rw [List.getElem?_append_right (by omega)]
-      have h_eq : l1.length + 1 + l2.length - l1.length = l2.length + 1 := by omega
-      rw [h_eq]
-      rw [List.getElem?_cons_succ]
-      simp
-  omega
+
+  have h_l1'_1_l2' : l1' ++ [e2] ++ l2' = l1 := by
+    rw [h_history_eq1] at h_history_eq2 h_nodup_i
+    have h_eq1 : l1 ++ [e1] ++ l2 ++ [e2] ++ l3 = l1 ++ [e1] ++ (l2 ++ [e2] ++ l3) := by simp
+    rw [h_eq1] at h_history_eq2 h_nodup_i
+    have h_eq := nodup_prefix_unique h_nodup_i h_history_eq2
+    simp [h_eq]
+  have h_l1_1_l2 : l1 ++ [e1] ++ l2 = l1' := by
+    rw [h_history_eq2] at h_nodup_i
+    rw [h_history_eq2] at h_history_eq1
+    have h_eq1 : l1' ++ [e2] ++ l2' ++ [e1] ++ l3' = l1' ++ [e2] ++ (l2' ++ [e1] ++ l3') := by simp
+    rw [h_eq1] at h_history_eq2 h_nodup_i h_history_eq1
+    have h_eq := nodup_prefix_unique h_nodup_i h_history_eq1
+    simp [h_eq]
+  rw [<-h_l1'_1_l2'] at h_l1_1_l2
+  simp at h_l1_1_l2
 
 theorem locallyOrdered_trans {A} [DecidableEq A] [Message A] {network : NetworkBase A} {i : ClientId} {e1 e2 e3 : Event A} :
   locallyOrdered network.toNodeHistories i e1 e2 →
@@ -199,20 +199,17 @@ theorem locallyOrdered_trans {A} [DecidableEq A] [Message A] {network : NetworkB
   obtain ⟨ l1, l2, l3, h_history_eq1 ⟩ := h_e1_e2
   obtain ⟨ l1', l2', l3', h_history_eq2 ⟩ := h_e2_e3
   use l1, (l2 ++ [e2] ++ l2'), l3'
-  have h_length_eq : (l1 ++ [e1] ++ l2).length = l1'.length := by sorry
-  have h_eq : l1' = l1 ++ [e1] ++ l2 := by
-    have h_eq1 : l1 ++ [e1] ++ l2 ++ [e2] ++ l3 = (l1 ++ [e1] ++ l2) ++ ([e2] ++ l3) := by
+  have h_nodup_i := network.toNodeHistories.event_distinct i
+  have h_eq : l1 ++ [e1] ++ l2 = l1' := by
+    rw [h_history_eq1] at h_history_eq2 h_nodup_i
+    have h_eq2 : l1' ++ [e2] ++ l2' ++ [e3] ++ l3' = l1' ++ [e2] ++ (l2' ++ [e3] ++ l3') := by
       simp
-    have h_eq2 : l1' ++ [e2] ++ l2' ++ [e3] ++ l3' = l1' ++ ([e2] ++ l2' ++ [e3] ++ l3') := by
-      simp
-    rw [h_eq1] at h_history_eq1
     rw [h_eq2] at h_history_eq2
-    rw [h_history_eq1] at h_history_eq2
-    obtain ⟨ h_eq1, h_eq2 ⟩ := List.append_inj h_history_eq2 h_length_eq
-    subst h_eq1; simp
-  have h_eq' : l1 ++ [e1] ++ (l2 ++ [e2] ++ l2') = l1 ++ [e1] ++ l2 ++ [e2] ++ l2' := by
+    have h_eq := nodup_prefix_unique h_nodup_i h_history_eq2
+    simp [h_eq]
+  have h_eq' : l1 ++ [e1] ++ (l2 ++ [e2] ++ l2') = (l1 ++ [e1] ++ l2) ++ [e2] ++ l2' := by
     simp
-  rw [h_eq', <-h_eq]
+  rw [h_eq', h_eq]
   assumption
 
 -- suppose a < a
@@ -400,8 +397,7 @@ theorem hb_consistent_local_history_aux i ms ms' :
       cases h_le with
       | inr h_lt =>
         apply network.causal_delivery (i := i) at h_lt
-        . -- need locallyOrdered asym, s.t. m < h → h < m → False
-          sorry
+        . apply locallyOrdered_asymm h_locally_ordered h_lt
         . rw [h_history_eq]
           simp
       | inl h_eq =>
@@ -447,7 +443,7 @@ theorem hb_consistent_local_history i :
   apply hb_consistent_local_history_aux network i []
   simp
 
-theorem toDeliverMessages_Nodup [DecidableEq A] [Message A] (network : CausalNetwork A) : (network.toDeliverMessages i).Nodup := by
+omit [Operation A] in theorem toDeliverMessages_Nodup (network : CausalNetwork A) : (network.toDeliverMessages i).Nodup := by
   rw [List.nodup_iff_pairwise_ne, List.pairwise_iff_getElem]
   intros idx1 idx2 h_idx1_lt_length h_idx2_lt_length h_idx1_lt_idx2 h_eq
   rw [List.getElem_eq_iff_getElem?_eq] at h_eq
