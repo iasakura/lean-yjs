@@ -1,6 +1,5 @@
 name = "lean-yjs"
 version = "0.1.0"
-defaultTargets = ["lean-yjs"]
 
 [[lean_lib]]
 name = "LeanYjs"
