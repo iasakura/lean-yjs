@@ -212,6 +212,31 @@ theorem locallyOrdered_trans {A} [DecidableEq A] [Message A] {network : NetworkB
   rw [h_eq', h_eq]
   assumption
 
+theorem HappensBeforeOnlyBroadcast_locallyOrdered {A} [DecidableEq A] [Message A] {network : NetworkBase A} {a b : A} :
+  HappensBeforeOnlyBroadcast network a b →
+  ∃i, locallyOrdered network.toNodeHistories i (Event.Broadcast a) (Event.Broadcast b) := by
+  intro h_hb
+  induction h_hb with
+  | broadcast_broadcast_local h_local =>
+    constructor; assumption
+  | @trans e1 e2 e3 h_e1_e2 h_e2_e3 ih_e1_e2 ih_e2_e3 =>
+    obtain ⟨ i, h_e1_e2_local ⟩ := ih_e1_e2
+    obtain ⟨ j, h_e2_e3_local ⟩ := ih_e2_e3
+    have h_i_eq_j : i = j := by
+      obtain ⟨ l1, l2, l3, h_history_eq1 ⟩ := h_e1_e2_local
+      obtain ⟨ l1', l2', l3', h_history_eq2 ⟩ := h_e2_e3_local
+      have h_e2_mem_history_i : Event.Broadcast e2 ∈ network.toNodeHistories.histories i := by
+        rw [h_history_eq1]
+        simp
+      have h_e2_mem_history_j : Event.Broadcast e2 ∈ network.toNodeHistories.histories j := by
+        rw [h_history_eq2]
+        simp
+      obtain ⟨ h_eq, _ ⟩ := network.msg_id_unique h_e2_mem_history_i h_e2_mem_history_j rfl
+      assumption
+    subst h_i_eq_j
+    exists i
+    apply locallyOrdered_trans h_e1_e2_local h_e2_e3_local
+
 -- suppose a < a
 -- if a < a only consists of broadcast_broadcast_local, then we can conclude a.idx < a.idx, which is a contradiction
 -- otherwise, if a < a is break down into a < b and b < a and a < b is broadcast_deliver_local, we now have
@@ -226,7 +251,9 @@ lemma HappensBefore_assym [Message A] [DecidableEq A] {network : CausalNetwork A
   apply HappensBeforeSame_HappensBeforeOnlyBroadcast_or_HappensBeforeDeliver_exists at h_aa
   cases h_aa with
   | inl h_broadcast_only =>
-    sorry
+    apply HappensBeforeOnlyBroadcast_locallyOrdered at h_broadcast_only
+    obtain ⟨ i, h_local ⟩ := h_broadcast_only
+    apply locallyOrdered_asymm h_local h_local
   | inr h_deliver_exists =>
     obtain ⟨ a', b', i, h_a_a', h_local, h_b'_a ⟩ := h_deliver_exists
     have h_mem_deliver_a' : Event.Deliver a' ∈ network.toNetworkBase.histories i := by
@@ -367,7 +394,7 @@ omit [Operation A] in theorem toDeliverMessages_histories (i : ClientId) :
             subst m'
             simp
 
-theorem hb_consistent_local_history_aux i ms ms' :
+omit [Operation A] in theorem hb_consistent_local_history_aux i ms ms' :
   ms ++ ms' = network.toDeliverMessages i →
   hb_consistent (hb := instCausalNetworkElemCausalOrder network) ms' := by
   intros h_ms
@@ -438,7 +465,7 @@ theorem hb_consistent_local_history_aux i ms ms' :
         . rw [h_history_eq]
           simp
 
-theorem hb_consistent_local_history i :
+omit [Operation A] in theorem hb_consistent_local_history i :
   hb_consistent (hb := instCausalNetworkElemCausalOrder network) (network.toDeliverMessages i) := by
   apply hb_consistent_local_history_aux network i []
   simp
