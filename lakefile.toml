@@ -6,8 +6,8 @@ defaultTargets = ["lean-yjs"]
 name = "LeanYjs"
 
 [[lean_exe]]
-name = "lean-yjs"
-root = "Main"
+name = "diff-test-runner"
+root = "DiffTestRunner"
 
 [[require]]
 name = "mathlib"
