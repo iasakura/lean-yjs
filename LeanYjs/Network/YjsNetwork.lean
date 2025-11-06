@@ -6,7 +6,7 @@ import LeanYjs.Network.CausalOrder
 
 section YjsNetwork
 
-open CausalNetwork
+open NetworkModels
 
 instance [Message A]: Message (YjsItem A) where
   messageId item := Message.messageId item.content
@@ -56,6 +56,16 @@ theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A
   simp [interpDeliveredOps, interpOps]
   rw [foldlM_foldr_effect_comp_eq]
 
+theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] [Message A] (network : YjsOperationNetwork A) (i : ClientId) :
+  concurrent_commutative inferInstance (network.toCausalNetwork.toDeliverMessages i) := by
+  intros a b h_a_mem h_b_mem h_a_b_happens_before
+  funext s
+  simp [Operation.State] at s
+  simp [effect_comp, effect, Operation.effect]
+  generalize h_s_a : integrate a.elem s = s_a
+  generalize h_s_b : integrate b.elem s = s_b
+  sorry
+
 theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] [Message A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : Array (YjsItem A)),
   let hist_i := network.toDeliverMessages i
   let hist_j := network.toDeliverMessages j
@@ -75,10 +85,13 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] [Message A] (
     apply hb_consistent_local_history
 
   have h_noDup_i : (network.toCausalNetwork.toDeliverMessages i).Nodup := by
-    apply CausalNetwork.toDeliverMessages_Nodup
+    apply toDeliverMessages_Nodup
 
   have h_noDup_j : (network.toCausalNetwork.toDeliverMessages j).Nodup := by
     apply toDeliverMessages_Nodup
+
+  have h_concurrent_commutative : concurrent_commutative hb (network.toCausalNetwork.toDeliverMessages i) := by
+    apply YjsOperationNetwork_concurrentCommutative network i
 
   have h_effectt_eq :
     (List.map (fun a => Operation.effect a) (network.toCausalNetwork.toDeliverMessages i) |> List.foldr effect_comp (fun s => Except.ok s)) =
@@ -89,7 +102,7 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] [Message A] (
         (fun s => Except.ok s)
         h_consistent_i
         h_consistent_j
-        (by sorry)
+        h_concurrent_commutative
         h_noDup_i
         h_noDup_j
         h_hist_mem
