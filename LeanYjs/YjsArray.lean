@@ -218,9 +218,9 @@ theorem ItemSetInvariant.eq_set {A} (P Q : ItemSet A) :
   . intros o r c id x hq hreachable
     rw [<-hiff] at *
     apply hP.origin_nearest_reachable <;> assumption
-  . intros x y hx hy hineq hid
+  . intros x y h_id_eq h_qx h_qy
     rw [<-hiff] at *
-    apply hP.same_id_ordered <;> assumption
+    apply hP.id_unique x y h_id_eq <;> assumption
 
 theorem push_subset {A} (arr : List (YjsItem A)) (a : YjsItem A) :
   ∀ x, ArrSet arr x -> ArrSet (a :: arr) x := by
@@ -263,7 +263,7 @@ omit [DecidableEq A] in theorem item_set_invariant_push (arr : List (YjsItem A))
   ArrSetClosed arr ->
   YjsLt' item.origin item.rightOrigin ->
   (∀ x, OriginReachable item x -> YjsLeq' x item.origin ∨ YjsLeq' item.rightOrigin x) ->
-  (∀ x : YjsItem A, ArrSet arr x -> x.id = item.id -> YjsLeq' x item.origin ∨ YjsLeq' item.rightOrigin x) ->
+  (∀ x : YjsItem A, ArrSet arr x -> x.id = item.id -> x = item) ->
   ItemSetInvariant (ArrSet (item :: arr)) := by
   intros hinv hclosed horigin hreach hsameid
   apply ItemSetInvariant.mk
@@ -284,40 +284,25 @@ omit [DecidableEq A] in theorem item_set_invariant_push (arr : List (YjsItem A))
       subst heq
       simp [YjsItem.origin, YjsItem.rightOrigin] at *
       apply hreach _ hreachable
-  . intros x y hinx hiny hineq hid
+  . intros x y h_id_eq h_set_x h_set_y
     simp [ArrSet] at *
-    cases hinx with
+    cases h_set_x with
     | inr hinx =>
-      cases hiny with
+      cases h_set_y with
       | inr hiny =>
-        apply hinv.same_id_ordered _ _ hinx hiny hineq hid
+        apply hinv.id_unique _ _ h_id_eq hinx hiny
       | inl hleq =>
         subst hleq
-        cases hsameid _ hinx hid with
-        | inl hleq =>
-          left; assumption
-        | inr hleq =>
-          right
-          right
-          right
-          assumption
+        apply hsameid _ hinx h_id_eq
     | inl hinx =>
       subst hinx
-      cases hiny with
+      cases h_set_y with
       | inr hiny =>
-        cases hsameid _ hiny (by rw [hid]) with
-        | inl hleq =>
-          right
-          left
-          assumption
-        | inr hleq =>
-          right
-          right
-          left
-          assumption
+        obtain h := hsameid y hiny (by rw [h_id_eq])
+        subst h; simp
       | inl heqy =>
         subst heqy
-        cases hineq (refl _)
+        simp
 
 structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
   closed : IsClosedItemSet (ArrSet arr)

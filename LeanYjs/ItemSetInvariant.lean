@@ -16,14 +16,7 @@ structure ItemSetInvariant where
     P (YjsItem.item o r id c) ->
     OriginReachable (A := A) (YjsItem.item o r id c) x ->
     (YjsLeq' x o) ∨ (YjsLeq' r x)
-  same_id_ordered : ∀ (x y : YjsItem A),
-    P x -> P y ->
-    x ≠ y ->
-    x.id = y.id ->
-    YjsLeq' x y.origin ∨
-    YjsLeq' y x.origin ∨
-    YjsLeq' x.rightOrigin y ∨
-    YjsLeq' y.rightOrigin x
+  id_unique : ∀ (x y : YjsItem A), x.id = y.id -> P x -> P y -> x = y
 
 @[simp] theorem origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.origin := by
   intros hclosed x px

@@ -52,6 +52,28 @@ import LeanYjs.ItemSetInvariant
 --     constructor
 --     apply YjsLt.ltRightOrigin <;> try assumption
 
+theorem YjsId_lt_total {x y : YjsId} :
+  x < y ∨ y < x ∨ x = y := by
+  obtain ⟨ xClientId, xClock ⟩ := x
+  obtain ⟨ yClientId, yClock ⟩ := y
+  simp only [LT.lt]
+  unfold ClientId at *
+  split
+  . rw [beq_iff_eq] at *; subst xClientId
+    rw [beq_self_eq_true]; simp
+    omega
+  . rw [Bool.beq_comm]
+    split
+    . contradiction
+    . simp
+      have h : (xClientId == yClientId) = false := by
+        generalize h : (xClientId == yClientId) = eqb at *
+        cases eqb <;> simp
+        contradiction
+      rw [beq_eq_false_iff_ne] at h
+      omega
+
+
 theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y : YjsPtr A), P x -> P y ->
@@ -218,7 +240,7 @@ theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
                 | leqSame _ =>
                   -- rw [heq] at hlt_yo_x hlt_x_yo hlt_x_yr
                   have hid : xid < yid ∨ yid < xid ∨ xid = yid := by
-                    unfold ClientId; omega
+                    apply YjsId_lt_total
                   cases hid with
                   | inl hlt =>
                     left
@@ -252,45 +274,10 @@ theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
                         rw [<-heq]
                         rw [<-heq] at hy
                         rw [<-heq] at *
-                        cases inv.same_id_ordered (YjsItem.item xo xr xid xc) (YjsItem.item xo yr xid yc) hx hy hneq heq with
-                        | inl hlt =>
-                          obtain ⟨ h, hlt ⟩ := hlt
-                          have ⟨ h', hlt ⟩ : ∃ h', YjsLt h' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) (YjsPtr.itemPtr (YjsItem.item xo yr xid yc)) := by
-                            constructor
-                            apply YjsLt.ltOrigin h; try assumption
-                          left
-                          constructor
-                          right
-                          apply hlt
-                        | inr hlt =>
-                          cases hlt with
-                          | inl hlt =>
-                            obtain ⟨ h, hlt ⟩ := hlt
-                            have ⟨ h', hlt ⟩ : ∃ h', YjsLt h' (YjsPtr.itemPtr (YjsItem.item xo yr xid yc)) (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) := by
-                              constructor
-                              apply YjsLt.ltOrigin h; try assumption
-                            right
-                            constructor
-                            apply hlt
-                          | inr hlt =>
-                            cases hlt with
-                            | inl hlt =>
-                              obtain ⟨ h, hlt ⟩ := hlt
-                              have ⟨ h, hlt ⟩ : ∃ h', YjsLt h' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) (YjsPtr.itemPtr (YjsItem.item xo yr xid yc)) := by
-                                constructor
-                                apply YjsLt.ltRightOrigin h; try assumption
-                              left
-                              constructor
-                              right
-                              apply hlt
-                            | inr hlt =>
-                              obtain ⟨ h, hlt ⟩ := hlt
-                              have ⟨ h, hlt ⟩ : ∃ h, YjsLt h (YjsItem.item xo yr xid yc) (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) := by
-                                constructor
-                                apply YjsLt.ltRightOrigin h; try assumption
-                              right
-                              constructor
-                              assumption
+                        have h_id_eq : (YjsItem.item xo xr xid xc).id = (YjsItem.item xo yr xid yc).id := by
+                          simp [YjsItem.id]
+                        have h_x_eq_y := inv.id_unique _ _ h_id_eq hx hy
+                        contradiction
 
 theorem YjsLeq'_or_YjsLt' {A : Type} [DecidableEq A] {P : ItemSet A} {x y : YjsPtr A} :
   ItemSetInvariant P -> IsClosedItemSet P -> P x -> P y -> (YjsLeq' x y) ∨ (YjsLt' y x) := by

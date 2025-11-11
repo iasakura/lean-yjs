@@ -55,7 +55,7 @@ def YjsLt' {A} (x y : YjsPtr A) : Prop :=
 def YjsLeq' {A} (x y : YjsPtr A) : Prop :=
   ∃ h, @YjsLeq A h x y
 
-theorem ConflictLt'.ltOriginDiff {A : Type} (l1 l2 r1 r2 : YjsPtr A) (id1 id2 : ClientId) (c1 c2 : A) :
+theorem ConflictLt'.ltOriginDiff {A : Type} (l1 l2 r1 r2 : YjsPtr A) (id1 id2 : YjsId) (c1 c2 : A) :
   YjsLt' l2 l1
   -> YjsLt' (YjsItem.item l1 r1 id1 c1) r2
   -> YjsLt' l1 (YjsItem.item l2 r2 id2 c2)
@@ -69,7 +69,7 @@ theorem ConflictLt'.ltOriginDiff {A : Type} (l1 l2 r1 r2 : YjsPtr A) (id1 id2 : 
   constructor
   apply ConflictLt.ltOriginDiff <;> try assumption
 
-theorem ConflictLt'.ltOriginSame {A : Type} (l r1 r2 : YjsPtr A) (id1 id2 : ClientId) (c1 c2 : A) :
+theorem ConflictLt'.ltOriginSame {A : Type} (l r1 r2 : YjsPtr A) (id1 id2 : YjsId) (c1 c2 : A) :
   YjsLt' (YjsItem.item l r1 id1 c1) r2
   -> YjsLt' (YjsItem.item l r2 id2 c2) r1
   -> id1 < id2

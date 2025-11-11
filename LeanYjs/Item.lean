@@ -2,6 +2,32 @@ import LeanYjs.ClientId
 
 variable (A : Type) [DecidableEq A]
 
+structure YjsId where
+  clientId : ClientId
+  clock : Nat
+deriving Repr, DecidableEq
+
+instance : LT YjsId where
+  lt id1 id2 :=
+    if id1.clientId == id2.clientId then
+      id1.clock < id2.clock
+    else
+      id1.clientId < id2.clientId
+
+instance : DecidableRel (· < · : YjsId → YjsId → Prop) := by
+  intros x y
+  obtain ⟨ x_clientId, x_clock ⟩ := x
+  obtain ⟨ y_clientId, y_clock ⟩ := y
+  simp only [LT.lt]
+  simp
+  split
+  . by_cases h : x_clock < y_clock
+    . exact isTrue h
+    . apply isFalse; omega
+  . by_cases h : x_clientId < y_clientId
+    . exact isTrue h
+    . apply isFalse; omega
+
 mutual
 inductive YjsPtr : Type where
   | itemPtr : YjsItem -> YjsPtr
@@ -10,7 +36,7 @@ inductive YjsPtr : Type where
   deriving Repr, DecidableEq
 
 inductive YjsItem : Type where
-| item (origin : YjsPtr) (rightOrigin : YjsPtr) : ClientId -> A -> YjsItem
+| item (origin : YjsPtr) (rightOrigin : YjsPtr) : YjsId -> A -> YjsItem
 deriving Repr, DecidableEq
 end
 
@@ -53,5 +79,5 @@ instance : LawfulBEq (YjsItem A) := by
 instance : Coe (YjsItem A) (YjsPtr A) where
   coe item := YjsPtr.itemPtr item
 
-def YjsItem.id {A : Type} : YjsItem A -> ClientId
+def YjsItem.id {A : Type} : YjsItem A -> YjsId
 | YjsItem.item _ _ id _ => id

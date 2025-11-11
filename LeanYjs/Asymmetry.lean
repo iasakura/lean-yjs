@@ -6,6 +6,22 @@ import LeanYjs.ItemSetInvariant
 import LeanYjs.Totality
 import LeanYjs.Transitivity
 
+theorem YjsId_lt_asymm {id1 id2 : YjsId} :
+  id1 < id2 -> ¬ (id2 < id1) := by
+  intro hlt hlt2
+  obtain ⟨ clientId1, clock1 ⟩ := id1
+  obtain ⟨ clientId2, clock2 ⟩ := id2
+  simp only [LT.lt] at *
+  simp at *
+  unfold ClientId at *
+  split at hlt
+  . split at hlt2
+    . omega
+    . omega
+  . split at hlt2
+    . omega
+    . omega
+
 theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
@@ -48,7 +64,8 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
       constructor <;> (constructor; assumption)
     | ltOriginSame _ _ _ _ o r id c =>
       unfold ClientId at *
-      omega
+      obtain h := YjsId_lt_asymm hidlt
+      contradiction
 
 theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : ItemSetInvariant P) (x : YjsItem A) (y : YjsPtr A) :
   P x -> P y ->
@@ -61,7 +78,7 @@ theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv 
   have hyxr : YjsLt' y r := by
     apply yjs_lt_trans hP (y := (YjsItem.item o r id c)) <;> try assumption
     . apply hP.closedRight at hpx; assumption
-    . constructor; apply YjsLt.ltRightOrigin <;> try assumption
+    . use 1; apply YjsLt.ltRightOrigin; try assumption
       left
   have hrylt : YjsLt' r y := by
     obtain ⟨ h, hxrleq ⟩ := hxrleq
@@ -90,7 +107,7 @@ theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : Item
   have hyxr : YjsLt' o x := by
     apply yjs_lt_trans hP (y := (YjsItem.item o r id c)) <;> try assumption
     . apply hP.closedLeft at hpy; assumption
-    . constructor; apply YjsLt.ltOrigin <;> try assumption
+    . use 1; apply YjsLt.ltOrigin; try assumption
       left
   have hrylt : YjsLt' x o := by
     obtain ⟨ h, hxrleq ⟩ := hxrleq

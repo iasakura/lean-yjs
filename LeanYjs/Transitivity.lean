@@ -53,6 +53,32 @@ theorem conflict_lt_x_lt_y_right_origin {A} x (y : YjsItem A) :
   | ltOriginSame h1 h2 l r1 r2 id1 id2 c1 c2 hlt1 hlt2 _ =>
     constructor; assumption
 
+theorem YjsId_lt_trans {x y z : YjsId} :
+  x < y → y < z → x < z := by
+  intro hxy hyz
+  obtain ⟨ x_clientId, x_clock ⟩ := x
+  obtain ⟨ y_clientId, y_clock ⟩ := y
+  obtain ⟨ z_clientId, z_clock ⟩ := z
+  simp only [LT.lt] at *
+  simp at *
+  unfold ClientId at *
+  split at hxy
+  . subst x_clientId
+    split at hyz
+    . subst y_clientId
+      simp; omega
+    . split
+      . omega
+      . omega
+  . split at hyz
+    . subst z_clientId
+      split
+      . omega
+      . omega
+    . split
+      . omega
+      . omega
+
 theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y z : YjsPtr A),
@@ -164,7 +190,7 @@ theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInva
           apply YjsLt.ltConflict
           apply ConflictLt.ltOriginSame <;> try assumption
           unfold ClientId at *
-          omega
+          apply YjsId_lt_trans (y := c1) <;> try assumption
 
 theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
