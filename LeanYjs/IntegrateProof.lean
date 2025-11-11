@@ -399,12 +399,7 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
     ∀ (x : YjsPtr A),
       OriginReachable (YjsPtr.itemPtr newItem) x →
         YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
-  (hsameid_consistent :
-    ∀ (x : YjsItem A),
-      ArrSet arr.toList (YjsPtr.itemPtr x) →
-        x.id = newItem.id →
-          YjsLeq' (A := A) (YjsPtr.itemPtr x) newItem.origin ∨
-            YjsLeq' (A := A) newItem.rightOrigin (YjsPtr.itemPtr x))
+  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → ¬x.id = newItem.id)
   (hneq : ∀ x ∈ arr, ¬x = newItem) (harrinv : YjsArrInvariant arr.toList)
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList))) (leftIdx : ℤ)
@@ -575,12 +570,7 @@ theorem idx_between_id_neq {i : ℕ} {newItem other : YjsItem A} {arr : Array (Y
   (horigin : ArrSet arr.toList newItem.origin)
   (hrorigin : ArrSet arr.toList newItem.rightOrigin)
   (harrinv : YjsArrInvariant arr.toList)
-  (hsameid_consistent :
-    ∀ (x : YjsItem A),
-      ArrSet arr.toList (YjsPtr.itemPtr x) →
-        x.id = newItem.id →
-          YjsLeq' (A := A) (YjsPtr.itemPtr x) newItem.origin ∨
-            YjsLeq' (A := A) newItem.rightOrigin (YjsPtr.itemPtr x))
+  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → ¬x.id = newItem.id)
   (hleftIdx : findPtrIdx newItem.origin arr = Except.ok leftIdx)
   (hrightIdx : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
   (h_leftIdx_lt_i : leftIdx < i)
@@ -619,12 +609,7 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
   [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
   (horigin : ArrSet arr.toList newItem.origin)
   (hrorigin : ArrSet arr.toList newItem.rightOrigin)
-  (hsameid_consistent :
-    ∀ (x : YjsItem A),
-      ArrSet arr.toList (YjsPtr.itemPtr x) →
-        x.id = newItem.id →
-          YjsLeq' (A := A) (YjsPtr.itemPtr x) newItem.origin ∨
-            YjsLeq' (A := A) newItem.rightOrigin (YjsPtr.itemPtr x))
+  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → ¬x.id = newItem.id)
   (harrinv : YjsArrInvariant arr.toList)
   (leftIdx : ℤ)
   (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx) (rightIdx : ℤ)
@@ -945,12 +930,7 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
     ∀ (x : YjsPtr A),
       OriginReachable (YjsPtr.itemPtr newItem) x →
         YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
-  (hsameid_consistent :
-    ∀ (x : YjsItem A),
-      ArrSet arr.toList (YjsPtr.itemPtr x) →
-        x.id = newItem.id →
-          YjsLeq' (A := A) (YjsPtr.itemPtr x) newItem.origin ∨
-            YjsLeq' (A := A) newItem.rightOrigin (YjsPtr.itemPtr x))
+  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → ¬x.id = newItem.id)
   (hneq : ∀ x ∈ arr, ¬x = newItem) (harrinv : YjsArrInvariant arr.toList)
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList))) (leftIdx : ℤ)
@@ -1221,11 +1201,7 @@ theorem loopInv_preserve1
   (hreachable_consistent : ∀ (x : YjsPtr A),
     OriginReachable (YjsPtr.itemPtr newItem) x →
     YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
-  (hsameid_consistent : ∀ (x : YjsItem A),
-    ArrSet arr.toList (YjsPtr.itemPtr x) →
-    x.id = newItem.id →
-      YjsLeq' (A := A) (YjsPtr.itemPtr x) newItem.origin ∨
-        YjsLeq' (A := A) newItem.rightOrigin (YjsPtr.itemPtr x))
+  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → x.id ≠ newItem.id)
   (hneq : ∀ x ∈ arr, x ≠ newItem)
   (harrinv : YjsArrInvariant arr.toList)
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
@@ -1611,11 +1587,9 @@ structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
   reachable_YjsLeq' : (∀ (x : YjsPtr A),
       OriginReachable (YjsPtr.itemPtr newItem) x →
       YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
-  id_eq_YjsLeq' : (∀ (x : YjsItem A),
-      ArrSet arr.toList (YjsPtr.itemPtr x) →
-      x.id = newItem.id →
-      YjsLeq' (A := A) (YjsPtr.itemPtr x) newItem.origin ∨
-        YjsLeq' (A := A) newItem.rightOrigin (YjsPtr.itemPtr x))
+  id_eq_YjsLeq' : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) →
+    x.id ≠ newItem.id
 
 theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
@@ -1637,7 +1611,9 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
     apply harrinv.closed
     apply horigin_consistent
     apply hreachable_consistent
-    apply hsameid_consistent
+    intros x hmem heq
+    have h := hsameid_consistent x hmem heq
+    contradiction
 
   generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
@@ -1943,13 +1919,7 @@ theorem insertOk_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
         obtain h_neq := h_id_neq y hy_in_arr2 y_in_arr1_eq
         contradiction
     replace hsameid_consistent := hsameid_consistent y hy_in_arr1 hid_eq
-    cases hsameid_consistent with
-    | inl hleq =>
-      left
-      apply hleq
-    | inr hleq =>
-      right
-      apply hleq
+    assumption
 
 theorem insertIdxIfInBounds_insertOk (arr : Array (YjsItem A)) (a x : YjsItem A) :
   YjsArrInvariant arr.toList
