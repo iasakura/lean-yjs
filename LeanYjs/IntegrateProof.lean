@@ -399,7 +399,8 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
     ∀ (x : YjsPtr A),
       OriginReachable (YjsPtr.itemPtr newItem) x →
         YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
-  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → ¬x.id = newItem.id)
+  (hsameid_consistent : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
   (harrinv : YjsArrInvariant arr.toList)
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList))) (leftIdx : ℤ)
@@ -418,7 +419,7 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
       if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
       else
         if oLeftIdx = leftIdx then
-          if other.id < newItem.id then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
+          if other.id.clientId < newItem.id.clientId then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
           else if oRightIdx = rightIdx then ForInStep.done ⟨dest, scanning⟩ else ForInStep.yield ⟨dest, true⟩
         else
           if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
@@ -453,13 +454,13 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
     nDest =
       if oLeftIdx < leftIdx then dest
       else
-        if oLeftIdx = leftIdx then if other.id < newItem.id then leftIdx + (1 + ↑i) + 1 else dest
+        if oLeftIdx = leftIdx then if other.id.clientId < newItem.id.clientId then leftIdx + (1 + ↑i) + 1 else dest
         else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
   (hnext_scanning :
     nScanning =
       if oLeftIdx < leftIdx then scanning
       else
-        if oLeftIdx = leftIdx then !decide (other.id < newItem.id) && (!decide (oRightIdx = rightIdx) || scanning)
+        if oLeftIdx = leftIdx then !decide (other.id.clientId < newItem.id.clientId) && (!decide (oRightIdx = rightIdx) || scanning)
         else scanning)
   (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
   (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other) (h_in_other : ArrSet (newItem :: arr.toList) (YjsPtr.itemPtr other))
@@ -495,7 +496,8 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
       omega
     apply findPtrIdx_origin_leq_newItem_YjsLt' _ _ _ hclosed harrsetinv harrinv <;> try assumption
     . omega
-    . intros; assumption
+    . intros; simp only [LT.lt]
+      split <;> simp at * <;> unfold ClientId at * <;> omega
     . subst leftIdx
       have heq : newItem.origin = other.origin := by
         apply findPtrIdx_eq_ok_inj _ _ heqleft hoLeftIdx
@@ -567,20 +569,24 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
 
 
 omit [DecidableEq A] in theorem idx_between_id_neq {i : ℕ} {newItem other : YjsItem A} {arr : Array (YjsItem A)}
-  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → ¬x.id = newItem.id)
+  (hsameid_consistent : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
   (heq : arr[i]? = some other) :
   other.id ≠ newItem.id := by
   intros hcontra
   rw [getElem?_eq_some_iff] at heq
   obtain ⟨ _, heq ⟩ := heq
   have h := hsameid_consistent other (by subst other; simp [ArrSet])
-  contradiction
+  rw [hcontra] at h
+  have h := h (by simp)
+  omega
 
 theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin {A : Type}
   [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
   (horigin : ArrSet arr.toList newItem.origin)
   (hrorigin : ArrSet arr.toList newItem.rightOrigin)
-  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → ¬x.id = newItem.id)
+  (hsameid_consistent : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
   (harrinv : YjsArrInvariant arr.toList)
   (leftIdx : ℤ)
   (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx) (rightIdx : ℤ)
@@ -598,7 +604,7 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
       if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
       else
         if oLeftIdx = leftIdx then
-          if other.id < newItem.id then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
+          if other.id.clientId < newItem.id.clientId then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
           else if oRightIdx = rightIdx then ForInStep.done ⟨dest, scanning⟩ else ForInStep.yield ⟨dest, true⟩
         else
           if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
@@ -633,13 +639,13 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
     nDest =
       if oLeftIdx < leftIdx then dest
       else
-        if oLeftIdx = leftIdx then if other.id < newItem.id then leftIdx + (1 + ↑i) + 1 else dest
+        if oLeftIdx = leftIdx then if other.id.clientId < newItem.id.clientId then leftIdx + (1 + ↑i) + 1 else dest
         else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
   (hnext_scanning :
     nScanning =
       if oLeftIdx < leftIdx then scanning
       else
-        if oLeftIdx = leftIdx then !decide (other.id < newItem.id) && (!decide (oRightIdx = rightIdx) || scanning)
+        if oLeftIdx = leftIdx then !decide (other.id.clientId < newItem.id.clientId) && (!decide (oRightIdx = rightIdx) || scanning)
         else scanning)
   (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
   (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other) (h_in_other : ArrSet (newItem :: arr.toList) (YjsPtr.itemPtr other))
@@ -721,7 +727,12 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
               | inr h_rest =>
                 cases h_rest with
                 | inl hlt_id =>
-                  contradiction
+                  simp only [LT.lt] at hlt_id
+                  simp at hlt_id
+                  split at hlt_id
+                  . have h_clock_lt := hsameid_consistent other (by subst other; simp [ArrSet]) (by assumption)
+                    omega
+                  . omega
                 | inr heq_id =>
                   rw [heq_id] at hneq
                   contradiction
@@ -828,7 +839,7 @@ theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : Decid
       if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
       else
         if oLeftIdx = leftIdx then
-          if other.id < newItem.id then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
+          if other.id.clientId < newItem.id.clientId then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
           else if oRightIdx = rightIdx then ForInStep.done ⟨dest, scanning⟩ else ForInStep.yield ⟨dest, true⟩
         else
           if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
@@ -862,13 +873,13 @@ theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : Decid
     nDest =
       if oLeftIdx < leftIdx then dest
       else
-        if oLeftIdx = leftIdx then if other.id < newItem.id then leftIdx + (1 + ↑i) + 1 else dest
+        if oLeftIdx = leftIdx then if other.id.clientId < newItem.id.clientId then leftIdx + (1 + ↑i) + 1 else dest
         else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
   (hnext_scanning :
     nScanning =
       if oLeftIdx < leftIdx then scanning
       else
-        if oLeftIdx = leftIdx then !decide (other.id < newItem.id) && (!decide (oRightIdx = rightIdx) || scanning)
+        if oLeftIdx = leftIdx then !decide (other.id.clientId < newItem.id.clientId) && (!decide (oRightIdx = rightIdx) || scanning)
         else scanning)
   (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
   (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other)
@@ -909,7 +920,8 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
     ∀ (x : YjsPtr A),
       OriginReachable (YjsPtr.itemPtr newItem) x →
         YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
-  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → ¬x.id = newItem.id)
+  (hsameid_consistent : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
   (harrinv : YjsArrInvariant arr.toList)
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList))) (leftIdx : ℤ)
@@ -928,7 +940,7 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
       if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
       else
         if oLeftIdx = leftIdx then
-          if other.id < newItem.id then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
+          if other.id.clientId < newItem.id.clientId then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, false⟩
           else if oRightIdx = rightIdx then ForInStep.done ⟨dest, scanning⟩ else ForInStep.yield ⟨dest, true⟩
         else
           if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
@@ -963,13 +975,13 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
     nDest =
       if oLeftIdx < leftIdx then dest
       else
-        if oLeftIdx = leftIdx then if other.id < newItem.id then leftIdx + (1 + ↑i) + 1 else dest
+        if oLeftIdx = leftIdx then if other.id.clientId < newItem.id.clientId then leftIdx + (1 + ↑i) + 1 else dest
         else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
   (hnext_scanning :
     nScanning =
       if oLeftIdx < leftIdx then scanning
       else
-        if oLeftIdx = leftIdx then !decide (other.id < newItem.id) && (!decide (oRightIdx = rightIdx) || scanning)
+        if oLeftIdx = leftIdx then !decide (other.id.clientId < newItem.id.clientId) && (!decide (oRightIdx = rightIdx) || scanning)
         else scanning)
   (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
   (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other) (h_in_other : ArrSet (newItem :: arr.toList) (YjsPtr.itemPtr other))
@@ -1013,7 +1025,14 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
             . right; constructor; assumption
               constructor; assumption
               simp
-              assumption
+              simp only [LT.lt] at |-
+              split
+              . simp at *
+                have h := hsameid_consistent other harr_other (by assumption)
+                omega
+              . simp at *
+                unfold ClientId at *
+                omega
             . cases hbody
         . split at hbody
           . cases hbody
@@ -1033,8 +1052,8 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
     subst item
     have h_other_neq_newItem : other ≠ newItem := by
       intros heq
-      apply hsameid_consistent other harr_other
-      subst heq; simp
+      have h := hsameid_consistent other harr_other (by subst newItem; simp)
+      subst heq; omega
     cases hor with
     | inl hlt =>
       cases YjsLeq'_or_YjsLt' (x := other) (y := newItem) harrsetinv hclosed (by assumption) (by simp [ArrSet]) with
@@ -1083,9 +1102,9 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
               contradiction
             | inr heq =>
               contradiction
-        . have h_contra := hsameid_consistent other harr_other
+        . have h_contra := hsameid_consistent other harr_other (by rw [h])
           rw [h] at h_contra
-          contradiction
+          simp at h_contra
       subst h_oLeftIdx_eq_leftIdx h_oRightIdx_eq_rightIdx
       apply YjsLt'.ltConflict
       obtain ⟨ o, r, id, c ⟩ := newItem
@@ -1167,7 +1186,8 @@ theorem loopInv_preserve1
   (hreachable_consistent : ∀ (x : YjsPtr A),
     OriginReachable (YjsPtr.itemPtr newItem) x →
     YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
-  (hsameid_consistent : ∀ (x : YjsItem A), ArrSet arr.toList (YjsPtr.itemPtr x) → x.id ≠ newItem.id)
+  (hsameid_consistent : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
   (harrinv : YjsArrInvariant arr.toList)
   (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList)))
@@ -1192,7 +1212,7 @@ theorem loopInv_preserve1
   (hbody : next = (if oLeftIdx < leftIdx then ForInStep.done ⟨state.fst, state.snd⟩
       else
         if oLeftIdx = leftIdx then
-          if other.id < newItem.id then ForInStep.yield ⟨(leftIdx + ↑(1 + i)) ⊔ 0 + 1, false⟩
+          if other.id.clientId < newItem.id.clientId then ForInStep.yield ⟨(leftIdx + ↑(1 + i)) ⊔ 0 + 1, false⟩
           else
             if oRightIdx = rightIdx then ForInStep.done ⟨state.fst, state.snd⟩
             else ForInStep.yield ⟨state.fst, true⟩
@@ -1206,7 +1226,7 @@ theorem loopInv_preserve1
     next.value.fst = if oLeftIdx < leftIdx then dest
       else
         if oLeftIdx = leftIdx then
-          if other.id < newItem.id then
+          if other.id.clientId < newItem.id.clientId then
             (leftIdx + ↑(1 + i)) ⊔ 0 + 1
           else
             if oRightIdx = rightIdx then dest
@@ -1232,7 +1252,7 @@ theorem loopInv_preserve1
     if oLeftIdx < leftIdx then scanning
     else
       if oLeftIdx = leftIdx then
-        if other.id < newItem.id then
+        if other.id.clientId < newItem.id.clientId then
           false
         else
           if oRightIdx = rightIdx then scanning
@@ -1553,7 +1573,7 @@ structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
       YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
   id_eq_YjsLeq' : ∀ (x : YjsItem A),
     ArrSet arr.toList (YjsPtr.itemPtr x) →
-    x.id ≠ newItem.id
+    x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock
 
 theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
@@ -1576,8 +1596,9 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
     apply horigin_consistent
     apply hreachable_consistent
     intros x hmem heq
-    have h := hsameid_consistent x hmem heq
-    contradiction
+    have h := hsameid_consistent x hmem (by rw [heq])
+    rw [heq] at h
+    simp at h
 
   generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
@@ -1606,7 +1627,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
       if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
         else
           if oLeftIdx = leftIdx then
-            if other.id < newItem.id then pure (ForInStep.yield ⟨(leftIdx + ↑offset) ⊔ 0 + 1, false⟩)
+            if other.id.clientId < newItem.id.clientId then pure (ForInStep.yield ⟨(leftIdx + ↑offset) ⊔ 0 + 1, false⟩)
             else
               if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
               else pure (ForInStep.yield ⟨r.fst, true⟩)
@@ -1686,10 +1707,9 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
           rw [Int.max_eq_left hrightIdx] at hdest_current
           obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
       . intros a hmem heq
-        apply hsameid_consistent a
-        . simp [ArrSet]
-          assumption
-        . subst heq; simp
+        have h := hsameid_consistent a (by simp [ArrSet]; assumption) (by rw [heq])
+        subst heq
+        omega
   . -- initial
     simp only [loopInv]
     rw [List.head?_range']
@@ -1804,7 +1824,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
       if oLeftIdx < leftIdx then ForInStep.done ⟨state.fst, state.snd⟩
       else
         if oLeftIdx = leftIdx then
-          if other.id < newItem.id then ForInStep.yield ⟨(leftIdx + ↑(1 + i)) ⊔ 0 + 1, false⟩
+          if other.id.clientId < newItem.id.clientId then ForInStep.yield ⟨(leftIdx + ↑(1 + i)) ⊔ 0 + 1, false⟩
           else
             if oRightIdx = rightIdx then ForInStep.done ⟨state.fst, state.snd⟩
             else ForInStep.yield ⟨state.fst, true⟩
@@ -1850,7 +1870,7 @@ theorem insertOk_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
   YjsArrInvariant arr1.toList
   -> YjsArrInvariant arr2.toList
   -> (∀ a, a ∈ arr1 → a ∈ arr2)
-  -> (∀ a, a ∈ arr2 → a ∉ arr1 -> a.id ≠ x.id)
+  -> (∀ a, a ∈ arr2 → a ∉ arr1 -> a.id.clientId ≠ x.id.clientId)
   -> InsertOk arr1 x
   -> InsertOk arr2 x := by
   intros harrinv1 harrinv2 h_arr1_subset_arr2 h_id_neq h_InsertOk
@@ -1880,7 +1900,7 @@ theorem insertIdxIfInBounds_insertOk (arr : Array (YjsItem A)) (a x : YjsItem A)
   YjsArrInvariant arr.toList
   → YjsArrInvariant (arr.insertIdxIfInBounds idx a).toList
   → InsertOk arr x
-  → a.id ≠ x.id
+  → a.id.clientId ≠ x.id.clientId
   → InsertOk (arr.insertIdxIfInBounds idx a) x := by
   intros harrinv harrinv2 ha_neq_x h_InsertOk
   wlog hidx : idx ≤ arr.size
@@ -1912,7 +1932,7 @@ theorem insertIdxIfInBounds_insertOk (arr : Array (YjsItem A)) (a x : YjsItem A)
 
 theorem integrate_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
-  -> a.id ≠ b.id
+  -> a.id.clientId ≠ b.id.clientId
   -> InsertOk arr1 a
   -> InsertOk arr1 b
   -> integrate a arr1 = Except.ok arr2

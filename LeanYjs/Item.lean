@@ -10,7 +10,7 @@ deriving Repr, DecidableEq
 instance : LT YjsId where
   lt id1 id2 :=
     if id1.clientId == id2.clientId then
-      id1.clock < id2.clock
+      id1.clock > id2.clock
     else
       id1.clientId < id2.clientId
 
@@ -21,7 +21,7 @@ instance : DecidableRel (· < · : YjsId → YjsId → Prop) := by
   simp only [LT.lt]
   simp
   split
-  . by_cases h : x_clock < y_clock
+  . by_cases h : x_clock > y_clock
     . exact isTrue h
     . apply isFalse; omega
   . by_cases h : x_clientId < y_clientId

@@ -38,7 +38,7 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
     if oLeftIdx < leftIdx then
       break
     else if oLeftIdx == leftIdx then
-      if newItem.id > other.id then
+      if newItem.id.clientId > other.id.clientId then
         scanning := false
       else if oRightIdx == rightIdx then
         break
@@ -49,3 +49,23 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
       destIdx := i + 1
 
   return (Array.insertIdxIfInBounds arr (Int.toNat destIdx) newItem)
+
+def init : Array (YjsItem String)  := #[]
+def i1 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 0) "0"
+def i2 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 1) "1"
+
+def test12 := do
+  let arr1 <- integrate i1 init
+  integrate i2 arr1
+
+def test21 := do
+  let arr1 <- integrate i2 init
+  integrate i1 arr1
+
+#eval match test12 with
+| Except.ok arr => IO.println $ arr.map (fun item => YjsItem.content item)
+| Except.error err => IO.println s!"Error"
+
+#eval match test21 with
+| Except.ok arr => IO.println $ arr.map (fun item => YjsItem.content item)
+| Except.error err => IO.println s!"Error"
