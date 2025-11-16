@@ -8,30 +8,30 @@ section YjsNetwork
 
 open NetworkModels
 
-instance [Message A]: Message (YjsItem A) where
-  messageId item := Message.messageId item.content
+instance : Message (YjsItem A) YjsId where
+  messageId item := item.id
 
 instance [DecidableEq A] : Operation (YjsItem A) where
   State := Array (YjsItem A)
   Error := IntegrateError
   effect item state := integrate item state
 
-def interpOps {A} [DecidableEq A] [Message A] (items : List (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) :=
+def interpOps {A} [DecidableEq A] (items : List (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) :=
   List.foldlM (init := #[]) (f := fun acc item => integrate item acc) items
 
-def interpHistory {A} [DecidableEq A] [Message A] (history : List (Event (YjsItem A))) : Except IntegrateError (Array (YjsItem A)) :=
+def interpHistory {A} [DecidableEq A] (history : List (Event (YjsItem A))) : Except IntegrateError (Array (YjsItem A)) :=
   interpOps (history.filterMap (fun ev => match ev with | Event.Deliver it => some it | _ => none))
 
-def interpDeliveredOps {A} [DecidableEq A] [Message A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)) : Except IntegrateError (Array (YjsItem A)) :=
+def interpDeliveredOps {A} [DecidableEq A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)) : Except IntegrateError (Array (YjsItem A)) :=
   let deliveredItems := items.map (fun item => item.elem)
   interpOps deliveredItems
 
-structure YjsOperationNetwork A [DecidableEq A] [Message A] extends CausalNetwork (YjsItem A) where
-  histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.id = i
+structure YjsOperationNetwork A [DecidableEq A] extends CausalNetwork (YjsItem A) where
+  histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.id.clientId = i
   histories_InsertOk : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
     interpHistory hist1 = Except.ok array → InsertOk array e
 
-theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] [Message A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)) (init : Array (YjsItem A)) :
+theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)) (init : Array (YjsItem A)) :
   List.foldlM (fun acc item => integrate item acc) init (List.map (fun item => item.elem) items) =
   List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) init := by
   induction items generalizing init with
@@ -49,14 +49,14 @@ theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] [Message A] {network : C
       rw [ih]
       eq_refl
 
-theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] [Message A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)),
+theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)),
   interpDeliveredOps items =
   List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) #[] := by
-  intros A _ _ network items
+  intros A _ network items
   simp [interpDeliveredOps, interpOps]
   rw [foldlM_foldr_effect_comp_eq]
 
-theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] [Message A] (network : YjsOperationNetwork A) (i : ClientId) :
+theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network : YjsOperationNetwork A) (i : ClientId) :
   concurrent_commutative inferInstance (network.toCausalNetwork.toDeliverMessages i) := by
   intros a b h_a_mem h_b_mem h_a_b_happens_before
   funext s
@@ -66,7 +66,7 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] [Message A
   generalize h_s_b : integrate b.elem s = s_b
   sorry
 
-theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] [Message A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : Array (YjsItem A)),
+theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : Array (YjsItem A)),
   let hist_i := network.toDeliverMessages i
   let hist_j := network.toDeliverMessages j
   interpDeliveredOps hist_i = Except.ok res₀ →
@@ -74,7 +74,7 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] [Message A] (
   (∀ item, item ∈ hist_i ↔ item ∈ hist_j) →
   res₀ = res₁
   := by
-  intros A _ _ network i j res₀ res₁ hist_i hist_j h_res₀ h_res₁ h_hist_mem
+  intros A _ network i j res₀ res₁ hist_i hist_j h_res₀ h_res₁ h_hist_mem
 
   subst hist_i hist_j
 

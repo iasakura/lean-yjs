@@ -9,15 +9,15 @@ import LeanYjs.Network.CausalOrder
 
 namespace NetworkModels
 
-class Message (A : Type) where
-  messageId : A → String
+class Message (A : Type) (M : outParam Type) [DecidableEq M] where
+  messageId : A → M
 
 inductive Event (A : Type) : Type where
   | Broadcast : A → Event A
   | Deliver : A → Event A
   deriving Inhabited, Repr, BEq, DecidableEq, Hashable
 
-def Event.id {A} [Message A] : Event A → String
+def Event.id {A M} [DecidableEq M] [Message A M] : Event A → M
   | Event.Broadcast a => Message.messageId a
   | Event.Deliver a => Message.messageId a
 
@@ -28,18 +28,18 @@ structure NodeHistories (E : Type) where
 def locallyOrdered {E} [DecidableEq E] (histories : NodeHistories E) (i : ClientId) (e1 e2 : E) : Prop :=
   ∃ l1 l2 l3, histories.histories i = l1 ++ [e1] ++ l2 ++ [e2] ++ l3
 
-structure NetworkBase A [DecidableEq A] [Message A] extends NodeHistories (Event A) where
+structure NetworkBase A [DecidableEq A] [DecidableEq M] [Message A M] extends NodeHistories (Event A) where
   deliver_has_a_cause : forall {i e}, Event.Deliver e ∈ histories i → ∃ j, Event.Broadcast e ∈ histories j
   deliver_locally : forall {i e}, Event.Deliver e ∈ histories i →
     locallyOrdered toNodeHistories i (Event.Broadcast e) (Event.Deliver e)
   msg_id_unique : forall {mi mj i j}, Event.Broadcast mi ∈ histories i → Event.Broadcast mj ∈ histories j → Message.messageId mi = Message.messageId mj → i = j ∧ mi = mj
 
-inductive HappensBefore {A} [DecidableEq A] [Message A] (network : NetworkBase A) : A → A → Prop
+inductive HappensBefore {A} [DecidableEq A] [DecidableEq M] [Message A M] (network : NetworkBase A) : A → A → Prop
   | broadcast_broadcast_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) → HappensBefore network e1 e2
   | broadcast_deliver_local : locallyOrdered network.toNodeHistories i (Event.Deliver e1) (Event.Broadcast e2) → HappensBefore network e1 e2
   | trans : HappensBefore network e1 e2 → HappensBefore network e2 e3 → HappensBefore network e1 e3
 
-structure CausalNetwork A [DecidableEq A] [Message A] extends NetworkBase A where
+structure CausalNetwork A [DecidableEq A] [DecidableEq M] [Message A M] extends NetworkBase A where
   causal_delivery : forall {i e1 e2}, Event.Deliver e2 ∈ histories i → HappensBefore toNetworkBase e1 e2 → locallyOrdered toNodeHistories i (Event.Deliver e1) (Event.Deliver e2)
   -- This assumption is not assumed in the paper, but it is necessary for the ensuring total order of Yjs items and for my proof.
   -- It is also a reasonable assumption because in a real Yjs implementation, a client would apply item same time at the time of creation of the item by library API (e.g., insert).
@@ -47,17 +47,17 @@ structure CausalNetwork A [DecidableEq A] [Message A] extends NetworkBase A wher
     locallyOrdered toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) →
     locallyOrdered toNodeHistories i (Event.Deliver e1) (Event.Broadcast e2)
 
-structure CausalNetworkElem A [DecidableEq A] [Message A] (network : CausalNetwork A) where
+structure CausalNetworkElem A [DecidableEq A] [DecidableEq M] [Message A M] (network : CausalNetwork A) where
   elem : A
 
-inductive HappensBeforeOnlyBroadcast {A} [DecidableEq A] [Message A] (network : NetworkBase A) : A → A → Prop
+inductive HappensBeforeOnlyBroadcast {A} [DecidableEq A] [DecidableEq M] [Message A M] (network : NetworkBase A) : A → A → Prop
   | broadcast_broadcast_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) → HappensBeforeOnlyBroadcast network e1 e2
   | trans : HappensBeforeOnlyBroadcast network e1 e2 → HappensBeforeOnlyBroadcast network e2 e3 → HappensBeforeOnlyBroadcast network e1 e3
 
-abbrev HappensBeforeOrEqual {A} [DecidableEq A] [Message A] (network : NetworkBase A) (a b : A) : Prop :=
+abbrev HappensBeforeOrEqual {A} [DecidableEq A] [DecidableEq M] [Message A M] (network : NetworkBase A) (a b : A) : Prop :=
   a = b ∨ HappensBefore network a b
 
-theorem HappensBefore.trans1 {A} [DecidableEq A] [Message A] {network : NetworkBase A} {a b c : A} :
+theorem HappensBefore.trans1 {A} [DecidableEq A] [DecidableEq M] [Message A M] {network : NetworkBase A} {a b c : A} :
   HappensBeforeOrEqual network a b →
   HappensBefore network b c →
   HappensBefore network a c := by
@@ -69,7 +69,7 @@ theorem HappensBefore.trans1 {A} [DecidableEq A] [Message A] {network : NetworkB
   | inr h_hb_ab =>
     apply HappensBefore.trans h_hb_ab h_bc
 
-theorem HappensBefore.trans2 {A} [DecidableEq A] [Message A] {network : NetworkBase A} {a b c : A} :
+theorem HappensBefore.trans2 {A} [DecidableEq A] [DecidableEq M] [Message A M] {network : NetworkBase A} {a b c : A} :
   HappensBefore network a b →
   HappensBeforeOrEqual network b c →
   HappensBefore network a c := by
@@ -81,7 +81,7 @@ theorem HappensBefore.trans2 {A} [DecidableEq A] [Message A] {network : NetworkB
   | inr h_hb_bc =>
     apply HappensBefore.trans h_ab h_hb_bc
 
-theorem HappensBeforeSame_HappensBeforeOnlyBroadcast_or_HappensBeforeDeliver_exists {A} [DecidableEq A] [Message A] {network : CausalNetwork A} (a b : A) :
+theorem HappensBeforeSame_HappensBeforeOnlyBroadcast_or_HappensBeforeDeliver_exists {A} [DecidableEq A] [DecidableEq M] [Message A M] {network : CausalNetwork A} (a b : A) :
   HappensBefore network.toNetworkBase a b →
   HappensBeforeOnlyBroadcast network.toNetworkBase a b ∨
   ∃ a' b' i,
@@ -166,7 +166,7 @@ theorem nodup_prefix_unique {A} [DecidableEq A] {lp1 ls1 lp2 ls2 : List A} {x : 
   obtain ⟨ h_eq1, h_eq2 ⟩ := List.append_inj h_eq h_lp2_length_eq_lp1_length
   assumption
 
-theorem locallyOrdered_asymm {A} [DecidableEq A] [Message A] {network : NetworkBase A} {i : ClientId} {e1 e2 : Event A} :
+theorem locallyOrdered_asymm {A} [DecidableEq A] [DecidableEq M] [Message A M] {network : NetworkBase A} {i : ClientId} {e1 e2 : Event A} :
   locallyOrdered network.toNodeHistories i e1 e2 →
   locallyOrdered network.toNodeHistories i e2 e1 →
   False := by
@@ -191,7 +191,7 @@ theorem locallyOrdered_asymm {A} [DecidableEq A] [Message A] {network : NetworkB
   rw [<-h_l1'_1_l2'] at h_l1_1_l2
   simp at h_l1_1_l2
 
-theorem locallyOrdered_trans {A} [DecidableEq A] [Message A] {network : NetworkBase A} {i : ClientId} {e1 e2 e3 : Event A} :
+theorem locallyOrdered_trans {A} [DecidableEq A] [DecidableEq M] [Message A M] {network : NetworkBase A} {i : ClientId} {e1 e2 e3 : Event A} :
   locallyOrdered network.toNodeHistories i e1 e2 →
   locallyOrdered network.toNodeHistories i e2 e3 →
   locallyOrdered network.toNodeHistories i e1 e3 := by
@@ -212,7 +212,7 @@ theorem locallyOrdered_trans {A} [DecidableEq A] [Message A] {network : NetworkB
   rw [h_eq', h_eq]
   assumption
 
-theorem HappensBeforeOnlyBroadcast_locallyOrdered {A} [DecidableEq A] [Message A] {network : NetworkBase A} {a b : A} :
+theorem HappensBeforeOnlyBroadcast_locallyOrdered {A} [DecidableEq A] [DecidableEq M] [Message A M] {network : NetworkBase A} {a b : A} :
   HappensBeforeOnlyBroadcast network a b →
   ∃i, locallyOrdered network.toNodeHistories i (Event.Broadcast a) (Event.Broadcast b) := by
   intro h_hb
@@ -242,7 +242,7 @@ theorem HappensBeforeOnlyBroadcast_locallyOrdered {A} [DecidableEq A] [Message A
 -- otherwise, if a < a is break down into a < b and b < a and a < b is broadcast_deliver_local, we now have
 -- D(a) <_i B(b) and b < a.
 -- so by causal_delivery, we have D(b) <_i D(a), but it followed by D(b) <_i B(b), it contradicts with deliver_locally.
-lemma HappensBefore_assym [Message A] [DecidableEq A] {network : CausalNetwork A} a b :
+lemma HappensBefore_assym [DecidableEq M] [Message A M] [DecidableEq A] {network : CausalNetwork A} a b :
   HappensBefore network.toNetworkBase a b →
   HappensBefore network.toNetworkBase b a → False := by
   intros h_ab h_ba
@@ -276,7 +276,7 @@ lemma HappensBefore_assym [Message A] [DecidableEq A] {network : CausalNetwork A
       apply locallyOrdered_trans h_lo_broadcast_b'_deliver_b' h_lo_deliver_b_deliver_a
     apply locallyOrdered_asymm h_lo_broadcast_b'_deliver_a' h_local
 
-instance instCausalNetworkElemCausalOrder [DecidableEq A] [Message A] (network : CausalNetwork A) : CausalOrder (CausalNetworkElem A network) where
+instance instCausalNetworkElemCausalOrder [DecidableEq A] [DecidableEq M] [Message A M] (network : CausalNetwork A) : CausalOrder (CausalNetworkElem A network) where
   lt a b := HappensBefore network.toNetworkBase a.elem b.elem
   le a b := a = b ∨ HappensBefore network.toNetworkBase a.elem b.elem
   le_refl := fun a => Or.inl rfl
@@ -331,7 +331,7 @@ instance instCausalNetworkElemCausalOrder [DecidableEq A] [Message A] (network :
         apply h_not_ge
         left; simp
 
-variable [Operation A] [Message A] [DecidableEq A]
+variable [Operation A] [DecidableEq M] [Message A M] [DecidableEq A]
 variable (network : CausalNetwork A)
 
 instance [Operation A] : Operation (CausalNetworkElem A network) where
