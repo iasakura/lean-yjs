@@ -973,3 +973,27 @@ theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other ne
       subst no
       apply YjsLt'.ltConflict
       apply ConflictLt'.ltOriginSame <;> try assumption
+
+theorem findPtrIdx_ArrSet {A : Type} [DecidableEq A] {arr : Array (YjsItem A)} {p : YjsPtr A} {idx : ℤ} :
+  findPtrIdx p arr = Except.ok idx →
+  ArrSet arr.toList p := by
+  intros hfind
+  unfold findPtrIdx at hfind
+  cases p with
+  | first =>
+    simp at hfind
+    cases hfind
+    simp [ArrSet]
+  | last =>
+    simp at hfind
+    cases hfind
+    simp [ArrSet]
+  | itemPtr p =>
+    simp at hfind
+    generalize heq : Array.findIdx? (fun i => decide (i = p)) arr = idxOpt at hfind
+    cases idxOpt <;> cases hfind
+    rw [Array.findIdx?_eq_some_iff_getElem] at heq
+    obtain ⟨ h, heq, _ ⟩ := heq
+    simp at heq
+    subst p
+    simp [ArrSet]

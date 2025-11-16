@@ -1565,8 +1565,6 @@ lemma findPtrIdx_lt_size_getElem {p : YjsPtr A} :
     simp
 
 structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
-  origin_in : ArrSet arr.toList newItem.origin
-  rightOrigin_in : ArrSet arr.toList newItem.rightOrigin
   origin_lt_rightOrigin : YjsLt' (A := A) newItem.origin newItem.rightOrigin
   reachable_YjsLeq' : (∀ (x : YjsPtr A),
       OriginReachable (YjsPtr.itemPtr newItem) x →
@@ -1581,9 +1579,22 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
   -> integrate newItem arr = Except.ok newArr
   -> ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList := by
   intros harrinv h_InsertOk hintegrate
-  obtain ⟨ horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent ⟩ :=
+  obtain ⟨ horigin_consistent, hreachable_consistent, hsameid_consistent ⟩ :=
     h_InsertOk
   unfold integrate at hintegrate
+  generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
+  obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
+  rw [ok_bind] at hintegrate
+
+  generalize heqright : findPtrIdx newItem.rightOrigin arr = rightIdx at hintegrate
+  obtain ⟨ _ ⟩ | ⟨ rightIdx ⟩ := rightIdx; cases hintegrate
+  rw [ok_bind] at hintegrate
+
+  have horigin : ArrSet arr.toList newItem.origin := by
+    apply findPtrIdx_ArrSet heqleft
+
+  have hrorigin : ArrSet arr.toList newItem.rightOrigin := by
+    apply findPtrIdx_ArrSet heqright
 
   have hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)) := by
     apply arr_set_closed_push _ _ _ horigin hrorigin
@@ -1599,14 +1610,6 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
     have h := hsameid_consistent x hmem (by rw [heq])
     rw [heq] at h
     simp at h
-
-  generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
-  obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
-  rw [ok_bind] at hintegrate
-
-  generalize heqright : findPtrIdx newItem.rightOrigin arr = rightIdx at hintegrate
-  obtain ⟨ _ ⟩ | ⟨ rightIdx ⟩ := rightIdx; cases hintegrate
-  rw [ok_bind] at hintegrate
 
   have hleftIdxrightIdx : leftIdx < rightIdx := by
     apply YjsLt'_findPtrIdx_lt leftIdx rightIdx newItem.origin newItem.rightOrigin arr harrinv _ (by assumption) (by assumption) heqleft heqright
@@ -1874,12 +1877,8 @@ theorem insertOk_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
   -> InsertOk arr1 x
   -> InsertOk arr2 x := by
   intros harrinv1 harrinv2 h_arr1_subset_arr2 h_id_neq h_InsertOk
-  obtain ⟨ horigin, hrorigin, horigin_consistent, hreachable_consistent, hsameid_consistent ⟩ := h_InsertOk
+  obtain ⟨ horigin_consistent, hreachable_consistent, hsameid_consistent ⟩ := h_InsertOk
   constructor <;> try assumption
-  . apply subset_ArrSet h_arr1_subset_arr2
-    assumption
-  . apply subset_ArrSet h_arr1_subset_arr2
-    assumption
   . intros y hy_in_arr2 hid_eq
     have hy_in_arr1 : ArrSet arr1.toList y := by
       simp [ArrSet]

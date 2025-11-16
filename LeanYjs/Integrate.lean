@@ -48,7 +48,7 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
     if !scanning then
       destIdx := i + 1
 
-  return (Array.insertIdxIfInBounds arr (Int.toNat destIdx) newItem)
+  return (arr.insertIdxIfInBounds (Int.toNat destIdx) newItem)
 
 def init : Array (YjsItem String)  := #[]
 def i1 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 0) "0"
@@ -64,8 +64,8 @@ def test21 := do
 
 #eval match test12 with
 | Except.ok arr => IO.println $ arr.map (fun item => YjsItem.content item)
-| Except.error err => IO.println s!"Error"
+| Except.error _err => IO.println s!"Error"
 
 #eval match test21 with
 | Except.ok arr => IO.println $ arr.map (fun item => YjsItem.content item)
-| Except.error err => IO.println s!"Error"
+| Except.error _err => IO.println s!"Error"
