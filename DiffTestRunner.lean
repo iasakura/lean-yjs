@@ -42,19 +42,20 @@ def renderIntegrateError : IntegrateError → String
   | .notFound => "integrate error: notFound"
   | .outOfBounds i size => s!"integrate error: outOfBounds {i} (size={size})"
 
-abbrev ClientState := Std.HashMap Nat YString
+abbrev ClientState := Std.HashMap Nat (YString × Nat)
 
 def applyInsert (state : ClientState) (clientId index : Nat) (char : Char) : Except String ClientState :=
-  let current := state.getD clientId YString.new
-  match (YString.insert current index char).run clientId with
-  | Except.ok updated =>
-    Except.ok <| state.insert clientId updated
+  let ⟨ current, clock ⟩ := state.getD clientId (YString.new, 0)
+  let id := YjsId.mk clientId (clock + 1)
+  match (YString.insert current index char).run id with
+  | Except.ok ⟨ updated, nextId ⟩ =>
+    Except.ok <| state.insert clientId ⟨ updated, nextId.clock ⟩
   | Except.error err =>
     Except.error (renderIntegrateError err)
 
 def applySync (state : ClientState) (src dst : Nat) : Except String ClientState := do
-  let fromDoc := state.getD src YString.new
-  let target := state.getD dst YString.new
+  let ⟨ fromDoc, fromClock ⟩ := state.getD src (YString.new, 0)
+  let ⟨ target, targetClock ⟩ := state.getD dst (YString.new, 0)
   let initial := target.contents
   let todo := fromDoc.contents.toList.filter fun item =>
     not (initial.any (fun existing => existing = item))
@@ -86,9 +87,9 @@ def applySync (state : ClientState) (src dst : Nat) : Except String ClientState 
 
   let maxFuel := todo.length + 1
   let contents ← integrateLoop initial todo maxFuel
-  let stateWithFrom := state.insert src fromDoc
+  let stateWithFrom := state.insert src ⟨ fromDoc, fromClock ⟩
   let updatedTarget : YString := { contents := contents }
-  return stateWithFrom.insert dst updatedTarget
+  return stateWithFrom.insert dst ⟨ updatedTarget, targetClock ⟩
 
 def applyCommand (state : ClientState) (cmd : NdjsonCommand) : Except String ClientState :=
   match cmd with
@@ -129,8 +130,8 @@ def readCommands : IO (Array NdjsonCommand) := do
   pure commands
 
 def stateToJson (state : ClientState) : Json :=
-  let pairs := state.toList.map fun (entry : Nat × YString) =>
-    (toString entry.fst, Json.str (YString.toString entry.snd))
+  let pairs := state.toList.map fun (entry : Nat × (YString × Nat)) =>
+    (toString entry.fst, Json.str (YString.toString entry.snd.fst))
   Json.mkObj pairs
 
 def main : IO Unit := do

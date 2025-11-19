@@ -21,14 +21,17 @@ def extGetElemExcept (arr : Array (YjsItem A)) (idx : Int) : Except IntegrateErr
       | some item => return item
       | none => Except.error IntegrateError.notFound
 
-def YString.insert (s : YString) (i : Nat) (c : Char) : ReaderT ClientId (Except IntegrateError) YString := do
+def nextId (currentId : YjsId) : YjsId :=
+  YjsId.mk currentId.clientId (currentId.clock + 1)
+
+def YString.insert (s : YString) (i : Nat) (c : Char) : StateT YjsId (Except IntegrateError) YString := do
   if i > s.contents.size then
     throw $ IntegrateError.outOfBounds i s.contents.size
   let arr : Array Item := s.contents
   let origin <- extGetElemExcept arr (Int.ofNat i - 1)
   let rightOrigin <- extGetElemExcept arr (Int.ofNat i)
-  let clientId <- ReaderT.read
-  let newItem : Item := YjsItem.item origin rightOrigin clientId c
+  let id := nextId (← StateT.get)
+  let newItem : Item := YjsItem.item origin rightOrigin id c
   let arr <- integrate newItem s.contents
   pure { contents := arr }
 
