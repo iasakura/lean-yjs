@@ -1,0 +1,27 @@
+# latexmk & LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.brf
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.toc
+*.synctex.gz
+*.run.xml
+*.bcf
+*.nav
+*.snm
+*.vrb
+
+# PDFs and intermediate files
+*.pdf
+*.xdv
+
+# dist artifacts
+dist/
+
+*.png
