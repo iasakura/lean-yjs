@@ -1,0 +1,71 @@
+% YjsLt derivation rules (standalone includable snippet)
+% Assumes amsmath/mathtools are available from the main paper.
+
+% Notation helpers
+\providecommand{\first}{\mathsf{first}}
+\providecommand{\last}{\mathsf{last}}
+\providecommand{\itemptr}[4]{\mathsf{item}(#1,#2,#3,#4)} % (o,r,id,c)
+% Compact relations: x <_o y (origin order), x <_c y (conflict order)
+\newcommand{\lto}{\mathrel{<}}
+\newcommand{\ltc}{\mathrel{<}}
+
+% Judgment forms
+\newcommand{\ltjudg}[2]{\vdash #1 < #2}
+\newcommand{\ltcjudg}[2]{\vdash #1 \, \ltc \, #2}
+\newcommand{\leqjudg}[2]{\vdash #1 \le #2}
+
+% We now use mathpartir's \inferrule* so no custom \Rule is needed.
+
+% Utility
+
+% --- Base ordering between special pointers and items ---
+% Encodes Lean's OriginLt as <_o with three axioms
+\begin{mathpar}
+  \inferrule*[right=Origin-First]{ }{\first \, \lto \, \itemptr{o}{r}{\mathit{id}}{c}}
+  \and
+  \inferrule*[right=Origin-Last]{ }{\itemptr{o}{r}{\mathit{id}}{c} \, \lto \, \last}
+  \and
+  \inferrule*[right=Origin-FL]{ }{\first \, \lto \, \last}
+\end{mathpar}
+
+% Left/right-origin propagation (stacked vertically to avoid overflow; centered)
+\begin{mathpar}
+  \inferrule*[right=Lt-LeftOrigin]{\itemptr{o}{r}{\mathit{id}}{c}\in P \\ \leqjudg{x}{o} }{\ltjudg{x}{\itemptr{o}{r}{\mathit{id}}{c}}}
+  \and
+  \inferrule*[right=Lt-RightOrigin]{\itemptr{o}{r}{\mathit{id}}{c}\in P \\ \leqjudg{r}{x}}{\ltjudg{\itemptr{o}{r}{\mathit{id}}{c}}{x}}
+\end{mathpar}
+
+% --- Non-strict order: N, P ⊢ x ≤ y ---
+% Lean: YjsLeq P N x y (place side-by-side and centered)
+\begin{mathpar}
+  \inferrule*[right=Leq-Refl]{x\in P}{\leqjudg{x}{x}}
+  \and
+  \inferrule*[right=Leq-FromLt]{\ltjudg{x}{y}}{\leqjudg{x}{y}}
+\end{mathpar}
+
+% --- Conflict ordering between concurrent inserts (<_c) ---
+% Lean: ConflictLt P N i1 i2
+% Different left-origins
+\begin{mathpar}
+  \inferrule*[right=Conf-OriginDiff]{
+    \ltjudg{\ell_2}{\ell_1} \\
+    \ltjudg{\itemptr{\ell_1}{r_1}{\mathit{id}_1}{c_1}}{r_2} \\
+    \ltjudg{\ell_1}{\itemptr{\ell_2}{r_2}{\mathit{id}_2}{c_2}} \\
+    \ltjudg{\itemptr{\ell_2}{r_2}{\mathit{id}_2}{c_2}}{r_1}
+  }{\ltcjudg{\itemptr{\ell_1}{r_1}{\mathit{id}_1}{c_1}}{\itemptr{\ell_2}{r_2}{\mathit{id}_2}{c_2}}}
+\end{mathpar}
+
+% Same left-origin: tie-break by increasing id
+\begin{mathpar}
+  \inferrule*[right=Conf-OriginSame]{
+    \ltjudg{\itemptr{\ell}{r_1}{\mathit{id}_1}{c_1}}{r_2} \\
+    \ltjudg{\itemptr{\ell}{r_2}{\mathit{id}_2}{c_2}}{r_1} \\
+    \mathit{id}_1 < \mathit{id}_2
+  }{\ltcjudg{\itemptr{\ell}{r_1}{\mathit{id}_1}{c_1}}{\itemptr{\ell}{r_2}{\mathit{id}_2}{c_2}}}
+\end{mathpar}
+
+% Notes:
+% - P is an ItemSet; we write x∈P as membership (Lean: P x).
+% - N is a stratification index mirroring the Lean constructors; it
+%   enables well-founded recursion and does not affect the semantic order.
+% - first/last are the sentinel pointers; items carry (origin, rightOrigin, id, content).

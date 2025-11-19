@@ -1,0 +1,19 @@
+% Standalone wrapper to render yjslt.tex into a cropped PDF/PNG
+\documentclass{article}
+
+% Match the math packages used in paper.tex (standalone not required; we trim later)
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{mathpartir} % centered inference rules, mathpar environment
+
+% Keep things compact
+\setlength{\abovedisplayskip}{6pt}
+\setlength{\belowdisplayskip}{6pt}
+
+\begin{document}
+\thispagestyle{empty}
+\noindent
+\input{yjslt.tex}
+\end{document}
