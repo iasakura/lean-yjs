@@ -4,7 +4,6 @@ import LeanYjs.ItemOrder
 
 inductive IntegrateError where
 | notFound : IntegrateError
-| outOfBounds : Nat → Nat → IntegrateError
 
 variable {A: Type} [DecidableEq A]
 
@@ -22,10 +21,7 @@ def getElemExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError 
   | some item => return item
   | none => Except.error IntegrateError.notFound
 
-def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
-  let leftIdx <- findPtrIdx (YjsItem.origin newItem) arr
-  let rightIdx <- findPtrIdx (YjsItem.rightOrigin newItem) arr
-
+def findIntegratedIndex (leftIdx rightIdx : Int) (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError Nat := do
   let mut scanning := false
   let mut destIdx := leftIdx + 1
   for offset in [1:(rightIdx-leftIdx).toNat] do
@@ -47,6 +43,14 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
 
     if !scanning then
       destIdx := i + 1
+
+  return (Int.toNat destIdx)
+
+def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
+  let leftIdx <- findPtrIdx (YjsItem.origin newItem) arr
+  let rightIdx <- findPtrIdx (YjsItem.rightOrigin newItem) arr
+
+  let destIdx <- findIntegratedIndex leftIdx rightIdx newItem arr
 
   return (arr.insertIdxIfInBounds (Int.toNat destIdx) newItem)
 

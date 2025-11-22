@@ -997,3 +997,65 @@ theorem findPtrIdx_ArrSet {A : Type} [DecidableEq A] {arr : Array (YjsItem A)} {
     simp at heq
     subst p
     simp [ArrSet]
+
+theorem findPtrIdx_insert_some {arr other} {newItem : YjsItem A} :
+  YjsArrInvariant (arr.insertIdxIfInBounds i newItem).toList
+  → findPtrIdx other arr = Except.ok idx
+  → findPtrIdx other (arr.insertIdxIfInBounds i newItem) = if i ≤ idx then Except.ok (idx + 1) else Except.ok idx := by
+  intros h_inv h_findPtrIdx_other
+  cases other with
+  | first =>
+    simp [findPtrIdx] at *
+    cases h_findPtrIdx_other
+    split; omega
+    eq_refl
+  | last =>
+    simp [findPtrIdx] at *
+    cases h_findPtrIdx_other
+    simp [Array.insertIdxIfInBounds]
+    split
+    . simp; eq_refl
+    . eq_refl
+  | itemPtr p =>
+    apply findPtrIdx_item_exists at h_findPtrIdx_other
+    obtain ⟨ j, h_j, h_getElem_eq ⟩ := h_findPtrIdx_other
+    have h_j_lt : j < arr.size := by
+      rw [Array.getElem?_eq_some_iff] at h_getElem_eq
+      obtain ⟨ h, h_eq ⟩ := h_getElem_eq
+      assumption
+    have h_idx_eq_j : idx = j := by
+      cases idx with
+      | negSucc n =>
+        simp [Int.toNat?] at *
+      | ofNat n =>
+        simp [Int.toNat?] at *
+        omega
+
+    subst idx
+    simp
+
+    have h_lt : (if i ≤ j then j + 1 else j) < (arr.insertIdxIfInBounds i newItem).size := by
+      simp [Array.insertIdxIfInBounds]
+      split_ifs
+      . simp
+        omega
+      . omega
+      . simp
+        omega
+      . omega
+
+    have h_getElem : (arr.insertIdxIfInBounds i newItem)[if i ≤ j then j + 1 else j] = p := by
+      rw [Array.getElem_eq_iff]
+      simp [Array.insertIdxIfInBounds] at *
+      split_ifs
+      . rw [Array.getElem?_insertIdx]
+        split_ifs <;> try omega
+        simp; assumption
+      . rw [Array.getElem?_insertIdx]
+        split_ifs <;> try omega
+      . omega
+      . omega
+
+    rw [<-h_getElem]
+    rw [findPtrIdx_getElem _ _ h_inv]
+    split_ifs <;> eq_refl
