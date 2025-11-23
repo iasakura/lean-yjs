@@ -1,9 +1,9 @@
 import LeanYjs.Item
 import LeanYjs.ClientId
-import LeanYjs.ItemOrder
+import LeanYjs.Order.ItemOrder
 import LeanYjs.ItemSet
-import LeanYjs.ItemSetInvariant
-import LeanYjs.Asymmetry
+import LeanYjs.Order.ItemSetInvariant
+import LeanYjs.Order.Asymmetry
 
 import Mathlib.Order.Defs.Unbundled
 

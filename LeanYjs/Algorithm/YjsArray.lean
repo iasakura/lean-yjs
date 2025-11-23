@@ -1,12 +1,12 @@
 import LeanYjs.Item
 import LeanYjs.ItemSet
 import LeanYjs.ClientId
-import LeanYjs.ItemOrder
-import LeanYjs.ItemSetInvariant
-import LeanYjs.Totality
-import LeanYjs.Transitivity
-import LeanYjs.Asymmetry
-import LeanYjs.Integrate
+import LeanYjs.Order.ItemOrder
+import LeanYjs.Order.ItemSetInvariant
+import LeanYjs.Order.Totality
+import LeanYjs.Order.Transitivity
+import LeanYjs.Order.Asymmetry
+import LeanYjs.Algorithm.Integrate
 
 variable {A : Type}
 variable [DecidableEq A]

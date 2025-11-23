@@ -2,8 +2,8 @@ import Lean.Data.Json
 import Std.Data.HashMap
 
 import LeanYjs.Item
-import LeanYjs.YString
-import LeanYjs.Integrate
+import LeanYjs.Algorithm.YString
+import LeanYjs.Algorithm.Integrate
 import LeanYjs.Logger
 
 open Lean

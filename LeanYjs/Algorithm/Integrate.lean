@@ -1,6 +1,6 @@
 import LeanYjs.Item
 import LeanYjs.ClientId
-import LeanYjs.ItemOrder
+import LeanYjs.Order.ItemOrder
 
 inductive IntegrateError where
 | notFound : IntegrateError

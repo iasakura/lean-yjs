@@ -5,14 +5,14 @@ import LeanYjs.ListLemmas
 import LeanYjs.Item
 import LeanYjs.ItemSet
 import LeanYjs.ClientId
-import LeanYjs.ItemOrder
-import LeanYjs.ItemSetInvariant
-import LeanYjs.Totality
-import LeanYjs.Transitivity
-import LeanYjs.Asymmetry
-import LeanYjs.Integrate
-import LeanYjs.YjsArray
-import LeanYjs.NoCrossOrigin
+import LeanYjs.Order.ItemOrder
+import LeanYjs.Order.ItemSetInvariant
+import LeanYjs.Order.Totality
+import LeanYjs.Order.Transitivity
+import LeanYjs.Order.Asymmetry
+import LeanYjs.Algorithm.Integrate
+import LeanYjs.Algorithm.YjsArray
+import LeanYjs.Order.NoCrossOrigin
 
 variable {A : Type}
 variable [DecidableEq A]

@@ -1,7 +1,7 @@
 import LeanYjs.Item
 import LeanYjs.ItemSet
 import LeanYjs.ClientId
-import LeanYjs.ItemOrder
+import LeanYjs.Order.ItemOrder
 
 variable {A : Type} [BEq A]
 

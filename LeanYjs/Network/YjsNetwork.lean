@@ -1,6 +1,6 @@
 import LeanYjs.Item
-import LeanYjs.Integrate
-import LeanYjs.IntegrateProof
+import LeanYjs.Algorithm.Integrate
+import LeanYjs.Algorithm.IntegrateProof
 import LeanYjs.Network.CausalNetwork
 import LeanYjs.Network.CausalOrder
 

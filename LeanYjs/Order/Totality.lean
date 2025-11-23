@@ -1,8 +1,8 @@
 import LeanYjs.Item
 import LeanYjs.ClientId
-import LeanYjs.ItemOrder
+import LeanYjs.Order.ItemOrder
 import LeanYjs.ItemSet
-import LeanYjs.ItemSetInvariant
+import LeanYjs.Order.ItemSetInvariant
 
 @[simp] theorem first_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> P YjsPtr.first := by
   intros hclosed

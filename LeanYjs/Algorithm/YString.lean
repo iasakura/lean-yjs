@@ -1,6 +1,6 @@
 import LeanYjs.Item
 import LeanYjs.ClientId
-import LeanYjs.Integrate
+import LeanYjs.Algorithm.Integrate
 
 abbrev Item := YjsItem Char
 structure YString : Type where

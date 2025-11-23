@@ -1,9 +1,9 @@
 import LeanYjs.Item
 import LeanYjs.ClientId
-import LeanYjs.ItemOrder
+import LeanYjs.Order.ItemOrder
 import LeanYjs.ItemSet
-import LeanYjs.ItemSetInvariant
-import LeanYjs.Totality
+import LeanYjs.Order.ItemSetInvariant
+import LeanYjs.Order.Totality
 
 variable {A : Type} {P : ItemSet A} {inv : ItemSetInvariant P}
 

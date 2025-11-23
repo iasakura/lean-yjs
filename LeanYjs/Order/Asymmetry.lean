@@ -1,10 +1,10 @@
 import LeanYjs.ClientId
 import LeanYjs.Item
-import LeanYjs.ItemOrder
 import LeanYjs.ItemSet
-import LeanYjs.ItemSetInvariant
-import LeanYjs.Totality
-import LeanYjs.Transitivity
+import LeanYjs.Order.ItemOrder
+import LeanYjs.Order.ItemSetInvariant
+import LeanYjs.Order.Totality
+import LeanYjs.Order.Transitivity
 
 theorem YjsId_lt_asymm {id1 id2 : YjsId} :
   id1 < id2 -> ¬ (id2 < id1) := by
