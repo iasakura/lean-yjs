@@ -1,6 +1,7 @@
 import LeanYjs.Item
 import LeanYjs.Algorithm.Integrate
-import LeanYjs.Algorithm.IntegrateProof
+import LeanYjs.Algorithm.IntegrateSpec
+import LeanYjs.Algorithm.IntegrateCommutative
 import LeanYjs.Network.CausalNetwork
 import LeanYjs.Network.CausalOrder
 
