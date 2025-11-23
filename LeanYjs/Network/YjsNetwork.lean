@@ -8,11 +8,27 @@ section YjsNetwork
 
 open NetworkModels
 
+abbrev YjsValidItem A := { item : YjsItem A // item.isValid }
+
+abbrev YjsArray A := { array : Array (YjsItem A) // YjsArrInvariant array.toList }
+
+def integrateValid {A} [DecidableEq A] (item : YjsValidItem A) (state : YjsArray A) : Except IntegrateError (YjsArray A) := by
+  let integrated := integrate item.val state.val
+  obtain ⟨ state, h_state ⟩ := state
+  obtain ⟨ item, h_item ⟩ := item
+  cases h_eq : integrated with
+  | error e => exact Except.error e
+  | ok arr =>
+    have harrinv : YjsArrInvariant arr.toList := by
+      have ⟨ _, _, _, h ⟩ := YjsArrInvariant_integrate item state arr h_state h_item _ (by subst integrated; apply h_eq)
+      apply h
+    exact Except.ok ⟨ arr, harrinv ⟩
+
 instance : Message (YjsItem A) YjsId where
   messageId item := item.id
 
 instance [DecidableEq A] : Operation (YjsItem A) where
-  State := Array (YjsItem A)
+  State := { s : Array (YjsItem A) // YjsArrInvariant s.toList }
   Error := IntegrateError
   effect item state := integrate item state
 
@@ -62,6 +78,7 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
   funext s
   simp [Operation.State] at s
   simp [effect_comp, effect, Operation.effect]
+  apply integrate_commutative
   generalize h_s_a : integrate a.elem s = s_a
   generalize h_s_b : integrate b.elem s = s_b
   sorry

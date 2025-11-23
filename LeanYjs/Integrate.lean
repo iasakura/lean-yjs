@@ -54,6 +54,17 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
 
   return (arr.insertIdxIfInBounds (Int.toNat destIdx) newItem)
 
+def isClockSafe (newItem : YjsItem A) (arr : Array (YjsItem A)) : Bool :=
+  arr.all (fun item => item.id.clientId = newItem.id.clientId → newItem.id.clock > item.id.clock)
+
+def integrateSafe (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
+  if isClockSafe newItem arr then
+    integrate newItem arr
+  else
+    Except.error IntegrateError.notFound
+
+section Test
+
 def init : Array (YjsItem String)  := #[]
 def i1 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 0) "0"
 def i2 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 1) "1"
@@ -73,3 +84,5 @@ def test21 := do
 #eval match test21 with
 | Except.ok arr => IO.println $ arr.map (fun item => YjsItem.content item)
 | Except.error _err => IO.println s!"Error"
+
+end Test
