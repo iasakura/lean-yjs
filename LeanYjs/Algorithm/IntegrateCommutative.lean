@@ -98,14 +98,16 @@ theorem integrate_ok_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' :
   -> a.id.clientId ≠ b.id.clientId
   → a.isValid
   → b.isValid
-  -> InsertOk arr1 a
-  -> InsertOk arr1 b
-  -> integrate a arr1 = Except.ok arr2
-  -> integrate b arr2 = Except.ok arr3
-  -> integrate b arr1 = Except.ok arr2'
-  -> integrate a arr2' = Except.ok arr3'
+  -> integrateSafe a arr1 = Except.ok arr2
+  -> integrateSafe b arr2 = Except.ok arr3
+  -> integrateSafe b arr1 = Except.ok arr2'
+  -> integrateSafe a arr2' = Except.ok arr3'
   -> arr3 = arr3' := by
-  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b hintegrate_a hintegrate_b hintegrate_b' hintegrate_a'
+  intros harrinv hcid_neq_bid h_a_valid h_b_valid hintegrate_a hintegrate_b hintegrate_b' hintegrate_a'
+
+  simp [integrateSafe] at *
+  split_ifs at *
+  rw [<-isClockSafe_insertOk] at *
 
   have ⟨ idx2, h_idx2, arr2_insertIdx, arr2_inv ⟩ : ∃ idx ≤ arr1.size, arr2 = arr1.insertIdxIfInBounds idx a ∧ YjsArrInvariant arr2.toList := by
     apply YjsArrInvariant_integrate a arr1 arr2
@@ -168,7 +170,6 @@ theorem integrate_ok_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' :
     rw [List.mem_insertIdx h_idx3, List.mem_insertIdx h_idx3', List.mem_insertIdx h_idx2, List.mem_insertIdx h_idx2']
     simp
     tauto
-
 
 theorem forIn_ok {α β : Type} {lst : List α} {init : β} {f : α → β → Except IntegrateError (ForInStep β)} :
   (∀ x ∈ lst, ∀ state, ∃ state', f x state = Except.ok state')
@@ -286,11 +287,10 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
 
 theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsItem A} :
   YjsArrInvariant arr.toList
-  → InsertOk arr newItem
   → ¬OriginReachable newItem (YjsPtr.itemPtr other)
   → integrate newItem arr = Except.error e
   → ∃ e', integrate newItem (arr.insertIdxIfInBounds idx other) = Except.error e' := by
-  intros harrinv h_InsertOk h_not_reachable hintegrate
+  intros harrinv h_not_reachable hintegrate
   unfold integrate at *
 
   have h_neq_other_error : ∀ (t : YjsItem A), t ≠ other
@@ -408,13 +408,11 @@ theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : YjsItem A} 
   → a.id.clientId ≠ b.id.clientId
   → a.isValid
   → b.isValid
-  → InsertOk arr a
-  → InsertOk arr b
   → ¬OriginReachable a (YjsPtr.itemPtr b)
-  → integrate a arr = Except.error e
-  → integrate b arr = Except.ok arr2
-  → ∃ e', integrate a arr2 = Except.error e' := by
-  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b h_not_reachable hintegrate_a
+  → integrateSafe a arr = Except.error e
+  → integrateSafe b arr = Except.ok arr2
+  → ∃ e', integrateSafe a arr2 = Except.error e' := by
+  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_not_reachable hintegrate_a
   sorry
 
 theorem integrate_integrate_eq_some {arr : Array (YjsItem A)} {a b : YjsItem A} :
@@ -422,59 +420,13 @@ theorem integrate_integrate_eq_some {arr : Array (YjsItem A)} {a b : YjsItem A} 
   → a.id.clientId ≠ b.id.clientId
   → a.isValid
   → b.isValid
-  → InsertOk arr a
-  → InsertOk arr b
-  → integrate a arr = Except.ok arr2
-  → integrate b arr = Except.ok arr2'
-  → ∃ arr3, integrate b arr2 = Except.ok arr3 := by
-  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b h_not_reachable hintegrate_a
+  → integrateSafe a arr = Except.ok arr2
+  → integrateSafe b arr = Except.ok arr2'
+  → ∃ arr3, integrateSafe b arr2 = Except.ok arr3 := by
+  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_not_reachable hintegrate_a
   sorry
 
 theorem integrate_commutative (a b : YjsItem A) (arr1 : Array (YjsItem A)) :
-  YjsArrInvariant arr1.toList
-  -> a.id.clientId ≠ b.id.clientId
-  → ¬OriginReachable a (YjsPtr.itemPtr b)
-  → ¬OriginReachable b (YjsPtr.itemPtr a)
-  → a.isValid
-  → b.isValid
-  -> InsertOk arr1 a
-  -> InsertOk arr1 b
-  -> (do
-    let arr2 <- integrate a arr1;
-    integrate b arr2) =
-  (do
-    let arr2' <- integrate b arr1;
-    integrate a arr2') := by
-  intros harrinv hcid_neq_bid h_not_a_origin_b h_not_b_origin_a h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b
-  cases h_eq_a : integrate a arr1 with
-  | error e_a =>
-    cases h_eq_b : integrate b arr1 with
-    | error e_b =>
-      simp [bind, Except.bind]
-    | ok arr2' =>
-      simp [bind, Except.bind]
-      have ⟨ e_a', h_integrate_a' ⟩ : ∃ e_a', integrate a arr2' = Except.error e_a' := by
-        apply integrate_integrate_eq_none harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b h_not_a_origin_b h_eq_a h_eq_b
-      rw [h_integrate_a']
-  | ok arr2 =>
-    cases h_eq_b : integrate b arr1 with
-    | error e_b =>
-      simp [bind, Except.bind]
-      have ⟨ e_b', h_integrate_b' ⟩ : ∃ e_b', integrate b arr2 = Except.error e_b' := by
-        apply integrate_integrate_eq_none harrinv _ h_b_valid h_a_valid h_InsertOk_b h_InsertOk_a h_not_b_origin_a h_eq_b h_eq_a
-        intros heq; rw [heq] at hcid_neq_bid; contradiction
-      rw [h_integrate_b']
-    | ok arr2' =>
-      simp [bind, Except.bind]
-      have ⟨ arr3', h_integrate_comm ⟩ : ∃ arr3', integrate a arr2' = Except.ok arr3' := by
-        apply integrate_integrate_eq_some harrinv _ h_b_valid h_a_valid h_InsertOk_b h_InsertOk_a h_eq_b h_eq_a
-        intros heq; rw [heq] at hcid_neq_bid; contradiction
-      have ⟨ arr3, h_integrate_comm' ⟩ : ∃ arr3, integrate b arr2 = Except.ok arr3 := by
-        apply integrate_integrate_eq_some harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b h_eq_a h_eq_b
-      rw [h_integrate_comm, h_integrate_comm']
-      rw [integrate_ok_commutative a b arr1 arr2 arr3 arr2' arr3' harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b h_eq_a h_integrate_comm' h_eq_b h_integrate_comm]
-
-theorem integrateSafe_commutative (a b : YjsItem A) (arr1 : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
   -> a.id.clientId ≠ b.id.clientId
   → ¬OriginReachable a (YjsPtr.itemPtr b)
@@ -487,31 +439,31 @@ theorem integrateSafe_commutative (a b : YjsItem A) (arr1 : Array (YjsItem A)) :
   (do
     let arr2' <- integrateSafe b arr1;
     integrateSafe a arr2') := by
-  intros harrinv hcid_neq_bid h_not_a_origin_b h_not_b_origin_a h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b
-  cases h_eq_a : integrate a arr1 with
+  intros harrinv hcid_neq_bid h_not_a_origin_b h_not_b_origin_a h_a_valid h_b_valid
+  cases h_eq_a : integrateSafe a arr1 with
   | error e_a =>
-    cases h_eq_b : integrate b arr1 with
+    cases h_eq_b : integrateSafe b arr1 with
     | error e_b =>
       simp [bind, Except.bind]
     | ok arr2' =>
       simp [bind, Except.bind]
-      have ⟨ e_a', h_integrate_a' ⟩ : ∃ e_a', integrate a arr2' = Except.error e_a' := by
-        apply integrate_integrate_eq_none harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b h_not_a_origin_b h_eq_a h_eq_b
+      have ⟨ e_a', h_integrate_a' ⟩ : ∃ e_a', integrateSafe a arr2' = Except.error e_a' := by
+        apply integrate_integrate_eq_none harrinv hcid_neq_bid h_a_valid h_b_valid h_not_a_origin_b h_eq_a h_eq_b
       rw [h_integrate_a']
   | ok arr2 =>
-    cases h_eq_b : integrate b arr1 with
+    cases h_eq_b : integrateSafe b arr1 with
     | error e_b =>
       simp [bind, Except.bind]
-      have ⟨ e_b', h_integrate_b' ⟩ : ∃ e_b', integrate b arr2 = Except.error e_b' := by
-        apply integrate_integrate_eq_none harrinv _ h_b_valid h_a_valid h_InsertOk_b h_InsertOk_a h_not_b_origin_a h_eq_b h_eq_a
+      have ⟨ e_b', h_integrate_b' ⟩ : ∃ e_b', integrateSafe b arr2 = Except.error e_b' := by
+        apply integrate_integrate_eq_none harrinv _ h_b_valid h_a_valid h_not_b_origin_a h_eq_b h_eq_a
         intros heq; rw [heq] at hcid_neq_bid; contradiction
       rw [h_integrate_b']
     | ok arr2' =>
       simp [bind, Except.bind]
-      have ⟨ arr3', h_integrate_comm ⟩ : ∃ arr3', integrate a arr2' = Except.ok arr3' := by
-        apply integrate_integrate_eq_some harrinv _ h_b_valid h_a_valid h_InsertOk_b h_InsertOk_a h_eq_b h_eq_a
+      have ⟨ arr3', h_integrate_comm ⟩ : ∃ arr3', integrateSafe a arr2' = Except.ok arr3' := by
+        apply integrate_integrate_eq_some harrinv _ h_b_valid h_a_valid h_eq_b h_eq_a
         intros heq; rw [heq] at hcid_neq_bid; contradiction
-      have ⟨ arr3, h_integrate_comm' ⟩ : ∃ arr3, integrate b arr2 = Except.ok arr3 := by
-        apply integrate_integrate_eq_some harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b h_eq_a h_eq_b
+      have ⟨ arr3, h_integrate_comm' ⟩ : ∃ arr3, integrateSafe b arr2 = Except.ok arr3 := by
+        apply integrate_integrate_eq_some harrinv hcid_neq_bid h_a_valid h_b_valid h_eq_a h_eq_b
       rw [h_integrate_comm, h_integrate_comm']
-      rw [integrate_ok_commutative a b arr1 arr2 arr3 arr2' arr3' harrinv hcid_neq_bid h_a_valid h_b_valid h_InsertOk_a h_InsertOk_b h_eq_a h_integrate_comm' h_eq_b h_integrate_comm]
+      rw [integrate_ok_commutative a b arr1 arr2 arr3 arr2' arr3' harrinv hcid_neq_bid h_a_valid h_b_valid h_eq_a h_integrate_comm' h_eq_b h_integrate_comm]

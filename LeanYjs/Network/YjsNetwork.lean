@@ -13,43 +13,65 @@ abbrev YjsValidItem A := { item : YjsItem A // item.isValid }
 
 abbrev YjsArray A := { array : Array (YjsItem A) // YjsArrInvariant array.toList }
 
-def integrateValid {A} [DecidableEq A] (item : YjsValidItem A) (state : YjsArray A) : Except IntegrateError (YjsArray A) := by
-  let integrated := integrate item.val state.val
-  obtain ⟨ state, h_state ⟩ := state
-  obtain ⟨ item, h_item ⟩ := item
-  cases h_eq : integrated with
-  | error e => exact Except.error e
-  | ok arr =>
-    have harrinv : YjsArrInvariant arr.toList := by
-      have ⟨ _, _, _, h ⟩ := YjsArrInvariant_integrate item state arr h_state h_item _ (by subst integrated; apply h_eq)
+def YjsEmptyArray {A} : YjsArray A :=
+  ⟨ #[], (by sorry) ⟩
+
+def integrateValid {A} [DecidableEq A] (item : YjsValidItem A) (state : YjsArray A) : Except IntegrateError (YjsArray A) :=
+  let integrated := integrateSafe item.val state.val
+  match (motive := (arr : Except IntegrateError (Array (YjsItem A))) → arr = integrated → Except IntegrateError (YjsArray A)) integrated, rfl with
+  | Except.error e, _ => Except.error e
+  | Except.ok arr, h_eq =>
+    let proof : YjsArrInvariant arr.toList := by
+      have ⟨ _, _, _, h ⟩ := YjsArrInvariant_integrateSafe item state arr state.prop item.prop (by subst integrated; rw [h_eq])
       apply h
-    exact Except.ok ⟨ arr, harrinv ⟩
+    Except.ok ⟨ arr, proof ⟩
 
-instance : Message (YjsItem A) YjsId where
-  messageId item := item.id
+theorem integrateValid_eq_integrateSafe {A} [DecidableEq A] (item : YjsValidItem A) (state : YjsArray A) :
+  (fun v => ↑v) <$> (integrateValid item state)  = integrateSafe item.val state.val := by
+  cases h_eq : integrateSafe item.val state.val with
+  | error err =>
+    simp [integrateValid]
+    -- rw [heq] at h_integrate_valid causes error at dependent type of rfl depending integrateSafe ..., so use conv mode.
+    conv =>
+      lhs
+      enter [2, 3]
+      rw [h_eq]
+      rfl
+    simp
+  | ok integrated =>
+    simp [integrateValid]
+    conv =>
+      lhs
+      enter [2, 3]
+      rw [h_eq]
+      rfl
+    simp
 
-instance [DecidableEq A] : Operation (YjsItem A) where
+instance : Message (YjsValidItem A) YjsId where
+  messageId item := item.val.id
+
+instance [DecidableEq A] : Operation (YjsValidItem A) where
   State := { s : Array (YjsItem A) // YjsArrInvariant s.toList }
   Error := IntegrateError
-  effect item state := integrate item state
+  effect item state := integrateValid item state
 
-def interpOps {A} [DecidableEq A] (items : List (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) :=
-  List.foldlM (init := #[]) (f := fun acc item => integrate item acc) items
+def interpOps {A} [DecidableEq A] (items : List (YjsValidItem A)) : Except IntegrateError (YjsArray A) :=
+  List.foldlM (init := YjsEmptyArray) (f := fun acc item => integrateValid item acc) items
 
-def interpHistory {A} [DecidableEq A] (history : List (Event (YjsItem A))) : Except IntegrateError (Array (YjsItem A)) :=
+def interpHistory {A} [DecidableEq A] (history : List (Event (YjsValidItem A))) : Except IntegrateError (YjsArray A) :=
   interpOps (history.filterMap (fun ev => match ev with | Event.Deliver it => some it | _ => none))
 
-def interpDeliveredOps {A} [DecidableEq A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)) : Except IntegrateError (Array (YjsItem A)) :=
+def interpDeliveredOps {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)) : Except IntegrateError (YjsArray A) :=
   let deliveredItems := items.map (fun item => item.elem)
   interpOps deliveredItems
 
-structure YjsOperationNetwork A [DecidableEq A] extends CausalNetwork (YjsItem A) where
-  histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.id.clientId = i
+structure YjsOperationNetwork A [DecidableEq A] extends CausalNetwork (YjsValidItem A) where
+  histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.val.id.clientId = i
   histories_InsertOk : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
-    interpHistory hist1 = Except.ok array → InsertOk array e
+    interpHistory hist1 = Except.ok array → InsertOk array.val e.val
 
-theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)) (init : Array (YjsItem A)) :
-  List.foldlM (fun acc item => integrate item acc) init (List.map (fun item => item.elem) items) =
+theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)) (init : YjsArray A) :
+  List.foldlM (fun acc item => integrateValid item acc) init (List.map (fun item => item.elem) items) =
   List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) init := by
   induction items generalizing init with
   | nil =>
@@ -57,7 +79,7 @@ theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork
     eq_refl
   | cons item items ih =>
     simp [effect_comp, bind, Except.bind, Operation.effect]
-    generalize h_init' : integrate item.elem init = init' at *
+    generalize h_init' : integrateValid item.elem init = init' at *
     cases init' with
     | error err =>
       simp
@@ -66,25 +88,76 @@ theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork
       rw [ih]
       eq_refl
 
-theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] {network : CausalNetwork (YjsItem A)} (items : List (CausalNetworkElem (YjsItem A) network)),
+theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)),
   interpDeliveredOps items =
-  List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) #[] := by
+  List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) YjsEmptyArray := by
   intros A _ network items
   simp [interpDeliveredOps, interpOps]
   rw [foldlM_foldr_effect_comp_eq]
+
+theorem Subtype_eq_of_val {α : Type} {P : α → Prop} {x y : { a : α // P a }} : x.val = y.val → x = y := by
+  intros h
+  cases x; cases y
+  simp at h
+  congr
+
+theorem integrateValid_bind_integrateSafe {A} [DecidableEq A] (state : YjsArray A) (a b : YjsValidItem A) :
+  (fun (x : YjsArray A) => x.val) <$> (do let arr ← integrateValid a state; integrateValid b arr) =
+  (do let arr ← integrateSafe ↑a ↑state; integrateSafe ↑b arr) := by
+  rw [map_bind]
+  conv =>
+    lhs
+    enter [2]
+    intro x
+    rw [integrateValid_eq_integrateSafe]
+    rfl
+  have h_eq := bind_map_left (f := fun (x : YjsArray A) => x.val) (g := fun arr => integrateSafe ↑b arr)
+  rw [<-h_eq, integrateValid_eq_integrateSafe]
+
+theorem Except.map_eq_eq {α β ε : Type} (f : α → β) {e1 e2 : Except ε α} :
+  (∀x y, f x = f y → x = y) →
+  f <$> e1 = f <$> e2
+  → e1 = e2 := by
+  intro h_f h_eq
+  cases e1 with
+  | error err1 =>
+    cases e2 with
+    | error err2 =>
+      simp at h_eq
+      rw [h_eq]
+    | ok val2 =>
+      simp at h_eq
+  | ok val1 =>
+    cases e2 with
+    | error err2 =>
+      simp at h_eq
+    | ok val2 =>
+      simp at h_eq
+      have h_val_eq : val1 = val2 := h_f val1 val2 h_eq
+      rw [h_val_eq]
 
 theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network : YjsOperationNetwork A) (i : ClientId) :
   concurrent_commutative inferInstance (network.toCausalNetwork.toDeliverMessages i) := by
   intros a b h_a_mem h_b_mem h_a_b_happens_before
   funext s
-  simp [Operation.State] at s
+  simp [Operation.State, Operation.Error] at *
   simp [effect_comp, effect, Operation.effect]
-  apply integrate_commutative
-  generalize h_s_a : integrate a.elem s = s_a
-  generalize h_s_b : integrate b.elem s = s_b
-  sorry
+  apply Except.map_eq_eq (f := fun (x : YjsArray A) => x.val)
+  . intros x y h_eq
+    apply Subtype_eq_of_val
+    exact h_eq
+  . rw [integrateValid_bind_integrateSafe]
+    rw [integrateValid_bind_integrateSafe]
+    apply integrate_commutative
+    . obtain ⟨ s, h_s ⟩ := s
+      simp; assumption
+    . sorry
+    . sorry
+    . sorry
+    . sorry
+    . sorry
 
-theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : Array (YjsItem A)),
+theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsArray A),
   let hist_i := network.toDeliverMessages i
   let hist_j := network.toDeliverMessages j
   interpDeliveredOps hist_i = Except.ok res₀ →
@@ -96,7 +169,7 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : Yj
 
   subst hist_i hist_j
 
-  let hb : CausalOrder (CausalNetworkElem (YjsItem A) network.toCausalNetwork) := inferInstance
+  let hb : CausalOrder (CausalNetworkElem (YjsValidItem A) network.toCausalNetwork) := inferInstance
   have h_consistent_i : hb_consistent hb (network.toCausalNetwork.toDeliverMessages i) := by
     apply hb_consistent_local_history
   have h_consistent_j : hb_consistent hb (network.toCausalNetwork.toDeliverMessages j) := by
