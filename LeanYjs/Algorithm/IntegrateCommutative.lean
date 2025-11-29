@@ -33,46 +33,44 @@ omit [DecidableEq A] in theorem subset_ArrSet {arr1 arr2 : Array (YjsItem A)} {a
     simp at *
     apply h_subset a h_arr1
 
-theorem insertOk_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
+theorem uniqueId_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
   YjsArrInvariant arr1.toList
   -> YjsArrInvariant arr2.toList
   -> (∀ a, a ∈ arr1 → a ∈ arr2)
   -> (∀ a, a ∈ arr2 → a ∉ arr1 -> a.id.clientId ≠ x.id.clientId)
-  -> InsertOk arr1 x
-  -> InsertOk arr2 x := by
-  intros harrinv1 harrinv2 h_arr1_subset_arr2 h_id_neq h_InsertOk
-  obtain ⟨ hsameid_consistent ⟩ := h_InsertOk
-  constructor; try assumption
-  . intros y hy_in_arr2 hid_eq
-    have hy_in_arr1 : ArrSet arr1.toList y := by
-      simp [ArrSet]
-      generalize y_in_arr1_eq : decide (y ∈ arr1) = y_in_arr1
-      cases y_in_arr1 with
-      | true =>
-        rw [decide_eq_true_eq] at y_in_arr1_eq
-        assumption
-      | false =>
-        rw [decide_eq_false_iff_not] at y_in_arr1_eq
-        simp [ArrSet] at hy_in_arr2
-        obtain h_neq := h_id_neq y hy_in_arr2 y_in_arr1_eq
-        contradiction
-    replace hsameid_consistent := hsameid_consistent y hy_in_arr1 hid_eq
-    assumption
+  -> UniqueId x arr1
+  -> UniqueId x arr2 := by
+  intros harrinv1 harrinv2 h_arr1_subset_arr2 h_id_neq h_UniqueId
+  intros y hy_in_arr2 hid_eq
+  have hy_in_arr1 : ArrSet arr1.toList y := by
+    simp [ArrSet]
+    generalize y_in_arr1_eq : decide (y ∈ arr1) = y_in_arr1
+    cases y_in_arr1 with
+    | true =>
+      rw [decide_eq_true_eq] at y_in_arr1_eq
+      assumption
+    | false =>
+      rw [decide_eq_false_iff_not] at y_in_arr1_eq
+      simp [ArrSet] at hy_in_arr2
+      obtain h_neq := h_id_neq y hy_in_arr2 y_in_arr1_eq
+      contradiction
+  replace h_UniqueId := h_UniqueId y hy_in_arr1 hid_eq
+  assumption
 
-theorem insertIdxIfInBounds_insertOk (arr : Array (YjsItem A)) (a x : YjsItem A) :
+theorem insertIdxIfInBounds_UniqueId (arr : Array (YjsItem A)) (a x : YjsItem A) :
   YjsArrInvariant arr.toList
   → YjsArrInvariant (arr.insertIdxIfInBounds idx a).toList
-  → InsertOk arr x
+  → UniqueId x arr
   → a.id.clientId ≠ x.id.clientId
-  → InsertOk (arr.insertIdxIfInBounds idx a) x := by
-  intros harrinv harrinv2 ha_neq_x h_InsertOk
+  → UniqueId x (arr.insertIdxIfInBounds idx a) := by
+  intros harrinv harrinv2 ha_neq_x h_UniqueId
   wlog hidx : idx ≤ arr.size
   case inr =>
     rw [List.insertIdxIfInBounds_toArray]
     rw [List.insertIdx_of_length_lt (l := arr.toList) (by simp only [Array.length_toList]; omega)]
     simp
     assumption
-  apply insertOk_mono arr (arr.insertIdxIfInBounds idx a) x harrinv harrinv2
+  apply uniqueId_mono arr (arr.insertIdxIfInBounds idx a) x harrinv harrinv2
   . intros b hb_in_arr
     rw [List.insertIdxIfInBounds_toArray]
     simp
@@ -107,7 +105,7 @@ theorem integrate_ok_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' :
 
   simp [integrateSafe] at *
   split_ifs at *
-  rw [<-isClockSafe_insertOk] at *
+  rw [<-isClockSafe_uniqueId] at *
 
   have ⟨ idx2, h_idx2, arr2_insertIdx, arr2_inv ⟩ : ∃ idx ≤ arr1.size, arr2 = arr1.insertIdxIfInBounds idx a ∧ YjsArrInvariant arr2.toList := by
     apply YjsArrInvariant_integrate a arr1 arr2
@@ -116,9 +114,9 @@ theorem integrate_ok_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' :
     assumption
     assumption
 
-  have h_InsertOk_arr2_b : InsertOk arr2 b := by
+  have h_UniqueId_arr2_b : UniqueId b arr2 := by
     subst arr2
-    apply insertIdxIfInBounds_insertOk <;> assumption
+    apply insertIdxIfInBounds_UniqueId <;> assumption
 
   have ⟨ idx2', h_idx2', arr2'_insertIdx, arr2'_inv ⟩ : ∃ idx ≤ arr1.size, arr2' = arr1.insertIdxIfInBounds idx b ∧ YjsArrInvariant arr2'.toList := by
     apply YjsArrInvariant_integrate b arr1 arr2'
@@ -127,9 +125,9 @@ theorem integrate_ok_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' :
     assumption
     assumption
 
-  have h_InsertOk_arr2'_a : InsertOk arr2' a := by
+  have h_UniqueId_arr2'_a : UniqueId a arr2' := by
     subst arr2'
-    apply insertIdxIfInBounds_insertOk <;> try assumption
+    apply insertIdxIfInBounds_UniqueId <;> try assumption
     intros heq
     rw [heq] at hcid_neq_bid
     contradiction
@@ -403,6 +401,43 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsIt
         rw [h_destIdx, ok_bind] at hintegrate
         cases hintegrate
 
+theorem Except.bind_eq_ok {α β ε : Type} (e : Except ε α) (f : α → Except ε β) (b : β) :
+  e >>= f = Except.ok b →
+  ∃ a, e = Except.ok a ∧ f a = Except.ok b := by
+  intro heq
+  simp [bind, Except.bind] at heq
+  cases e with
+  | error err =>
+    cases heq
+  | ok val =>
+    simp at heq
+    use val
+
+theorem Except.bind_eq_error {α β ε : Type} (e : Except ε α) (f : α → Except ε β) (err : ε) :
+  e >>= f = Except.error err →
+  (e = Except.error err) ∨ (∃ a, e = Except.ok a ∧ f a = Except.error err) := by
+  intro heq
+  simp [bind, Except.bind] at heq
+  cases e with
+  | error e_err =>
+    simp at heq
+    left; rw [heq]
+  | ok val =>
+    simp at heq
+    right
+    use val
+
+theorem Except.map_eq_ok {α β ε : Type} (f : α → β) {e : Except ε α} (b : β) :
+  f <$> e = Except.ok b →
+  ∃ a, e = Except.ok a ∧ f a = b := by
+  intro heq
+  cases e with
+  | error err =>
+    simp at heq
+  | ok val =>
+    simp at heq
+    use val
+
 theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : YjsItem A} :
   YjsArrInvariant arr.toList
   → a.id.clientId ≠ b.id.clientId
@@ -412,8 +447,41 @@ theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : YjsItem A} 
   → integrateSafe a arr = Except.error e
   → integrateSafe b arr = Except.ok arr2
   → ∃ e', integrateSafe a arr2 = Except.error e' := by
-  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_not_reachable hintegrate_a
-  sorry
+  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_not_reachable h_integrate_a h_integrate_b
+  simp [integrateSafe] at *
+  split_ifs at *
+  constructor; constructor; apply IntegrateError.notFound
+  intros hsafe
+  rw [<-isClockSafe_uniqueId] at *
+  have ⟨ idx, h_arr2 ⟩  : ∃ i, arr2 = arr.insertIdxIfInBounds i b := by
+    simp [integrate] at h_integrate_b
+    apply Except.bind_eq_ok at h_integrate_b
+    replace ⟨ leftIdx, h_leftIdx_eq, h_integrate_a ⟩ := h_integrate_b
+    apply Except.bind_eq_ok at h_integrate_a
+    replace ⟨ rightIdx, h_rightIdx_eq, h_integrate_a ⟩ := h_integrate_a
+    apply Except.map_eq_ok at h_integrate_a
+    obtain ⟨ destIdx, h_destIdx_eq, h_eq ⟩ := h_integrate_a
+    use destIdx; simp [h_eq]
+  suffices UniqueId a arr by
+    have ⟨ e, h ⟩ := integrate_insert_eq_none (idx := idx) harrinv h_not_reachable (h_integrate_a this)
+    rw [h_arr2, h]
+
+  simp [integrate] at h_integrate_b
+  apply Except.bind_eq_ok at h_integrate_b
+  replace ⟨ leftIdx, h_leftIdx_eq, h_integrate_b ⟩ := h_integrate_b
+  apply Except.bind_eq_ok at h_integrate_b
+  replace ⟨ rightIdx, h_rightIdx_eq, h_integrate_b ⟩ := h_integrate_b
+  apply Except.map_eq_ok at h_integrate_b
+  obtain ⟨ destIdx, h_destIdx_eq, h_eq ⟩ := h_integrate_b
+
+  intros x hmem heq
+  apply hsafe x _ heq
+  subst arr2
+  simp [ArrSet, Array.insertIdxIfInBounds] at *
+  split_ifs
+  . rw [Array.mem_insertIdx]
+    right; assumption
+  . assumption
 
 theorem integrate_integrate_eq_some {arr : Array (YjsItem A)} {a b : YjsItem A} :
   YjsArrInvariant arr.toList
@@ -423,8 +491,58 @@ theorem integrate_integrate_eq_some {arr : Array (YjsItem A)} {a b : YjsItem A} 
   → integrateSafe a arr = Except.ok arr2
   → integrateSafe b arr = Except.ok arr2'
   → ∃ arr3, integrateSafe b arr2 = Except.ok arr3 := by
-  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_not_reachable hintegrate_a
-  sorry
+  intros harrinv h_aid_neq_bid h_a_valid h_b_valid h_integrate_a h_integrate_b
+
+  have harrinv_arr2 : YjsArrInvariant arr2.toList := by
+    have ⟨ _, _, _, h ⟩ := YjsArrInvariant_integrateSafe a arr arr2 harrinv h_a_valid h_integrate_a
+    assumption
+
+  simp [integrateSafe] at *
+  split_ifs at h_integrate_a h_integrate_b
+
+  simp [integrate] at h_integrate_a
+  apply Except.bind_eq_ok at h_integrate_a
+  replace ⟨ leftIdx, h_leftIdx_eq, h_integrate_a ⟩ := h_integrate_a
+  apply Except.bind_eq_ok at h_integrate_a
+  replace ⟨ rightIdx, h_rightIdx_eq, h_integrate_a ⟩ := h_integrate_a
+  apply Except.map_eq_ok at h_integrate_a
+  obtain ⟨ destIdx, h_destIdx_eq, h_eq ⟩ := h_integrate_a
+
+  simp [integrate] at h_integrate_b
+  apply Except.bind_eq_ok at h_integrate_b
+  replace ⟨ leftIdx', h_leftIdx'_eq, h_integrate_b ⟩ := h_integrate_b
+  apply Except.bind_eq_ok at h_integrate_b
+  replace ⟨ rightIdx', h_rightIdx'_eq, h_integrate_b ⟩ := h_integrate_b
+  apply Except.map_eq_ok at h_integrate_b
+  obtain ⟨ destIdx', h_destIdx'_eq, h_eq' ⟩ := h_integrate_b
+
+  subst arr2
+  simp [integrate]
+
+  have ⟨ leftIdx'', h_leftIdx''_eq ⟩ : ∃ leftIdx'', findPtrIdx b.origin (arr.insertIdxIfInBounds destIdx a) = Except.ok leftIdx'' := by
+    rw [findPtrIdx_insert_some harrinv_arr2 h_leftIdx'_eq]
+    split_ifs <;> simp
+  have h_leftIdx''_range : -1 ≤ leftIdx'' ∧ leftIdx'' ≤ (arr.insertIdxIfInBounds destIdx a).size := by
+    constructor
+    . apply findPtrIdx_ge_minus_1 at h_leftIdx''_eq; omega
+    . apply findPtrIdx_le_size at h_leftIdx''_eq; omega
+  have ⟨ rightIdx'', h_rightIdx''_eq ⟩ : ∃ rightIdx'', findPtrIdx b.rightOrigin (arr.insertIdxIfInBounds destIdx a) = Except.ok rightIdx'' := by
+    rw [findPtrIdx_insert_some harrinv_arr2 h_rightIdx'_eq]
+    split_ifs <;> simp
+  have h_rightIdx''_range : -1 ≤ rightIdx'' ∧ rightIdx'' ≤ (arr.insertIdxIfInBounds destIdx a).size := by
+    constructor
+    . apply findPtrIdx_ge_minus_1 at h_rightIdx''_eq; omega
+    . apply findPtrIdx_le_size at h_rightIdx''_eq; omega
+
+  split_ifs
+  . rw [h_leftIdx''_eq, h_rightIdx''_eq]
+    rw [ok_bind, ok_bind]
+    have ⟨ _, h ⟩ := findIntegratedIndex_safe (leftIdx := leftIdx'') (rightIdx := rightIdx'') (newItem := b) harrinv_arr2 (by omega) (by omega) (by omega) (by omega)
+    rw [h]; simp
+  . rw [<-isClockSafe_uniqueId] at *
+    have h_contra : UniqueId b (arr.insertIdxIfInBounds destIdx a) := by
+      apply insertIdxIfInBounds_UniqueId <;> try assumption
+    contradiction
 
 theorem integrate_commutative (a b : YjsItem A) (arr1 : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList

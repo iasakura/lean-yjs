@@ -1572,19 +1572,18 @@ structure IsItemValid (item : YjsItem A) where
 
 abbrev YjsItem.isValid : YjsItem A → Prop := IsItemValid
 
-structure InsertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) where
-  id_eq_YjsLeq' : ∀ (x : YjsItem A),
+def UniqueId (newItem : YjsItem A) (arr : Array (YjsItem A)) :=
+  ∀ (x : YjsItem A),
     ArrSet arr.toList (YjsPtr.itemPtr x) →
     x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock
 
 theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
   → newItem.isValid
-  -> InsertOk arr newItem
+  -> UniqueId newItem arr
   -> integrate newItem arr = Except.ok newArr
   -> ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList := by
-  intros harrinv h_valid h_InsertOk hintegrate
-  obtain ⟨ hsameid_consistent ⟩ := h_InsertOk
+  intros harrinv h_valid h_UniqueId hintegrate
   obtain ⟨ horigin_consistent, hreachable_consistent ⟩ := h_valid
   unfold integrate at hintegrate
   generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
@@ -1612,7 +1611,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
     apply horigin_consistent
     apply hreachable_consistent
     intros x hmem heq
-    have h := hsameid_consistent x hmem (by rw [heq])
+    have h := h_UniqueId x hmem (by rw [heq])
     rw [heq] at h
     simp at h
 
@@ -1715,7 +1714,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
           rw [Int.max_eq_left hrightIdx] at hdest_current
           obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
       . intros a hmem heq
-        have h := hsameid_consistent a (by simp [ArrSet]; assumption) (by rw [heq])
+        have h := h_UniqueId a (by simp [ArrSet]; assumption) (by rw [heq])
         subst heq
         omega
   . -- initial
@@ -1857,22 +1856,20 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
         (repeat' (split <;> try simp)) <;> try simp [pure, Except.pure]
 
     apply loopInv_preserve1
-      newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
+      newItem arr horigin hrorigin horigin_consistent hreachable_consistent h_UniqueId
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx
       state hloop i hlt hlt2 hinv other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx hnext
 
-omit [DecidableEq A] in theorem isClockSafe_insertOk (arr : Array (YjsItem A)) (newItem : YjsItem A) :
-  InsertOk arr newItem ↔ isClockSafe newItem arr := by
+omit [DecidableEq A] in theorem isClockSafe_uniqueId (arr : Array (YjsItem A)) (newItem : YjsItem A) :
+  UniqueId newItem arr ↔ isClockSafe newItem arr := by
   constructor
-  . intros hInsertOk
-    obtain ⟨ hsameid_consistent ⟩ := hInsertOk
+  . intros h_UniqueId
     simp [isClockSafe]
     intros x h_x
-    replace hsameid_consistent := hsameid_consistent arr[x] (by simp [ArrSet])
+    replace h_UniqueId := h_UniqueId arr[x] (by simp [ArrSet])
     grind
   . intros hisClockSafe
     simp [isClockSafe] at hisClockSafe
-    constructor
     intros x hmem heq
     simp [ArrSet] at hmem
     rw [Array.mem_iff_getElem] at hmem
@@ -1887,6 +1884,6 @@ theorem YjsArrInvariant_integrateSafe (newItem : YjsItem A) (arr newArr : Array 
   intros harrinv h_valid hintegrate
   simp [integrateSafe] at hintegrate
   split at hintegrate
-  . rw [<-isClockSafe_insertOk arr newItem] at *
+  . rw [<-isClockSafe_uniqueId arr newItem] at *
     apply YjsArrInvariant_integrate newItem arr newArr harrinv h_valid (by assumption) hintegrate
   . cases hintegrate

@@ -13,8 +13,15 @@ abbrev YjsValidItem A := { item : YjsItem A // item.isValid }
 
 abbrev YjsArray A := { array : Array (YjsItem A) // YjsArrInvariant array.toList }
 
+theorem YjsArrayInvariant_empty {A} : YjsArrInvariant ([] : List (YjsItem A)) := by
+  constructor
+  . constructor <;> simp [ArrSet]
+  . constructor <;> simp [ArrSet]
+  . constructor
+  . constructor
+
 def YjsEmptyArray {A} : YjsArray A :=
-  ⟨ #[], (by sorry) ⟩
+  ⟨ #[], (by simp [YjsArrayInvariant_empty]) ⟩
 
 def integrateValid {A} [DecidableEq A] (item : YjsValidItem A) (state : YjsArray A) : Except IntegrateError (YjsArray A) :=
   let integrated := integrateSafe item.val state.val
@@ -31,7 +38,7 @@ theorem integrateValid_eq_integrateSafe {A} [DecidableEq A] (item : YjsValidItem
   cases h_eq : integrateSafe item.val state.val with
   | error err =>
     simp [integrateValid]
-    -- rw [heq] at h_integrate_valid causes error at dependent type of rfl depending integrateSafe ..., so use conv mode.
+    -- rw [heq] at h_integrate_valid causes error at dependent type of rfl depending integrateSafe ..., so use conv mode.`
     conv =>
       lhs
       enter [2, 3]
@@ -68,7 +75,7 @@ def interpDeliveredOps {A} [DecidableEq A] {network : CausalNetwork (YjsValidIte
 structure YjsOperationNetwork A [DecidableEq A] extends CausalNetwork (YjsValidItem A) where
   histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.val.id.clientId = i
   histories_InsertOk : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
-    interpHistory hist1 = Except.ok array → InsertOk array.val e.val
+    interpHistory hist1 = Except.ok array → UniqueId e.val array.val
 
 theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)) (init : YjsArray A) :
   List.foldlM (fun acc item => integrateValid item acc) init (List.map (fun item => item.elem) items) =
@@ -136,6 +143,21 @@ theorem Except.map_eq_eq {α β ε : Type} (f : α → β) {e1 e2 : Except ε α
       have h_val_eq : val1 = val2 := h_f val1 val2 h_eq
       rw [h_val_eq]
 
+theorem same_history_not_hb_concurrent {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} {i : ClientId} {a b : YjsValidItem A} :
+  Event.Broadcast a ∈ network.histories i →
+  Event.Broadcast b ∈ network.histories i →
+  ¬hb_concurrent inferInstance (CausalNetworkElem.mk (network := network) a) (CausalNetworkElem.mk (network := network) b) := by
+  intros h_a_mem h_b_mem h_not_hb
+  intro h_eq
+  subst h_eq
+  have h_a_hb_b : a ⪯ b ∨ b ⪯ a := by
+    apply network.local_history_total_ordering i a b h_a_mem h_b_mem
+  cases h_a_hb_b with
+  | inl h_a_hb_b' =>
+    contradiction
+  | inr h_b_hb_a' =>
+    contradiction
+
 theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network : YjsOperationNetwork A) (i : ClientId) :
   concurrent_commutative inferInstance (network.toCausalNetwork.toDeliverMessages i) := by
   intros a b h_a_mem h_b_mem h_a_b_happens_before
@@ -151,7 +173,45 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
     apply integrate_commutative
     . obtain ⟨ s, h_s ⟩ := s
       simp; assumption
-    . sorry
+    . intros h_eq
+      simp [CausalNetwork.toDeliverMessages] at h_a_mem h_b_mem
+      obtain ⟨ a', h_a'_mem, h_a'_pos ⟩ := h_a_mem
+      obtain ⟨ b', h_b'_mem, h_b'_pos ⟩ := h_b_mem
+
+      have ⟨ a', h_a ⟩ : ∃ a'', Event.Deliver a'' = a' := by
+        cases a' with
+        | Deliver it =>
+          use it
+        | Broadcast e =>
+          simp at h_a'_pos
+
+      have ⟨ b', h_b ⟩ : ∃ b'', Event.Deliver b'' = b' := by
+        cases b' with
+        | Deliver it =>
+          use it
+        | Broadcast e =>
+          simp at h_b'_pos
+
+      subst h_a h_b
+
+      apply network.deliver_has_a_cause at h_a'_mem
+      obtain ⟨ i_a, h_a'_mem_hist ⟩ := h_a'_mem
+      apply network.deliver_has_a_cause at h_b'_mem
+      obtain ⟨ i_b, h_b'_mem_hist ⟩ := h_b'_mem
+
+      have h_i_a_eq_i_b : i_a = i_b := by
+        apply network.histories_client_id at h_a'_mem_hist
+        apply network.histories_client_id at h_b'_mem_hist
+        simp at *
+        subst a b
+        simp at *
+        subst i_a i_b
+        assumption
+
+      subst i_a
+      simp at *
+      subst a b
+      apply same_history_not_hb_concurrent h_a'_mem_hist h_b'_mem_hist h_a_b_happens_before
     . sorry
     . sorry
     . sorry
