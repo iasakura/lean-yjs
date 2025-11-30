@@ -148,15 +148,50 @@ theorem same_history_not_hb_concurrent {A} [DecidableEq A] {network : CausalNetw
   Event.Broadcast b ∈ network.histories i →
   ¬hb_concurrent inferInstance (CausalNetworkElem.mk (network := network) a) (CausalNetworkElem.mk (network := network) b) := by
   intros h_a_mem h_b_mem h_not_hb
-  intro h_eq
-  subst h_eq
-  have h_a_hb_b : a ⪯ b ∨ b ⪯ a := by
-    apply network.local_history_total_ordering i a b h_a_mem h_b_mem
-  cases h_a_hb_b with
-  | inl h_a_hb_b' =>
-    contradiction
-  | inr h_b_hb_a' =>
-    contradiction
+  have h_local :
+    locallyOrdered network.toNodeHistories i (Event.Broadcast a) (Event.Broadcast b) ∨
+    locallyOrdered network.toNodeHistories i (Event.Broadcast b) (Event.Broadcast a) ∨
+    a = b := by
+    simp [locallyOrdered]
+    rw [List.mem_iff_append] at h_a_mem h_b_mem
+    have ⟨ s_a, t_a, h_a ⟩ := h_a_mem
+    have ⟨ s_b, t_b, h_b ⟩ := h_b_mem
+    have h_eq : s_a ++ Event.Broadcast a :: t_a = s_b ++ Event.Broadcast b :: t_b := by
+      rw [<-h_a, <-h_b]
+    rw [List.append_eq_append_iff] at h_eq
+    cases h_eq with
+    | inl h_eq =>
+      obtain ⟨ as, h_prefix, h_suffix ⟩ := h_eq
+      cases as with
+      | nil =>
+        simp at h_suffix
+        grind only [cases eager Subtype]
+      | cons hd tl =>
+        grind only [=_ List.cons_append, = List.append_assoc, = List.cons_append, →
+          List.eq_nil_of_append_eq_nil, cases eager Subtype]
+    | inr h_eq =>
+      obtain ⟨ as, h_prefix, h_suffix ⟩ := h_eq
+      cases as with
+      | nil =>
+        simp at h_suffix
+        grind only [cases eager Subtype]
+      | cons hd tl =>
+        grind only [=_ List.cons_append, = List.append_assoc, = List.cons_append, →
+          List.eq_nil_of_append_eq_nil, cases eager Subtype]
+  cases h_local with
+  | inl h_ordered =>
+    apply HappensBefore.broadcast_broadcast_local at h_ordered
+    simp [hb_concurrent, LE.le] at h_not_hb
+    grind
+  | inr h_ordered =>
+    cases h_ordered with
+    | inl h_ordered =>
+      apply HappensBefore.broadcast_broadcast_local at h_ordered
+      simp [hb_concurrent, LE.le] at h_not_hb
+      grind
+    | inr h_eq =>
+      simp [hb_concurrent, LE.le] at h_not_hb
+      grind
 
 theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network : YjsOperationNetwork A) (i : ClientId) :
   concurrent_commutative inferInstance (network.toCausalNetwork.toDeliverMessages i) := by
