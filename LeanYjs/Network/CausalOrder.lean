@@ -17,6 +17,7 @@ section CausalOrder
 class Operation (A : Type) where
   State : Type
   Error : Type
+  init : State
   effect : A → State → Except Error State
 
 variable {A : Type} [DecidableEq A] (hb : CausalOrder A)

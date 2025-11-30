@@ -337,6 +337,7 @@ variable (network : CausalNetwork A)
 instance [Operation A] : Operation (CausalNetworkElem A network) where
   State := Operation.State A
   Error := Operation.Error A
+  init := Operation.init
   effect (a : CausalNetworkElem A network) : Operation.State A → Except (Operation.Error A) (Operation.State A) :=
     Operation.effect a.elem
 

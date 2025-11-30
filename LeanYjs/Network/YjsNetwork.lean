@@ -4,6 +4,7 @@ import LeanYjs.Algorithm.IntegrateSpec
 import LeanYjs.Algorithm.IntegrateCommutative
 import LeanYjs.Network.CausalNetwork
 import LeanYjs.Network.CausalOrder
+import LeanYjs.Network.OperationNetwork
 
 section YjsNetwork
 
@@ -60,22 +61,17 @@ instance : Message (YjsValidItem A) YjsId where
 instance [DecidableEq A] : Operation (YjsValidItem A) where
   State := { s : Array (YjsItem A) // YjsArrInvariant s.toList }
   Error := IntegrateError
+  init := YjsEmptyArray
   effect item state := integrateValid item state
 
-def interpOps {A} [DecidableEq A] (items : List (YjsValidItem A)) : Except IntegrateError (YjsArray A) :=
-  List.foldlM (init := YjsEmptyArray) (f := fun acc item => integrateValid item acc) items
+instance [DecidableEq A] : ValidMessage (YjsValidItem A) where
+  isValidMessage state item :=
+    ArrSet state.val.toList item.val.origin
 
-def interpHistory {A} [DecidableEq A] (history : List (Event (YjsValidItem A))) : Except IntegrateError (YjsArray A) :=
-  interpOps (history.filterMap (fun ev => match ev with | Event.Deliver it => some it | _ => none))
-
-def interpDeliveredOps {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)) : Except IntegrateError (YjsArray A) :=
-  let deliveredItems := items.map (fun item => item.elem)
-  interpOps deliveredItems
-
-structure YjsOperationNetwork A [DecidableEq A] extends CausalNetwork (YjsValidItem A) where
+structure YjsOperationNetwork A [DecidableEq A] extends OperationNetwork (YjsValidItem A) where
   histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.val.id.clientId = i
   histories_InsertOk : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
-    interpHistory hist1 = Except.ok array → UniqueId e.val array.val
+    interpHistory hist1 = Except.ok array → UniqueId e.val (array : YjsArray A).val
 
 theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)) (init : YjsArray A) :
   List.foldlM (fun acc item => integrateValid item acc) init (List.map (fun item => item.elem) items) =
@@ -100,7 +96,8 @@ theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A
   List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) YjsEmptyArray := by
   intros A _ network items
   simp [interpDeliveredOps, interpOps]
-  rw [foldlM_foldr_effect_comp_eq]
+  rw [<-foldlM_foldr_effect_comp_eq]
+  eq_refl
 
 theorem Subtype_eq_of_val {α : Type} {P : α → Prop} {x y : { a : α // P a }} : x.val = y.val → x = y := by
   intros h
