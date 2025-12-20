@@ -70,7 +70,7 @@ instance [DecidableEq A] : ValidMessage (YjsValidItem A) where
 
 structure YjsOperationNetwork A [DecidableEq A] extends OperationNetwork (YjsValidItem A) where
   histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.val.id.clientId = i
-  histories_InsertOk : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
+  histories_UniqueId : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
     interpHistory hist1 = Except.ok array → UniqueId e.val (array : YjsArray A).val
 
 theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)) (init : YjsArray A) :
