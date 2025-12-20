@@ -19,7 +19,7 @@ inductive NdjsonCommand where
 instance : Inhabited NdjsonCommand := ⟨NdjsonCommand.sync 0 0⟩
 
 def parseChar (s : String) : Except String Char :=
-  match s.data with
+  match s.toList with
   | [c] => Except.ok c
   | _ => Except.error "expected single-character string"
 
@@ -40,7 +40,6 @@ def decodeCommand (json : Json) : Except String NdjsonCommand := do
 
 def renderIntegrateError : IntegrateError → String
   | .notFound => "integrate error: notFound"
-  | .outOfBounds i size => s!"integrate error: outOfBounds {i} (size={size})"
 
 abbrev ClientState := Std.HashMap Nat (YString × Nat)
 
@@ -75,7 +74,6 @@ def applySync (state : ClientState) (src dst : Nat) : Except String ClientState 
             match integrate item d with
             | Except.ok newDest => pure (newDest, remaining, true)
             | Except.error IntegrateError.notFound => pure (d, item :: remaining, progressed)
-            | Except.error err => Except.error (renderIntegrateError err)
 
         let (dest', remaining, progressed) ← queue.foldlM process (dest, [], false)
         if remaining.isEmpty then
@@ -121,7 +119,7 @@ def readCommands : IO (Array NdjsonCommand) := do
   let stdin ← IO.getStdin
   let input ← stdin.readToEnd
   let mut commands : Array NdjsonCommand := #[]
-  for line in input.split (fun c => c = '\n') do
+  for line in input.splitToList (fun c => c = '\n') do
     let trimmed := line.trim
     if !trimmed.isEmpty then
       match parseLine trimmed with

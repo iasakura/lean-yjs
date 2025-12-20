@@ -26,7 +26,7 @@ def nextId (currentId : YjsId) : YjsId :=
 
 def YString.insert (s : YString) (i : Nat) (c : Char) : StateT YjsId (Except IntegrateError) YString := do
   if i > s.contents.size then
-    throw $ IntegrateError.outOfBounds i s.contents.size
+    throw $ IntegrateError.notFound
   let arr : Array Item := s.contents
   let origin <- extGetElemExcept arr (Int.ofNat i - 1)
   let rightOrigin <- extGetElemExcept arr (Int.ofNat i)
@@ -36,4 +36,5 @@ def YString.insert (s : YString) (i : Nat) (c : Char) : StateT YjsId (Except Int
   pure { contents := arr }
 
 def YString.toString (s : YString) : String :=
-  String.mk $ (s.contents.map (fun item => item.content)).toList
+  String.ofList $ (s.contents.map (fun item => item.content)).toList
+  
