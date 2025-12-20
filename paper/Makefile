@@ -1,18 +1,25 @@
 TEX=paper
+# Use LuaLaTeX for robust CJK handling (font mapping issues under pdflatex).
+# Add -f/-g so latexmk ignores stale error state and rebuilds to refresh logs.
+LATEXMK_OPTS?=-lualatex -f -g
+LATEXMK_ENV?=TEXMFVAR=$(PWD)/texmf-var
 MARGIN?=40
 
 .PHONY: all watch clean arxiv distdir rules clean-rules rules-transparent svg
 
 all:
-	latexmk -pdf -interaction=nonstopmode -halt-on-error $(TEX).tex
+	mkdir -p texmf-var
+	$(LATEXMK_ENV) latexmk $(LATEXMK_OPTS) -interaction=nonstopmode -halt-on-error $(TEX).tex
 
 watch:
-	latexmk -pdf -pvc -interaction=nonstopmode $(TEX).tex
+	mkdir -p texmf-var
+	$(LATEXMK_ENV) latexmk $(LATEXMK_OPTS) -pvc -interaction=nonstopmode $(TEX).tex
 
 clean:
 	latexmk -C $(TEX).tex
 	rm -rf dist
 	latexmk -C rules.tex 2>/dev/null || true
+	rm -rf texmf-var
 
 distdir:
 	mkdir -p dist
@@ -21,8 +28,8 @@ distdir:
 arxiv: all distdir
 	# Ensure .bbl is up to date
 	bibtex $(TEX) || true
-	latexmk -pdf -interaction=nonstopmode -halt-on-error $(TEX).tex
-	zip -j dist/$(TEX)-arxiv.zip $(TEX).tex $(TEX).bbl refs.bib || true
+	$(LATEXMK_ENV) latexmk $(LATEXMK_OPTS) -interaction=nonstopmode -halt-on-error $(TEX).tex
+	zip -j dist/$(TEX)-arxiv.zip $(TEX).tex $(TEX).bbl refs.bib acmart.cls ACM-Reference-Format.bst || true
 	# Include figures directory if present
 	if [ -d figures ]; then cd figures && zip -r ../dist/$(TEX)-arxiv.zip .; fi
 

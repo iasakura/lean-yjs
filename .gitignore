@@ -1,2 +1,4 @@
 /.lake
 **/node_modules
+**/texmf-var
+**/acmart-primary

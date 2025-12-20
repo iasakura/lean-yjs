@@ -47,7 +47,7 @@
 % Lean: ConflictLt P N i1 i2
 % Different left-origins
 \begin{mathpar}
-  \inferrule*[right=Conf-OriginDiff]{
+  \inferrule[Conf-OriginDiff]{
     \ltjudg{\ell_2}{\ell_1} \\
     \ltjudg{\itemptr{\ell_1}{r_1}{\mathit{id}_1}{c_1}}{r_2} \\
     \ltjudg{\ell_1}{\itemptr{\ell_2}{r_2}{\mathit{id}_2}{c_2}} \\
@@ -57,7 +57,7 @@
 
 % Same left-origin: tie-break by increasing id
 \begin{mathpar}
-  \inferrule*[right=Conf-OriginSame]{
+  \inferrule[Conf-OriginSame]{
     \ltjudg{\itemptr{\ell}{r_1}{\mathit{id}_1}{c_1}}{r_2} \\
     \ltjudg{\itemptr{\ell}{r_2}{\mathit{id}_2}{c_2}}{r_1} \\
     \mathit{id}_1 < \mathit{id}_2

@@ -15,3 +15,4 @@ Notes
 - Edit `paper.tex` and `refs.bib` to suit your project.
 - Place figures under `figures/` and reference with `\includegraphics{figures/<name>}`.
 - The ArXiv target generates a `.bbl` and zips sources for upload.
+- `acmart.cls` と `ACM-Reference-Format.bst` を `paper/` 直下に展開済み（`acmart-primary/` に原本を保持）。
