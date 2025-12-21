@@ -67,6 +67,7 @@ instance [DecidableEq A] : Operation (YjsValidItem A) where
 instance [DecidableEq A] : ValidMessage (YjsValidItem A) where
   isValidMessage state item :=
     ArrSet state.val.toList item.val.origin
+    ∧ ArrSet state.val.toList item.val.rightOrigin
 
 structure YjsOperationNetwork A [DecidableEq A] extends OperationNetwork (YjsValidItem A) where
   histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.val.id.clientId = i
@@ -190,6 +191,40 @@ theorem same_history_not_hb_concurrent {A} [DecidableEq A] {network : CausalNetw
       simp [hb_concurrent, LE.le] at h_not_hb
       grind
 
+theorem OriginReachableStep_HappensBefore {A} [DecidableEq A] {network : YjsOperationNetwork A} {x y : YjsValidItem A} :
+  x ∈ network.toCausalNetwork y.val.id.clientId →
+  OriginReachableStep x.val (YjsPtr.itemPtr y.val) →
+  CausalNetworkElem.mk (network := network.toCausalNetwork) x > CausalNetworkElem.mk (network := network.toCausalNetwork) y := by
+  intro h_reachable
+  obtain ⟨ item1, h_item1_valid ⟩ := x
+  obtain ⟨ item2, h_item2_valid ⟩ := y
+  simp at *
+  generalize h_ptr1 : YjsPtr.itemPtr item1 = ptr1 at *
+  generalize h_ptr2 : YjsPtr.itemPtr item2 = ptr2 at *
+  cases h_reachable with
+  | reachable x y z c =>
+    cases h_ptr1
+    subst ptr2
+    simp [LT.lt]
+    sorry
+  | reachable_rig x y z c =>
+    sorry
+
+theorem OriginReachable_HappensBefore {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} {item1 item2 : YjsValidItem A} :
+  OriginReachable item1.val (YjsPtr.itemPtr item2.val) →
+  CausalNetworkElem.mk (network := network) item1 < CausalNetworkElem.mk (network := network) item2 := by
+  intro h_reachable
+  obtain ⟨ item1, h_item1_valid ⟩ := item1
+  obtain ⟨ item2, h_item2_valid ⟩ := item2
+  simp at *
+  generalize h_ptr1 : YjsPtr.itemPtr item1 = ptr1 at *
+  generalize h_ptr2 : YjsPtr.itemPtr item2 = ptr2 at *
+  induction h_reachable generalizing item1 item2 with
+  | reachable_head x y z h_step h_reachable ih =>
+    sorry
+  | reachable_single x =>
+    sorry
+
 theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network : YjsOperationNetwork A) (i : ClientId) :
   concurrent_commutative inferInstance (network.toCausalNetwork.toDeliverMessages i) := by
   intros a b h_a_mem h_b_mem h_a_b_happens_before
@@ -244,10 +279,50 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
       simp at *
       subst a b
       apply same_history_not_hb_concurrent h_a'_mem_hist h_b'_mem_hist h_a_b_happens_before
+    . intros h_reachable
+      obtain ⟨ h_a_hb_b, _ ⟩ := h_a_b_happens_before
+      apply h_a_hb_b
+      simp [CausalNetwork.toDeliverMessages] at h_b_mem h_a_mem
+      replace ⟨ a, h_a_mem, h_a_eq ⟩ := h_a_mem
+      have ⟨ a', h_a_eq ⟩ : ∃ a', Event.Deliver a' = a := by
+        cases a with
+        | Deliver it =>
+          use it
+        | Broadcast e =>
+          simp at h_a_eq
+      subst h_a_eq
+      replace ⟨ b, h_b_mem, h_b_eq ⟩ := h_b_mem
+      have ⟨ b', h_b_eq ⟩ : ∃ b', Event.Deliver b' = b := by
+        cases b with
+        | Deliver it =>
+          use it
+        | Broadcast e =>
+          simp at h_b_eq
+      subst h_b_eq
+      have ⟨ j_a, h_a_mem_history_j_a ⟩ := network.deliver_has_a_cause h_a_mem
+      have ⟨ j_b, h_b_mem_history_j_b  ⟩ := network.deliver_has_a_cause h_b_mem
+
+      rw [List.mem_iff_append] at h_a_mem_history_j_a h_b_mem_history_j_b
+
+      obtain ⟨ pre_a, post_a, h_a_history ⟩ := h_a_mem_history_j_a
+      obtain ⟨ pre_b, post_b, h_b_history ⟩ := h_b_mem_history_j_b
+
+      have ⟨ state_a, h_state_a, h_valid_message_a ⟩ : ∃state, interpHistory pre_a = Except.ok state ∧ ValidMessage.isValidMessage state a' := by
+        apply network.broadcast_only_valid_messages (pre := pre_a) (post := post_a) j_a
+        rw [h_a_history]; simp
+      have ⟨ state_b, h_state_b, h_valid_message_b ⟩ : ∃state, interpHistory pre_b = Except.ok state ∧ ValidMessage.isValidMessage state b' := by
+        apply network.broadcast_only_valid_messages (pre := pre_b) (post := post_b) j_b
+        rw [h_b_history]; simp
+
+      simp [ValidMessage.isValidMessage] at h_valid_message_b
+
+      sorry
+
     . sorry
-    . sorry
-    . sorry
-    . sorry
+    . obtain ⟨ a, _ ⟩ := a
+      assumption
+    . obtain ⟨ b, _ ⟩ := b
+      assumption
 
 theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsArray A),
   let hist_i := network.toDeliverMessages i

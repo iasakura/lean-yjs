@@ -22,4 +22,4 @@ structure OperationNetwork A {I} [DecidableEq A] [DecidableEq I] [Operation A] [
     ∀i, pre ++ [Event.Broadcast e] ++ post = histories i →
     ∃state,
       interpHistory pre = Except.ok state ∧
-      ∀ {e i}, Event.Broadcast e ∈ histories i → ValidMessage.isValidMessage state e
+      ValidMessage.isValidMessage state e
