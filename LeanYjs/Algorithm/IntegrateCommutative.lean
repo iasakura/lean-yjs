@@ -249,7 +249,7 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
     rw [h_other_ok, ok_bind]
 
     have ArrSet_other_origin : ArrSet arr.toList other.origin := by
-      obtain ⟨ o, r, id, c ⟩ := other
+      obtain ⟨ o, r, id, c, d ⟩ := other
       apply harrinv.closed.closedLeft o r id c
       simp [ArrSet]
       rw [getElem?_eq_some_iff] at h_other_eq
@@ -258,7 +258,7 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
       simp
 
     have ArrSet_other_rightOrigin : ArrSet arr.toList other.rightOrigin := by
-      obtain ⟨ o, r, id, c ⟩ := other
+      obtain ⟨ o, r, id, c, d ⟩ := other
       apply harrinv.closed.closedRight o r id c
       simp [ArrSet]
       rw [getElem?_eq_some_iff] at h_other_eq
@@ -348,7 +348,7 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsIt
         intros heq
         rw [<-heq, <-h_origin_eq] at h_not_reachable
         apply h_not_reachable
-        obtain ⟨ o, r, id, c ⟩ := newItem
+        obtain ⟨ o, r, id, c, d ⟩ := newItem
         apply OriginReachable.reachable_single
         apply OriginReachableStep.reachable
     rw [heqleft']
@@ -381,7 +381,7 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsIt
             intros heq
             rw [<-heq, <-h_rightOrigin_eq] at h_not_reachable
             apply h_not_reachable
-            obtain ⟨ o, r, id, c ⟩ := newItem
+            obtain ⟨ o, r, id, c, d ⟩ := newItem
             apply OriginReachable.reachable_single
             apply OriginReachableStep.reachable_right
         rw [heqright']

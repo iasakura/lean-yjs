@@ -31,7 +31,7 @@ def YString.insert (s : YString) (i : Nat) (c : Char) : StateT YjsId (Except Int
   let origin <- extGetElemExcept arr (Int.ofNat i - 1)
   let rightOrigin <- extGetElemExcept arr (Int.ofNat i)
   let id := nextId (← StateT.get)
-  let newItem : Item := YjsItem.item origin rightOrigin id c
+  let newItem : Item := YjsItem.item origin rightOrigin id c false
   let arr <- integrate newItem s.contents
   pure { contents := arr }
 

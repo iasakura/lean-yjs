@@ -10,23 +10,23 @@ variable {A : Type} [BEq A]
 variable (P : ItemSet A)
 
 structure ItemSetInvariant where
-  origin_not_leq : ∀ (o r : YjsPtr A) c id, P (YjsItem.item o r id c) ->
+  origin_not_leq : ∀ (o r : YjsPtr A) c id d, P (YjsItem.item o r id c d) ->
     YjsLt' o r
-  origin_nearest_reachable : ∀ (o r : YjsPtr A) c id x,
-    P (YjsItem.item o r id c) ->
-    OriginReachable (A := A) (YjsItem.item o r id c) x ->
+  origin_nearest_reachable : ∀ (o r : YjsPtr A) c id d x,
+    P (YjsItem.item o r id c d) ->
+    OriginReachable (A := A) (YjsItem.item o r id c d) x ->
     (YjsLeq' x o) ∨ (YjsLeq' r x)
   id_unique : ∀ (x y : YjsItem A), x.id = y.id -> P x -> P y -> x = y
 
 @[simp] theorem origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.origin := by
   intros hclosed x px
-  obtain ⟨ o, r, id, c ⟩ := x
+  obtain ⟨ o, r, id, c, d ⟩ := x
   simp [YjsItem.origin] at *
   apply hclosed.closedLeft <;> assumption
 
 @[simp] theorem right_origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.rightOrigin := by
   intros hclosed x px
-  obtain ⟨ o, r, id, c ⟩ := x
+  obtain ⟨ o, r, id, c, d ⟩ := x
   simp [YjsItem.rightOrigin] at *
   apply hclosed.closedRight <;> assumption
 
@@ -41,7 +41,7 @@ theorem not_ptr_lt_first {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvar
     cases hlt
   | ltOriginOrder o _ hlt =>
     cases hlt
-  | ltRightOrigin h o r id c hp hlt =>
+  | ltRightOrigin h o r id c d hp hlt =>
     cases hlt with
     | leqLt h _ _ hlt =>
       have hsize' : r.size < n := by
@@ -73,7 +73,7 @@ theorem not_last_lt_ptr {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvari
     cases hlt
   | ltOriginOrder _  hpo hlt =>
     cases hlt
-  | ltOrigin h x o r id c hlt =>
+  | ltOrigin h x o r id c d hlt =>
     cases hlt with
     | leqLt h _ _ hlt =>
       have hsize' : o.size < n := by

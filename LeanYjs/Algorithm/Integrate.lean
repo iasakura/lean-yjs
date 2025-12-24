@@ -66,8 +66,8 @@ def integrateSafe (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integ
 section Test
 
 def init : Array (YjsItem String)  := #[]
-def i1 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 0) "0"
-def i2 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 1) "1"
+def i1 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 0) "0" false
+def i2 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 1) "1" false
 
 def test12 := do
   let arr1 <- integrate i1 init
