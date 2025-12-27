@@ -76,7 +76,7 @@ theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv 
   intros hpx hpy hP hxrleq hxy
   obtain ⟨ o, r, id, c, d ⟩ := x
   have hyxr : YjsLt' y r := by
-    apply yjs_lt_trans hP (y := (YjsItem.item o r id c d)) <;> try assumption
+    apply yjs_lt_trans hP (y := (YjsItem.mk o r id c d)) <;> try assumption
     . apply hP.closedRight at hpx; assumption
     . use 1; apply YjsLt.ltRightOrigin; try assumption
       left
@@ -105,7 +105,7 @@ theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : Item
   intros hpx hpy hP hxrleq hxy
   obtain ⟨ o, r, id, c, d ⟩ := y
   have hyxr : YjsLt' o x := by
-    apply yjs_lt_trans hP (y := (YjsItem.item o r id c d)) <;> try assumption
+    apply yjs_lt_trans hP (y := (YjsItem.mk o r id c d)) <;> try assumption
     . apply hP.closedLeft at hpy; assumption
     . use 1; apply YjsLt.ltOrigin; try assumption
       left

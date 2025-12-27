@@ -74,7 +74,7 @@ def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integrate
   return (arr.insertIdxIfInBounds (Int.toNat destIdx) newItem)
 
 def integrateSafe (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
-  if isClockSafe newItem arr then integrate newItem arr else Except.error IntegrateError.notFound
+  if isClockSafe newItem arr then integrate newItem arr else Except.error IntegrateError.error
 ```
 
 ### Algorithm Logic
@@ -119,8 +119,8 @@ mutual
   inductive YjsLt {A : Type} : Nat -> YjsPtr A -> YjsPtr A -> Prop where
     | ltConflict h i1 i2 : ConflictLt h i1 i2 -> YjsLt (h + 1) i1 i2
     | ltOriginOrder i1 i2 : OriginLt i1 i2 -> YjsLt 0 i1 i2
-    | ltOrigin h x o r id c : YjsLeq h x o -> YjsLt (h + 1) x (YjsItem.item o r id c)
-    | ltRightOrigin h o r id c x : YjsLeq h r x -> YjsLt (h + 1) (YjsItem.item o r id c) x
+    | ltOrigin h x o r id c : YjsLeq h x o -> YjsLt (h + 1) x (YjsItem.mk o r id c)
+    | ltRightOrigin h o r id c x : YjsLeq h r x -> YjsLt (h + 1) (YjsItem.mk o r id c) x
 
   inductive YjsLeq {A : Type} : Nat -> YjsPtr A -> YjsPtr A -> Prop where
     | leqSame x : YjsLeq h x x
@@ -129,15 +129,15 @@ mutual
   inductive ConflictLt {A : Type} : Nat -> YjsPtr A -> YjsPtr A -> Prop where
     | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 :
       YjsLt h1 l2 l1
-      -> YjsLt h2 (YjsItem.item l1 r1 id1 c1) r2
-      -> YjsLt h3 l1 (YjsItem.item l2 r2 id2 c2)
-      -> YjsLt h4 (YjsItem.item l2 r2 id2 c2) r1
-      -> ConflictLt (max4 h1 h2 h3 h4 + 1) (YjsItem.item l1 r1 id1 c1) (YjsItem.item l2 r2 id2 c2)
+      -> YjsLt h2 (YjsItem.mk l1 r1 id1 c1) r2
+      -> YjsLt h3 l1 (YjsItem.mk l2 r2 id2 c2)
+      -> YjsLt h4 (YjsItem.mk l2 r2 id2 c2) r1
+      -> ConflictLt (max4 h1 h2 h3 h4 + 1) (YjsItem.mk l1 r1 id1 c1) (YjsItem.mk l2 r2 id2 c2)
     | ltOriginSame h1 h2 l r1 r2 id1 id2 (c1 c2 : A) :
-      YjsLt h1 (YjsItem.item l r1 id1 c1) r2
-      -> YjsLt h2 (YjsItem.item l r2 id2 c2) r1
+      YjsLt h1 (YjsItem.mk l r1 id1 c1) r2
+      -> YjsLt h2 (YjsItem.mk l r2 id2 c2) r1
       -> id1 < id2
-      -> ConflictLt (max h1 h2 + 1) (YjsItem.item l r1 id1 c1) (YjsItem.item l r2 id2 c2)
+      -> ConflictLt (max h1 h2 + 1) (YjsItem.mk l r1 id1 c1) (YjsItem.mk l r2 id2 c2)
 end
 ```
 
@@ -164,19 +164,19 @@ def ItemSet := Set (YjsPtr A)
 structure IsClosedItemSet {A} (P : YjsPtr A -> Prop) : Prop where
   baseFirst : P YjsPtr.first
   baseLast : P YjsPtr.last
-  closedLeft : (∀ (o : YjsPtr A) r id c, P (YjsItem.item o r id c) -> P o)
-  closedRight : (∀ o (r : YjsPtr A) id c, P (YjsItem.item o r id c) -> P r)
+  closedLeft : (∀ (o : YjsPtr A) r id c, P (YjsItem.mk o r id c) -> P o)
+  closedRight : (∀ o (r : YjsPtr A) id c, P (YjsItem.mk o r id c) -> P r)
 ```
 
 ### ItemSetInvariant
 
 ```lean
 structure ItemSetInvariant where
-  origin_not_leq : ∀ (o r : YjsPtr A) c id, P (YjsItem.item o r id c) ->
+  origin_not_leq : ∀ (o r : YjsPtr A) c id, P (YjsItem.mk o r id c) ->
     YjsLt' o r
   origin_nearest_reachable : ∀ (o r : YjsPtr A) c id x,
-    P (YjsItem.item o r id c) ->
-    OriginReachable (A := A) (YjsItem.item o r id c) x ->
+    P (YjsItem.mk o r id c) ->
+    OriginReachable (A := A) (YjsItem.mk o r id c) x ->
     (YjsLeq' x o) ∨ (YjsLeq' r x)
   id_unique : ∀ (x y : YjsItem A), x.id = y.id -> P x -> P y -> x = y
 ```

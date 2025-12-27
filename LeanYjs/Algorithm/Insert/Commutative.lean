@@ -11,9 +11,12 @@ import LeanYjs.Order.Totality
 import LeanYjs.Order.Transitivity
 import LeanYjs.Order.Asymmetry
 import LeanYjs.Order.NoCrossOrigin
-import LeanYjs.Algorithm.Integrate
-import LeanYjs.Algorithm.YjsArray
-import LeanYjs.Algorithm.IntegrateSpec
+import LeanYjs.Algorithm.Basic
+import LeanYjs.Algorithm.Insert.Basic
+import LeanYjs.Algorithm.Insert.Lemmas
+import LeanYjs.Algorithm.Insert.Spec
+import LeanYjs.Algorithm.Invariant.Basic
+import LeanYjs.Algorithm.Invariant.YjsArray
 
 variable {A : Type}
 variable [DecidableEq A]
@@ -358,7 +361,7 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsIt
     cases heqleft' : findPtrIdx newItem.origin (arr.insertIdxIfInBounds idx other) with
     | error e =>
       simp [bind, Except.bind]
-      apply Nonempty.intro IntegrateError.notFound
+      apply Nonempty.intro IntegrateError.error
     | ok leftIdx' =>
       rw [ok_bind]
       cases heqright : findPtrIdx newItem.rightOrigin arr with
@@ -450,7 +453,7 @@ theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : YjsItem A} 
   intros harrinv hcid_neq_bid h_a_valid h_b_valid h_not_reachable h_integrate_a h_integrate_b
   simp [integrateSafe] at *
   split_ifs at *
-  constructor; constructor; apply IntegrateError.notFound
+  constructor; constructor; apply IntegrateError.error
   intros hsafe
   rw [<-isClockSafe_uniqueId] at *
   have ⟨ idx, h_arr2 ⟩  : ∃ i, arr2 = arr.insertIdxIfInBounds i b := by

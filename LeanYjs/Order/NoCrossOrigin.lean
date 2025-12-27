@@ -51,7 +51,7 @@ theorem no_cross_origin {x y : YjsItem A} :
       cases horlt
       apply hP.closedLeft at hpx; assumption
     | last =>
-      simp [YjsItem.rightOrigin] at hleq'
+      simp at hleq'
       have ⟨ _, hleq' ⟩ := hleq'
       cases hleq' with
       | leqLt h _ _ hlt' =>
@@ -62,12 +62,12 @@ theorem no_cross_origin {x y : YjsItem A} :
       have hpxr_origin : P xr.origin := by
         obtain ⟨ xro, xrr, xrid, xrc, xrd ⟩ := xr
         apply hP.closedLeft; assumption
-      simp [YjsItem.rightOrigin] at hleq'
+      simp at hleq'
       apply yjs_leq'_imp_eq_or_yjs_lt' at hleq'
       cases hleq' with
       | inl hleq =>
         cases hleq
-        have hreachable : OriginReachable (YjsPtr.itemPtr (YjsItem.item xo (YjsPtr.itemPtr y) xid xc xd)) y.origin := by
+        have hreachable : OriginReachable (YjsPtr.itemPtr (YjsItem.mk xo (YjsPtr.itemPtr y) xid xc xd)) y.origin := by
           apply OriginReachable.reachable_head (y := YjsPtr.itemPtr y)
           . apply OriginReachableStep.reachable_right
           . obtain ⟨ yo, yr, yid, yc, yd ⟩ := y
@@ -89,7 +89,7 @@ theorem no_cross_origin {x y : YjsItem A} :
             apply yjs_lt_asymm hP hinv y.origin y hpy_origin hpy hltorigin hlt
           | inl heq =>
             obtain ⟨ yo, yr, yid, yc, yd ⟩ := y
-            simp [YjsItem.origin] at heq
+            simp at heq
             cases heq
       | inr hlt =>
         have hsize' : xr.size + y.size < n := by
@@ -101,7 +101,7 @@ theorem no_cross_origin {x y : YjsItem A} :
         | inl hleq =>
           obtain ⟨ h, hleq ⟩ := hleq
           left
-          have hreachable : OriginReachable (YjsPtr.itemPtr (YjsItem.item xo xr xid xc xd)) xr.origin := by
+          have hreachable : OriginReachable (YjsPtr.itemPtr (YjsItem.mk xo xr xid xc xd)) xr.origin := by
             apply OriginReachable.reachable_head
             apply OriginReachableStep.reachable_right
             . apply OriginReachable.reachable_single
@@ -120,7 +120,7 @@ theorem no_cross_origin {x y : YjsItem A} :
               | inl heq =>
                 by_contra
                 obtain ⟨ xro, xrr, xrid, xrc, xrd ⟩ := xr
-                simp [YjsItem.origin] at *
+                simp at *
                 cases heq
               | inr hlt' =>
                 cases yjs_lt_asymm hP hinv _ _ hpxr_origin hpxr hlt hlt'
@@ -129,7 +129,7 @@ theorem no_cross_origin {x y : YjsItem A} :
         | inr hlt =>
           obtain ⟨ _, hlt ⟩ := hlt
           right
-          have ⟨ h', hlt' ⟩ : YjsLt' (YjsPtr.itemPtr (YjsItem.item xo (YjsPtr.itemPtr xr) xid xc xd)) xr := by
+          have ⟨ h', hlt' ⟩ : YjsLt' (YjsPtr.itemPtr (YjsItem.mk xo (YjsPtr.itemPtr xr) xid xc xd)) xr := by
             constructor; apply YjsLt.ltRightOrigin <;> try assumption
             . apply YjsLeq.leqSame
           apply yjs_leq_p_trans (h1 := h' + 1) (inv := hinv) (y := xr) <;> try assumption

@@ -48,7 +48,7 @@ def originGreaterByIdx (a b : YjsPtr A) (items : Array (YjsItem A)) : Except YAT
 -- YjsItemの比較（creator/actor IDベース）
 def compareYjsItems (a b : YjsItem A) : Bool :=
   match a, b with
-  | YjsItem.item _ _ creatorA _, YjsItem.item _ _ creatorB _ => creatorA < creatorB
+  | YjsItem.mk _ _ creatorA _, YjsItem.mk _ _ creatorB _ => creatorA < creatorB
 
 -- YATAのintegrate algorithm
 -- Insert 'newItem' in a list of items

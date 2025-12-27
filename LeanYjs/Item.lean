@@ -35,19 +35,14 @@ inductive YjsPtr : Type where
   | last : YjsPtr
   deriving Repr, DecidableEq
 
-inductive YjsItem : Type where
-| item (origin : YjsPtr) (rightOrigin : YjsPtr) (id : YjsId) (content : A) (deleted : Bool) : YjsItem
+structure YjsItem : Type where
+  origin : YjsPtr
+  rightOrigin : YjsPtr
+  id : YjsId
+  content : A
+  deleted : Bool
 deriving Repr, DecidableEq
 end
-
-def YjsItem.origin {A : Type} : YjsItem A -> YjsPtr A
-  | YjsItem.item origin _ _ _ _ => origin
-
-def YjsItem.rightOrigin {A : Type} : YjsItem A -> YjsPtr A
-  | YjsItem.item _ rightOrigin _ _ _ => rightOrigin
-
-def YjsItem.content {A : Type} : YjsItem A -> A
-  | YjsItem.item _ _ _ content _ => content
 
 mutual
 def YjsPtr.size {A : Type} : YjsPtr A -> Nat
@@ -56,9 +51,14 @@ def YjsPtr.size {A : Type} : YjsPtr A -> Nat
   | YjsPtr.last => 0
 
 def YjsItem.size {A : Type} : YjsItem A -> Nat
-  | YjsItem.item origin rightOrigin _ _ _ =>
+  | YjsItem.mk origin rightOrigin _ _ _ =>
     origin.size + rightOrigin.size + 2
 end
+
+def YjsPtr.deleted {A : Type} : YjsPtr A -> Bool
+  | YjsPtr.itemPtr item => item.deleted
+  | YjsPtr.first => false
+  | YjsPtr.last => false
 
 instance : BEq ClientId where
   beq x y := by
@@ -78,6 +78,3 @@ instance : LawfulBEq (YjsItem A) := by
 
 instance : Coe (YjsItem A) (YjsPtr A) where
   coe item := YjsPtr.itemPtr item
-
-def YjsItem.id {A : Type} : YjsItem A -> YjsId
-| YjsItem.item _ _ id _ _ => id

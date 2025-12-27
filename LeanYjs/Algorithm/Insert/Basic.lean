@@ -1,9 +1,7 @@
 import LeanYjs.Item
 import LeanYjs.ClientId
 import LeanYjs.Order.ItemOrder
-
-inductive IntegrateError where
-| notFound : IntegrateError
+import LeanYjs.Algorithm.Basic
 
 variable {A: Type} [DecidableEq A]
 
@@ -12,14 +10,14 @@ def findPtrIdx (p : YjsPtr A) (arr : Array (YjsItem A)) : Except IntegrateError 
   | YjsPtr.itemPtr item =>
     match Array.findIdx? (fun i => i = item) arr with
     | some idx => return idx
-    | none => Except.error IntegrateError.notFound
+    | none => Except.error IntegrateError.error
   | YjsPtr.first => return -1
   | YjsPtr.last => return Array.size arr
 
 def getElemExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError (YjsItem A) :=
   match arr[idx]? with
   | some item => return item
-  | none => Except.error IntegrateError.notFound
+  | none => Except.error IntegrateError.error
 
 def findIntegratedIndex (leftIdx rightIdx : Int) (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError Nat := do
   let mut scanning := false
@@ -61,13 +59,13 @@ def integrateSafe (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except Integ
   if isClockSafe newItem arr then
     integrate newItem arr
   else
-    Except.error IntegrateError.notFound
+    Except.error IntegrateError.error
 
 section Test
 
 def init : Array (YjsItem String)  := #[]
-def i1 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 0) "0" false
-def i2 := YjsItem.item (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 1) "1" false
+def i1 := YjsItem.mk (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 0) "0" false
+def i2 := YjsItem.mk (YjsPtr.first) (YjsPtr.last) (YjsId.mk 0 1) "1" false
 
 def test12 := do
   let arr1 <- integrate i1 init

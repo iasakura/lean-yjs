@@ -1,7 +1,7 @@
 import LeanYjs.Item
-import LeanYjs.Algorithm.Integrate
-import LeanYjs.Algorithm.IntegrateSpec
-import LeanYjs.Algorithm.IntegrateCommutative
+import LeanYjs.Algorithm.Insert.Basic
+import LeanYjs.Algorithm.Insert.Spec
+import LeanYjs.Algorithm.Insert.Commutative
 import LeanYjs.Network.CausalNetwork
 import LeanYjs.Network.CausalOrder
 import LeanYjs.Network.OperationNetwork
