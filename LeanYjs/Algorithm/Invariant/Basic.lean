@@ -261,15 +261,15 @@ omit [DecidableEq A] in theorem item_set_invariant_push (arr : List (YjsItem A))
     | inl heq =>
       subst heq
       assumption
-  . intros o r c id d x hin hreachable h_x_deleted
+  . intros o r c id d x hin
     simp [ArrSet] at hin
     cases hin with
     | inr hin =>
-      apply hinv.origin_nearest_reachable _ _ _ _ _ _ hin hreachable h_x_deleted
+      apply hinv.origin_nearest_reachable _ _ _ _ _ _ hin
     | inl heq =>
       subst heq
       simp at *
-      apply hreach _ hreachable
+      apply hreach _
   . intros x y h_id_eq h_set_x h_set_y
     simp [ArrSet] at *
     cases h_set_x with
