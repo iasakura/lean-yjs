@@ -1,7 +1,9 @@
 import LeanYjs.Item
+import LeanYjs.Algorithm.Delete.Basic
+import LeanYjs.Algorithm.Delete.Spec
 import LeanYjs.Algorithm.Insert.Basic
 import LeanYjs.Algorithm.Insert.Spec
-import LeanYjs.Algorithm.Insert.Commutative
+import LeanYjs.Algorithm.Commutativity.InsertInsert
 import LeanYjs.Network.CausalNetwork
 import LeanYjs.Network.CausalOrder
 import LeanYjs.Network.OperationNetwork
@@ -11,6 +13,19 @@ section YjsNetwork
 open NetworkModels
 
 abbrev YjsValidItem A := { item : YjsItem A // item.isValid }
+
+def YjsValidItem.id {A} (item : YjsValidItem A) : YjsId :=
+  item.val.id
+
+inductive YjsOperation A where
+| insert (item : YjsValidItem A) : YjsOperation A
+| delete (id deletedId : YjsId) : YjsOperation A
+deriving Repr, DecidableEq
+
+def YjsOperation.id {A} (op : YjsOperation A) : YjsId :=
+  match op with
+  | YjsOperation.insert item => item.val.id
+  | YjsOperation.delete id _ => id
 
 abbrev YjsArray A := { array : Array (YjsItem A) // YjsArrInvariant array.toList }
 
@@ -55,44 +70,61 @@ theorem integrateValid_eq_integrateSafe {A} [DecidableEq A] (item : YjsValidItem
       rfl
     simp
 
-instance : Message (YjsValidItem A) YjsId where
-  messageId item := item.val.id
+def deleteValid {A} [DecidableEq A] (id : YjsId) (state : YjsArray A) : YjsArray A :=
+  let newArr := deleteById state.val id
+  ⟨ newArr, by subst newArr; apply YjsArrInvariant_deleteById; apply state.2 ⟩
 
-instance [DecidableEq A] : Operation (YjsValidItem A) where
+instance : Message (YjsOperation A) YjsId where
+  messageId item := match item with
+  | YjsOperation.insert item => item.val.id
+  | YjsOperation.delete id _ => id
+
+instance [DecidableEq A] : Operation (YjsOperation A) where
   State := { s : Array (YjsItem A) // YjsArrInvariant s.toList }
   Error := IntegrateError
   init := YjsEmptyArray
-  effect item state := integrateValid item state
+  effect item state := match item with
+  | YjsOperation.insert item => integrateValid item state
+  | YjsOperation.delete _id deletedId =>
+    Except.ok <| deleteValid deletedId state
 
-instance [DecidableEq A] : ValidMessage (YjsValidItem A) where
-  isValidMessage state item :=
-    ArrSet state.val.toList item.val.origin
-    ∧ ArrSet state.val.toList item.val.rightOrigin
+def IsValidMessage (state : YjsArray A) (item : YjsOperation A) : Prop :=
+  match item with
+  | YjsOperation.insert item =>
+    ArrSet state.val.toList item.val.origin ∧
+    ArrSet state.val.toList item.val.rightOrigin
+  | YjsOperation.delete _ _ =>
+    True
 
-structure YjsOperationNetwork A [DecidableEq A] extends OperationNetwork (YjsValidItem A) where
-  histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.val.id.clientId = i
-  histories_UniqueId : forall {e i}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
-    interpHistory hist1 Operation.init = Except.ok array → UniqueId e.val (array : YjsArray A).val
+instance [DecidableEq A] : ValidMessage (YjsOperation A) where
+  isValidMessage state item := IsValidMessage state item
 
-theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)) (init : YjsArray A) :
-  List.foldlM (fun acc item => integrateValid item acc) init (List.map (fun item => item.elem) items) =
+def YjsOperation.UniqueId {A} (op : YjsOperation A) (state : YjsArray A) : Prop :=
+    ∀x ∈ state.val, x.id.clientId = op.id.clientId → x.id.clock < op.id.clock
+
+structure YjsOperationNetwork A [DecidableEq A] extends OperationNetwork (YjsOperation A) where
+  histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.id.clientId = i
+  histories_UniqueId : forall {e i} {array : YjsArray A}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
+    interpHistory hist1 Operation.init = Except.ok array → YjsOperation.UniqueId e array
+
+theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] {network : CausalNetwork (YjsOperation A)} (items : List (CausalNetworkElem (YjsOperation A) network)) (init : YjsArray A) :
+  List.foldlM (fun acc item => Operation.effect item acc) init (List.map (fun item => item.elem) items) =
   List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) init := by
   induction items generalizing init with
   | nil =>
     simp
     eq_refl
   | cons item items ih =>
-    simp [effect_comp, bind, Except.bind, Operation.effect]
-    generalize h_init' : integrateValid item.elem init = init' at *
+    simp [effect_comp, bind, Except.bind]
+    generalize h_init' : Operation.effect item.elem init = init' at *
     cases init' with
     | error err =>
       simp
     | ok state' =>
       simp
       rw [ih]
-      eq_refl
 
-theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} (items : List (CausalNetworkElem (YjsValidItem A) network)),
+theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] {network : CausalNetwork (YjsOperation A)} (items : List (CausalNetworkElem (YjsOperation A) network)),
   interpDeliveredOps items Operation.init =
   List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) YjsEmptyArray := by
   intros A _ network items
@@ -141,7 +173,7 @@ theorem Except.map_eq_eq {α β ε : Type} (f : α → β) {e1 e2 : Except ε α
       have h_val_eq : val1 = val2 := h_f val1 val2 h_eq
       rw [h_val_eq]
 
-theorem same_history_not_hb_concurrent {A} [DecidableEq A] {network : CausalNetwork (YjsValidItem A)} {i : ClientId} {a b : YjsValidItem A} :
+theorem same_history_not_hb_concurrent {A} [DecidableEq A] {network : CausalNetwork (YjsOperation A)} {i : ClientId} {a b : YjsOperation A} :
   Event.Broadcast a ∈ network.histories i →
   Event.Broadcast b ∈ network.histories i →
   ¬hb_concurrent inferInstance (CausalNetworkElem.mk (network := network) a) (CausalNetworkElem.mk (network := network) b) := by
@@ -192,8 +224,8 @@ theorem same_history_not_hb_concurrent {A} [DecidableEq A] {network : CausalNetw
       grind
 
 theorem integrateValid_exists_insertIdxIfBounds {A : Type} [inst : DecidableEq A]
-  {init : Operation.State (YjsValidItem A)} {item : YjsValidItem A}
-  {state' : Operation.State (YjsValidItem A)} :
+  {init : Operation.State (YjsOperation A)} {item : YjsOperation A}
+  {state' : Operation.State (YjsOperation A)} :
   (h_effect : integrateValid item init = Except.ok state') →
   ∃ i, state'.val = init.val.insertIdxIfInBounds i ↑item := by
   intro h_effect
