@@ -17,7 +17,7 @@ structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
   closed : IsClosedItemSet (ArrSet arr)
   item_set_inv : ItemSetInvariant (ArrSet arr)
   sorted : List.Pairwise (fun (x y : YjsItem A) => YjsLt' (A := A) x y) arr
-  unique : List.Pairwise (fun x y => x ≠ y) arr
+  unique : List.Pairwise (fun x y => x.id ≠ y.id) arr
 
 theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
   YjsArrInvariant xs_all ->
@@ -471,7 +471,9 @@ omit [DecidableEq A] in private theorem YjsArrayInvariant_lt_neq (arr : Array (Y
   i < j ->
   arr[i] ≠ arr[j] := by
   intros hinv hilt hjlt hij
-  apply idx_lt_pairwise (P := fun x y => x ≠ y) arr.toList i j hinv.unique hij hilt hjlt
+  have h := idx_lt_pairwise (P := fun x y => x.id ≠ y.id) arr.toList i j hinv.unique hij hilt hjlt
+  simp at h
+  grind only
 
 theorem findPtrIdx_getElem (arr : Array (YjsItem A)) (i :  ℕ) :
   YjsArrInvariant arr.toList ->

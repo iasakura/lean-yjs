@@ -1431,7 +1431,7 @@ theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem :
   -> (hisize : i ≤ arr.size)
   -> ((hizero : 0 < i) -> YjsLt' (A := A) arr[i - 1] newItem)
   -> ((hisize : i < arr.size) -> YjsLt' (A := A) newItem arr[i])
-  -> (∀ a, a ∈ arr -> a ≠ newItem)
+  -> (∀ a, a ∈ arr -> a.id ≠ newItem.id)
   -> YjsArrInvariant (arr.insertIdxIfInBounds i newItem).toList := by
   intros hclosed hinv harrinv hisize hlt1 hlt2 hneq
   obtain ⟨ _, _, hsorted, hunique ⟩ := harrinv
@@ -1538,8 +1538,7 @@ theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem :
     . intros j hij hlt heq
       apply hneq arr[j]
       simp
-      subst heq
-      simp
+      rw [heq]; simp
 
 lemma findPtrIdx_lt_size_getElem {p : YjsPtr A} :
   findPtrIdx p arr = Except.ok idx →
@@ -1718,7 +1717,7 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
           obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
       . intros a hmem heq
         have h := h_UniqueId a (by simp [ArrSet]; assumption) (by rw [heq])
-        subst heq
+        rw [heq] at h
         omega
   . -- initial
     simp only [loopInv]
