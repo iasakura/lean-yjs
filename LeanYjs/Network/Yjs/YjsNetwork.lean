@@ -4,6 +4,8 @@ import LeanYjs.Algorithm.Delete.Spec
 import LeanYjs.Algorithm.Insert.Basic
 import LeanYjs.Algorithm.Insert.Spec
 import LeanYjs.Algorithm.Commutativity.InsertInsert
+import LeanYjs.Algorithm.Commutativity.InsertDelete
+import LeanYjs.Algorithm.Commutativity.DeleteDelete
 import LeanYjs.Network.CausalNetwork
 import LeanYjs.Network.CausalOrder
 import LeanYjs.Network.OperationNetwork
@@ -257,14 +259,15 @@ theorem integrateValid_exists_insertIdxIfBounds {A : Type} [inst : DecidableEq A
 theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation A))} {state init : Operation.State (YjsOperation A)} {x : YjsItem A}:
   interpHistory items init = Except.ok state →
   ArrSet state.val.toList x →
-  ArrSet init.val.toList x ∨ ∃y, y.val = x ∧ Event.Deliver (YjsOperation.insert y) ∈ items  := by
+  (∃y, ArrSet init.val.toList (YjsPtr.itemPtr y) ∧ y.id = x.id) ∨
+  (∃y, y.val.id = x.id ∧ Event.Deliver (YjsOperation.insert y) ∈ items) := by
   intros h_interp h_in_state
   induction items generalizing init state x with
   | nil =>
     simp [interpHistory, interpOps, pure] at h_interp
     cases h_interp
     simp [ArrSet] at h_in_state |-
-    assumption
+    use x
   | cons e items ih =>
     simp [interpHistory, interpOps] at h_interp
     cases e with
@@ -282,7 +285,21 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
         simp; assumption
     | Deliver op =>
       cases op with
-      | delete _ _ => sorry
+      | delete _ deletedId =>
+        simp [Operation.effect] at h_interp
+        apply ih (x := x) h_interp at h_in_state
+        cases h_in_state with
+        | inl h =>
+          obtain ⟨ y, h_mem, h_y_id ⟩ := h
+          simp [ArrSet, deleteValid, deleteById] at h_mem
+          obtain ⟨ a, h_a_mem, h_a_eq ⟩ := h_mem
+          left; use a; constructor; simp [ArrSet]; assumption
+          rw [<-h_y_id, <-h_a_eq, deleteItemById_id]
+        | inr h =>
+          obtain ⟨ y, h_y_val, h_y_mem ⟩ := h
+          right; use y
+          simp; constructor; assumption
+          assumption
       | insert item =>
         simp at h_interp
         generalize h_effect : Operation.effect (YjsOperation.insert item) init = state' at *
@@ -301,14 +318,18 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
             simp [Array.insertIdxIfInBounds] at h_init_mem
             split at h_init_mem
             . simp [ArrSet] at h_init_mem
-              rw [List.mem_insertIdx (by assumption)] at h_init_mem
-              cases h_init_mem with
+              obtain ⟨ y, h_y_mem, h_y_id ⟩ := h_init_mem
+              rw [List.mem_insertIdx (by assumption)] at h_y_mem
+              cases h_y_mem with
               | inl h_mem =>
-                right; subst x; simp
-                obtain ⟨ _, _ ⟩ := item
-                simp; assumption
+                right
+                use item
+                constructor
+                grind only
+                simp
               | inr h_eq =>
-                left; assumption
+                left; use y; constructor; simp [ArrSet] at *; assumption
+                assumption
             . left; assumption
           | inr h_in_state =>
             obtain ⟨ y, h_y_val, h_y_mem ⟩ := h_in_state
@@ -316,7 +337,7 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
             simp; constructor; assumption
             right; assumption
 
-theorem OriginReachable_HappensBefore {A M : Type} [DecidableEq A] [DecidableEq M] [Message A M]
+theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
   {network : YjsOperationNetwork A} {i : ClientId} {a b : CausalNetworkElem (YjsOperation A) network.toCausalNetwork} {item_a item_b : YjsValidItem A} :
   a ∈ network.toDeliverMessages i →
   b ∈ network.toDeliverMessages i →
@@ -396,86 +417,147 @@ theorem OriginReachable_HappensBefore {A M : Type} [DecidableEq A] [DecidableEq 
       apply reachable_in _ _ h_closed _ h_reach_tail h_step
 
   apply interpOps_ArrSet h_state_a at h_b_in_state_a
-  simp [ArrSet, Operation.init, YjsEmptyArray] at h_b_in_state_a
-  obtain ⟨ h_b_in_items_mem, h_b_in_items_eq ⟩ := h_b_in_state_a
+  cases h_b_in_state_a with
+  | inl h_b_in_init =>
+    simp [ArrSet, Operation.init, YjsEmptyArray] at h_b_in_init
+  | inr h_b_in_items =>
+    obtain ⟨ item_b', h_b_id_eq,  h_b_in_items_eq ⟩ := h_b_in_items
 
-  rw [List.mem_iff_append] at h_b_in_items_eq
-  obtain ⟨ pre_b'', post_b'', h_b_in_items_history ⟩ := h_b_in_items_eq
+    rw [List.mem_iff_append] at h_b_in_items_eq
+    obtain ⟨ pre_b'', post_b'', h_b_in_items_history ⟩ := h_b_in_items_eq
 
-  right
-  apply HappensBefore.broadcast_deliver_local (i := j_a)
+    right
+    apply HappensBefore.broadcast_deliver_local (i := j_a)
 
-  use pre_b'', post_b'', post_a
+    use pre_b'', post_b'', post_a
 
-  rw [h_a_history, h_b_in_items_history]
+    rw [h_a_history, h_b_in_items_history]
+    simp at *
+    have h_b_id_eq : Message.messageId (YjsOperation.insert item_b') = Message.messageId (YjsOperation.insert item_b) := by
+      assumption
+    have h_item_b'_in_ja : Event.Deliver (YjsOperation.insert item_b') ∈ network.histories j_a := by
+      rw [h_a_history, h_b_in_items_history]; simp
+    apply network.deliver_has_a_cause at h_item_b'_in_ja
+    obtain ⟨ j_b', h_item_b'_in_ja_history ⟩ := h_item_b'_in_ja
+    apply network.msg_id_unique (i := j_b') (j := j_b) at h_b_id_eq
+    . obtain ⟨ _, h_eq ⟩ := h_b_id_eq
+      simp at h_eq
+      subst item_b'
+      rfl
+    . assumption
+    . rw [h_b_history]; simp
+
+theorem hb_concurrent_diff_id {A : Type} [inst : DecidableEq A]
+  (network : YjsOperationNetwork A) (i : ClientId)
+  (a : CausalNetworkElem (YjsOperation A) network.toCausalNetwork)
+  (h_a_mem : a ∈ network.toDeliverMessages i)
+  (b : CausalNetworkElem (YjsOperation A) network.toCausalNetwork)
+  (h_b_mem : b ∈ network.toDeliverMessages i)
+  (h_a_b_happens_before : hb_concurrent inferInstance a b) :
+  a.elem.id.clientId ≠ b.elem.id.clientId := by
+  intros h_eq
+  simp [CausalNetwork.toDeliverMessages] at h_a_mem h_b_mem
+  obtain ⟨ a', h_a'_mem, h_a'_pos ⟩ := h_a_mem
+  obtain ⟨ b', h_b'_mem, h_b'_pos ⟩ := h_b_mem
+
+  have ⟨ a', h_a ⟩ : ∃ a'', Event.Deliver a'' = a' := by
+    cases a' with
+    | Deliver it =>
+      use it
+    | Broadcast e =>
+      simp at h_a'_pos
+
+  have ⟨ b', h_b ⟩ : ∃ b'', Event.Deliver b'' = b' := by
+    cases b' with
+    | Deliver it =>
+      use it
+    | Broadcast e =>
+      simp at h_b'_pos
+
+  subst h_a h_b
+
+  apply network.deliver_has_a_cause at h_a'_mem
+  obtain ⟨ i_a, h_a'_mem_hist ⟩ := h_a'_mem
+  apply network.deliver_has_a_cause at h_b'_mem
+  obtain ⟨ i_b, h_b'_mem_hist ⟩ := h_b'_mem
+
+  have h_i_a_eq_i_b : i_a = i_b := by
+    apply network.histories_client_id at h_a'_mem_hist
+    apply network.histories_client_id at h_b'_mem_hist
+    simp at *
+    subst a b
+    subst i_a i_b
+    assumption
+
+  subst i_a
   simp at *
+  subst a b
+  apply same_history_not_hb_concurrent h_a'_mem_hist h_b'_mem_hist h_a_b_happens_before
 
 theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network : YjsOperationNetwork A) (i : ClientId) :
   concurrent_commutative inferInstance (network.toCausalNetwork.toDeliverMessages i) := by
   intros a b h_a_mem h_b_mem h_a_b_happens_before
   funext s
   simp [Operation.State, Operation.Error] at *
-  simp [effect_comp, effect, Operation.effect]
+  simp [effect_comp, effect]
   apply Except.map_eq_eq (f := fun (x : YjsArray A) => x.val)
   . intros x y h_eq
     apply Subtype_eq_of_val
     exact h_eq
-  . rw [integrateValid_bind_integrateSafe]
-    rw [integrateValid_bind_integrateSafe]
-    apply integrate_commutative
-    . obtain ⟨ s, h_s ⟩ := s
-      simp; assumption
-    . intros h_eq
-      simp [CausalNetwork.toDeliverMessages] at h_a_mem h_b_mem
-      obtain ⟨ a', h_a'_mem, h_a'_pos ⟩ := h_a_mem
-      obtain ⟨ b', h_b'_mem, h_b'_pos ⟩ := h_b_mem
-
-      have ⟨ a', h_a ⟩ : ∃ a'', Event.Deliver a'' = a' := by
-        cases a' with
-        | Deliver it =>
-          use it
-        | Broadcast e =>
-          simp at h_a'_pos
-
-      have ⟨ b', h_b ⟩ : ∃ b'', Event.Deliver b'' = b' := by
-        cases b' with
-        | Deliver it =>
-          use it
-        | Broadcast e =>
-          simp at h_b'_pos
-
-      subst h_a h_b
-
-      apply network.deliver_has_a_cause at h_a'_mem
-      obtain ⟨ i_a, h_a'_mem_hist ⟩ := h_a'_mem
-      apply network.deliver_has_a_cause at h_b'_mem
-      obtain ⟨ i_b, h_b'_mem_hist ⟩ := h_b'_mem
-
-      have h_i_a_eq_i_b : i_a = i_b := by
-        apply network.histories_client_id at h_a'_mem_hist
-        apply network.histories_client_id at h_b'_mem_hist
-        simp at *
-        subst a b
-        simp at *
-        subst i_a i_b
-        assumption
-
-      subst i_a
-      simp at *
-      subst a b
-      apply same_history_not_hb_concurrent h_a'_mem_hist h_b'_mem_hist h_a_b_happens_before
-    . intros h_reachable
-      obtain ⟨ _, h_b_hb_a ⟩ := h_a_b_happens_before
-      apply h_b_hb_a
-      apply OriginReachable_HappensBefore h_a_mem h_b_mem h_reachable
-    . intros h_reachable
-      obtain ⟨ h_a_hb_b, _ ⟩ := h_a_b_happens_before
-      apply h_a_hb_b
-      apply OriginReachable_HappensBefore h_b_mem h_a_mem h_reachable
-    . obtain ⟨ a, _ ⟩ := a
-      assumption
-    . obtain ⟨ b, _ ⟩ := b
-      assumption
+  . obtain ⟨ a ⟩ := a
+    obtain ⟨ b ⟩ := b
+    cases a with
+    | insert a =>
+      cases b with
+      | insert b =>
+        conv =>
+          lhs
+          enter [2]
+          simp [Operation.effect]
+        rw [integrateValid_bind_integrateSafe]
+        conv =>
+          rhs
+          enter [2]
+          simp [Operation.effect]
+        rw [integrateValid_bind_integrateSafe]
+        apply integrate_commutative
+        . obtain ⟨ s, h_s ⟩ := s
+          simp; assumption
+        . apply hb_concurrent_diff_id _ _
+            (a := ⟨ YjsOperation.insert a ⟩) (b := ⟨YjsOperation.insert b ⟩) h_a_mem h_b_mem h_a_b_happens_before
+        . intros h_reachable
+          obtain ⟨ _, h_b_hb_a ⟩ := h_a_b_happens_before
+          apply h_b_hb_a
+          apply OriginReachable_HappensBefore h_a_mem h_b_mem rfl rfl h_reachable
+        . intros h_reachable
+          obtain ⟨ h_a_hb_b, _ ⟩ := h_a_b_happens_before
+          apply h_a_hb_b
+          apply OriginReachable_HappensBefore h_b_mem h_a_mem rfl rfl h_reachable
+        . obtain ⟨ a, _ ⟩ := a
+          assumption
+        . obtain ⟨ b, _ ⟩ := b
+          assumption
+      | delete _ deletedId =>
+        simp [Operation.State, Operation.Error, Operation.effect]
+        simp [deleteValid]
+        rw [<-bind_map_left (f := fun (x : YjsArray A) => x.val) (g := fun arr => Except.ok (deleteById arr deletedId)),
+            integrateValid_eq_integrateSafe,
+            integrateSafe_deleteById_commutative]
+        simp [bind, Except.bind]
+        rw [integrateValid_eq_integrateSafe]
+    | delete _ deletedId =>
+      cases b with
+      | insert b =>
+        simp [Operation.State, Operation.Error, Operation.effect]
+        simp [deleteValid]
+        rw [<-bind_map_left (f := fun (x : YjsArray A) => x.val) (g := fun arr => Except.ok (deleteById arr deletedId)),
+            integrateValid_eq_integrateSafe,
+            integrateSafe_deleteById_commutative]
+        simp [bind, Except.bind]
+        rw [integrateValid_eq_integrateSafe]
+      | delete _ deletedId' =>
+        simp [Operation.Error, Operation.effect, deleteValid, bind, Except.bind]
+        apply deleteById_commutative
 
 theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsArray A),
   let hist_i := network.toDeliverMessages i
