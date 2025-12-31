@@ -533,7 +533,7 @@ theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other ne
         apply findPtrIdx_lt_YjsLt' <;> assumption
       obtain ⟨ o, r, id, c, d ⟩ := other
       obtain ⟨ no, nr, nid, nc, nd ⟩ := newItem
-      simp [YjsItem.origin, YjsItem.rightOrigin] at heq_origin hlt
+      simp at heq_origin hlt
       apply YjsLt'.ltConflict
       apply ConflictLt'.ltOriginDiff <;> try assumption
     | inr heq_origin =>
@@ -542,7 +542,7 @@ theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other ne
         apply findPtrIdx_eq_ok_inj _ _ hfindLeft hfindOLeft
       obtain ⟨ o, r, id, c, d ⟩ := other
       obtain ⟨ no, nr, nid, nc, nd ⟩ := newItem
-      simp [YjsItem.origin, YjsItem.rightOrigin, YjsItem.id] at heq_origin heq_oleft_eq hlt
+      simp at heq_origin heq_oleft_eq hlt
       subst no
       apply YjsLt'.ltConflict
       apply ConflictLt'.ltOriginSame <;> try assumption

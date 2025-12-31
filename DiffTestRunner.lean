@@ -3,7 +3,7 @@ import Std.Data.HashMap
 
 import LeanYjs.Item
 import LeanYjs.Algorithm.YString
-import LeanYjs.Algorithm.Integrate
+import LeanYjs.Algorithm.Insert.Basic
 import LeanYjs.Logger
 
 open Lean
