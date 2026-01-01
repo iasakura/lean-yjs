@@ -3,31 +3,31 @@ import LeanYjs.ItemSet
 import LeanYjs.ClientId
 import LeanYjs.Order.ItemOrder
 
-variable {A : Type} [BEq A]
+variable {A : Type}
 
 -- Defines a subset of YjsItem which are possible DAG of a history of insertions.
 
 variable (P : ItemSet A)
 
 structure ItemSetInvariant where
-  origin_not_leq : ∀ (o r : YjsPtr A) c id, P (YjsItem.item o r id c) ->
+  origin_not_leq : ∀ (o r : YjsPtr A) c id d, P (YjsItem.mk o r id c d) ->
     YjsLt' o r
-  origin_nearest_reachable : ∀ (o r : YjsPtr A) c id x,
-    P (YjsItem.item o r id c) ->
-    OriginReachable (A := A) (YjsItem.item o r id c) x ->
+  origin_nearest_reachable : ∀ (o r : YjsPtr A) c id d x,
+    P (YjsItem.mk o r id c d) ->
+    OriginReachable (A := A) (YjsItem.mk o r id c d) x ->
     (YjsLeq' x o) ∨ (YjsLeq' r x)
   id_unique : ∀ (x y : YjsItem A), x.id = y.id -> P x -> P y -> x = y
 
 @[simp] theorem origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.origin := by
   intros hclosed x px
-  obtain ⟨ o, r, id, c ⟩ := x
-  simp [YjsItem.origin] at *
+  obtain ⟨ o, r, id, c, d ⟩ := x
+  simp at *
   apply hclosed.closedLeft <;> assumption
 
 @[simp] theorem right_origin_p_valid {A} {P : ItemSet A} : IsClosedItemSet P -> forall (x : YjsItem A), P x -> P x.rightOrigin := by
   intros hclosed x px
-  obtain ⟨ o, r, id, c ⟩ := x
-  simp [YjsItem.rightOrigin] at *
+  obtain ⟨ o, r, id, c, d ⟩ := x
+  simp at *
   apply hclosed.closedRight <;> assumption
 
 theorem not_ptr_lt_first {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvariant P -> ∀ h (o : YjsPtr A), P o -> ¬ YjsLt h o YjsPtr.first := by
@@ -41,7 +41,7 @@ theorem not_ptr_lt_first {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvar
     cases hlt
   | ltOriginOrder o _ hlt =>
     cases hlt
-  | ltRightOrigin h o r id c hp hlt =>
+  | ltRightOrigin h o r id c d hp hlt =>
     cases hlt with
     | leqLt h _ _ hlt =>
       have hsize' : r.size < n := by
@@ -73,7 +73,7 @@ theorem not_last_lt_ptr {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvari
     cases hlt
   | ltOriginOrder _  hpo hlt =>
     cases hlt
-  | ltOrigin h x o r id c hlt =>
+  | ltOrigin h x o r id c d hlt =>
     cases hlt with
     | leqLt h _ _ hlt =>
       have hsize' : o.size < n := by
@@ -121,3 +121,20 @@ theorem not_last_lt_last {A} {P : ItemSet A} : ItemSetInvariant P -> ∀ h, ¬ @
     | ltOriginOrder _ _ hlt =>
       assumption
   cases h with
+
+theorem ItemSetInvariant.eq_set {A} (P Q : ItemSet A) :
+  IsClosedItemSet P →
+  ItemSetInvariant P →
+  (∀x, P x ↔ Q x) →
+  ItemSetInvariant Q := by
+  intros hPclosed hP hiff
+  constructor
+  . intros o r c id d hq
+    rw [<-hiff] at *
+    apply hP.origin_not_leq <;> assumption
+  . intros o r c id d x hq hreachable
+    rw [<-hiff] at *
+    apply hP.origin_nearest_reachable <;> assumption
+  . intros x y h_id_eq h_qx h_qy
+    rw [<-hiff] at *
+    apply hP.id_unique x y h_id_eq <;> assumption

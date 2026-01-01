@@ -3,7 +3,7 @@ import Std.Data.HashMap
 
 import LeanYjs.Item
 import LeanYjs.Algorithm.YString
-import LeanYjs.Algorithm.Integrate
+import LeanYjs.Algorithm.Insert.Basic
 import LeanYjs.Logger
 
 open Lean
@@ -39,7 +39,7 @@ def decodeCommand (json : Json) : Except String NdjsonCommand := do
     Except.error s!"unknown command type: {other}"
 
 def renderIntegrateError : IntegrateError → String
-  | .notFound => "integrate error: notFound"
+  | .error => "integrate error: error"
 
 abbrev ClientState := Std.HashMap Nat (YString × Nat)
 
@@ -61,7 +61,7 @@ def applySync (state : ClientState) (src dst : Nat) : Except String ClientState 
 
   let rec integrateLoop (dest : Array Item) (queue : List Item) (fuel : Nat) : Except String (Array Item) :=
     match fuel with
-    | 0 => Except.error (renderIntegrateError IntegrateError.notFound)
+    | 0 => Except.error (renderIntegrateError IntegrateError.error)
     | Nat.succ fuel' =>
       match queue with
       | [] => pure dest
@@ -73,7 +73,7 @@ def applySync (state : ClientState) (src dst : Nat) : Except String ClientState 
           else
             match integrate item d with
             | Except.ok newDest => pure (newDest, remaining, true)
-            | Except.error IntegrateError.notFound => pure (d, item :: remaining, progressed)
+            | Except.error IntegrateError.error => pure (d, item :: remaining, progressed)
 
         let (dest', remaining, progressed) ← queue.foldlM process (dest, [], false)
         if remaining.isEmpty then
@@ -81,7 +81,7 @@ def applySync (state : ClientState) (src dst : Nat) : Except String ClientState 
         else if progressed then
           integrateLoop dest' remaining.reverse fuel'
         else
-          Except.error (renderIntegrateError IntegrateError.notFound)
+          Except.error (renderIntegrateError IntegrateError.error)
 
   let maxFuel := todo.length + 1
   let contents ← integrateLoop initial todo maxFuel

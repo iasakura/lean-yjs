@@ -93,17 +93,17 @@ theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInva
           ∀ (h0 : ℕ), YjsLt h0 x y → ∀ (h1 : ℕ), YjsLt h1 y z → x.size + y.size + z.size = m → ∃ h, YjsLt h x z) ->
   ConflictLt h1 x y -> ConflictLt h2 y z -> YjsLt' x z := by
   intros hclosed x y z hpx hpy hpz ih hxy hyz
-  have ⟨ ⟨ xo, xr, xid, xc ⟩, heqx ⟩ : ∃ x' : YjsItem A, x = YjsPtr.itemPtr x' := by
+  have ⟨ ⟨ xo, xr, xid, xc, xd ⟩, heqx ⟩ : ∃ x' : YjsItem A, x = YjsPtr.itemPtr x' := by
     cases hxy <;> (constructor; eq_refl)
-  have ⟨ ⟨ zo, zr, zid, zc ⟩, heqz ⟩ : ∃ z' : YjsItem A, z = YjsPtr.itemPtr z' := by
+  have ⟨ ⟨ zo, zr, zid, zc, zd ⟩, heqz ⟩ : ∃ z' : YjsItem A, z = YjsPtr.itemPtr z' := by
     cases hyz <;> (constructor; eq_refl)
   subst heqx heqz
   have hltxrz :
-    YjsLeq' xr (YjsItem.item zo zr zid zc) ∨ YjsLt' (YjsItem.item zo zr zid zc) xr := by
+    YjsLeq' xr (YjsItem.mk zo zr zid zc zd) ∨ YjsLt' (YjsItem.mk zo zr zid zc zd) xr := by
     apply yjs_lt_total <;> try assumption
     apply hclosed.closedRight; assumption
   have hltxzo :
-    YjsLeq' (YjsItem.item xo xr xid xc) zo ∨ YjsLt' zo (YjsItem.item xo xr xid xc) := by
+    YjsLeq' (YjsItem.mk xo xr xid xc xd) zo ∨ YjsLt' zo (YjsItem.mk xo xr xid xc xd) := by
     apply yjs_lt_total <;> try assumption
     apply hclosed.closedLeft; assumption
 
@@ -116,16 +116,16 @@ theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInva
     apply YjsLt.ltOrigin <;> try assumption
     left
 
-  have hltxzr : YjsLt' (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)) zr := by
+  have hltxzr : YjsLt' (YjsPtr.itemPtr (YjsItem.mk xo xr xid xc xd)) zr := by
     obtain ⟨ _, hyzr ⟩ := hyzr
-    apply ih (y := y) ((YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size + y.size + zr.size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ hpx hpy (by apply hclosed.closedRight; assumption) <;> try simp
+    apply ih (y := y) ((YjsPtr.itemPtr (YjsItem.mk xo xr xid xc xd)).size + y.size + zr.size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ hpx hpy (by apply hclosed.closedRight; assumption) <;> try simp
     . apply YjsLt.ltConflict
       assumption
     . assumption
 
-  have hltxoz : YjsLt' xo (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)) := by
+  have hltxoz : YjsLt' xo (YjsPtr.itemPtr (YjsItem.mk zo zr zid zc zd)) := by
     obtain ⟨ _, hxoy ⟩ := hxoy
-    apply ih (y := y) (xo.size + y.size + (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)).size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ (by apply hclosed.closedLeft; assumption) hpy hpz <;> try simp
+    apply ih (y := y) (xo.size + y.size + (YjsPtr.itemPtr (YjsItem.mk zo zr zid zc zd)).size) (by simp [YjsItem.size, YjsPtr.size] at *; omega) _ _ (by apply hclosed.closedLeft; assumption) hpy hpz <;> try simp
     . assumption
     . apply YjsLt.ltConflict
       assumption
@@ -143,24 +143,24 @@ theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInva
       apply YjsLt.ltOrigin <;> assumption
     | inr hltzox =>
       cases hxy with
-      | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+      | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 d1 d2 hlt1 hlt2 hlt3 hlt4 =>
         cases hyz with
-        | ltOriginDiff h5 h6 h7 h8 l3 l4 r3 r4 id3 id4 c3 c4 hlt5 hlt6 hlt7 hlt8 =>
+        | ltOriginDiff h5 h6 h7 h8 l3 l4 r3 r4 id3 id4 c3 c4 d3 d4 hlt5 hlt6 hlt7 hlt8 =>
           obtain ⟨ _, _ ⟩ := hltzxr
           obtain ⟨ _, _ ⟩ := hltzox
           obtain ⟨ _, _ ⟩ := hltxzr
           obtain ⟨ _, _ ⟩ := hltxoz
           have hlt : zo.size + l2.size + xo.size <
-            (YjsPtr.itemPtr (YjsItem.item xo xr xid xc)).size +
-            (YjsPtr.itemPtr (YjsItem.item l2 r2 id2 c2)).size +
-            (YjsPtr.itemPtr (YjsItem.item zo zr zid zc)).size := by
+            (YjsPtr.itemPtr (YjsItem.mk xo xr xid xc xd)).size +
+            (YjsPtr.itemPtr (YjsItem.mk l2 r2 id2 c2 d2)).size +
+            (YjsPtr.itemPtr (YjsItem.mk zo zr zid zc zd)).size := by
             simp [YjsItem.size, YjsPtr.size] at *
             omega
           obtain ⟨ _, hlt ⟩ := ih (y := l2) (zo.size + l2.size + xo.size) hlt zo xo (by apply hclosed.closedLeft; assumption) (by apply hclosed.closedLeft; assumption) (by apply hclosed.closedLeft; assumption) _ hlt5 _ hlt1 (refl _)
           constructor
           apply YjsLt.ltConflict
           apply ConflictLt.ltOriginDiff <;> try assumption
-        | ltOriginSame h5 h6 l3 r3 id3 id4 c3 c4 hlt5 hlt6 _ =>
+        | ltOriginSame h5 h6 l3 r3 id3 id4 c3 c4 d3 d4 hlt5 hlt6 _ =>
           obtain ⟨ _, _ ⟩ := hltzxr
           obtain ⟨ _, _ ⟩ := hltzox
           obtain ⟨ _, _ ⟩ := hltxzr
@@ -169,9 +169,9 @@ theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInva
           constructor
           apply YjsLt.ltConflict
           apply ConflictLt.ltOriginDiff <;> try assumption
-      | ltOriginSame h1 h2 l1 r1 id1 id2 c1 c2 hlt1 hlt2 _ =>
+      | ltOriginSame h1 h2 l1 r1 id1 id2 c1 c2 d1 d2 hlt1 hlt2 _ =>
         cases hyz with
-        | ltOriginDiff h5 h6 h7 h8 l3 l4 r3 r4 id3 id4 c3 c4 hlt5 hlt6 hlt7 hlt8 =>
+        | ltOriginDiff h5 h6 h7 h8 l3 l4 r3 r4 id3 id4 c3 c4 d3 d4 hlt5 hlt6 hlt7 hlt8 =>
           obtain ⟨ _, _ ⟩ := hltzxr
           obtain ⟨ _, _ ⟩ := hltzox
           obtain ⟨ _, _ ⟩ := hltxzr
@@ -180,7 +180,7 @@ theorem conflict_lt_trans {A} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInva
           constructor
           apply YjsLt.ltConflict
           apply ConflictLt.ltOriginDiff <;> try assumption
-        | ltOriginSame h5 h6 l3 r3 id3 id4 c3 c4 hlt5 hlt6 _ =>
+        | ltOriginSame h5 h6 l3 r3 id3 id4 c3 c4 d3 d4 hlt5 hlt6 _ =>
           obtain ⟨ _, _ ⟩ := hltzxr
           obtain ⟨ _, _ ⟩ := hltzox
           obtain ⟨ _, _ ⟩ := hltxzr
@@ -267,7 +267,7 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
   | ⟨ y', hyeq, h, hleq  ⟩
   | hxyconflict
   . subst hxeq
-    obtain ⟨ o, r, id, c ⟩ := x'
+    obtain ⟨ o, r, id, c, d ⟩ := x'
     simp [YjsItem.rightOrigin] at hleq
     obtain ⟨ h', hleq ⟩ := hleq
     cases hleq with
@@ -287,22 +287,22 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
       right; assumption
   . subst hyeq
     rcases hyzcases with
-    ⟨ y', hyeq, hyz, hleq' ⟩
+    ⟨ x', hyeq, hyz, hleq' ⟩
     | ⟨ z', hzeq, hyz, hleq' ⟩
     | hyzconflict
-    . obtain ⟨ o, r, id, c ⟩ := y'
+    . obtain ⟨ o, r, id, c, d ⟩ := y'
       simp [YjsItem.origin] at hleq
       cases hyeq
       simp [YjsItem.rightOrigin] at hleq'
       have ⟨ hor, horlt ⟩ : YjsLt' o r := by
-        apply inv.origin_not_leq <;> assumption
+        apply inv.origin_not_leq (o := o) (r := r) (c := c) (id := id) (d := d) <;> assumption
       cases hleq with
       | leqSame =>
         cases hleq' with
         | leqSame =>
           constructor; assumption
         | leqLt h _ _ hlt' =>
-          apply ih (o.size + r.size + z.size) _ o r z _ _ _ _ horlt _ hlt' <;> try assumption
+          apply ih (x.size + r.size + z.size) _ x r z _ _ _ _ horlt _ hlt' <;> try assumption
           simp
           simp [YjsItem.size, YjsPtr.size] at hsize
           omega
@@ -329,7 +329,7 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
           omega
           apply hP.closedLeft; assumption
     . subst hzeq
-      obtain ⟨ o, r, id, c ⟩ := z'
+      obtain ⟨ o, r, id, c, d ⟩ := z'
       cases hleq' with
       | leqSame =>
         constructor
@@ -354,17 +354,17 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
 
       | leqLt h _ _ hlt =>
         apply ih (x.size + y'.origin.size + z.size) _ x y'.origin z _ _ _ _ hlt _ hlt' (refl _) <;> try assumption
-        . obtain ⟨ o, r, id, c ⟩ := y'
+        . obtain ⟨ o, r, id, c, d ⟩ := y'
           simp [ YjsItem.origin, YjsItem.size, YjsPtr.size] at *
           omega
-        . obtain ⟨ o, r, id, c ⟩ := y'
+        . obtain ⟨ o, r, id, c, d ⟩ := y'
           apply hP.closedLeft; assumption
   . rcases hyzcases with
     ⟨ y', hyeq, hyz, hleq' ⟩
     | ⟨ z', hzeq, hyz, hleq' ⟩
     | hyzconflict
     . subst hyeq
-      obtain ⟨ o, r, id, c ⟩ := y'
+      obtain ⟨ o, r, id, c, d ⟩ := y'
       simp [YjsItem.rightOrigin] at hleq'
       obtain ⟨ h', hxyconflict ⟩ := hxyconflict
       apply conflict_lt_x_lt_y_right_origin at hxyconflict
@@ -381,7 +381,7 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
     . subst hzeq
       suffices YjsLt' x z'.origin by
         obtain ⟨ h', this ⟩ := this
-        obtain ⟨ o, r, id, c ⟩ := z'
+        obtain ⟨ o, r, id, c, d ⟩ := z'
         constructor
         apply YjsLt.ltOrigin (h' + 1) <;> try assumption
         right; assumption
@@ -389,7 +389,7 @@ theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetIn
       | leqSame =>
         constructor; assumption
       | leqLt h _ _ hlt' =>
-        obtain ⟨ o, r, id, c ⟩ := z'
+        obtain ⟨ o, r, id, c, d ⟩ := z'
         apply ih (x.size + y.size + o.size) _ x y o _ _ _ _ hxy _ hlt' (refl _) <;> try assumption
         . simp [YjsItem.origin, YjsItem.size, YjsPtr.size] at *
           omega

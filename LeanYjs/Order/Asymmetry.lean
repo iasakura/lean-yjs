@@ -31,9 +31,9 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
   obtain ⟨ _, hltxy ⟩ := hltxy
   obtain ⟨ _, hltyx ⟩ := hltyx
   cases hltxy with
-  | ltOriginDiff _ _ _ _ o1 o2 r1 r2 id1 id2 c1 c2 hlt1 hlt2 hlt3 hlt4 =>
+  | ltOriginDiff h1 h2 h3 h4 o1 o2 r1 r2 id1 id2 c1 c2 d1 d2 hlt1 hlt2 hlt3 hlt4 =>
     cases hltyx with
-    | ltOriginDiff _ _ _ _ _ _ _ _ _ _ _ _ hlt1' _ _ _ =>
+    | ltOriginDiff h1' h2' h3' h4' _ _ _ _ _ _ _ _ _ _ hlt1' hlt2' hlt3' hlt4' =>
       exists o1, o2
       constructor
       . apply hP.closedLeft at hpx; assumption
@@ -42,7 +42,7 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
       constructor
       . simp [YjsPtr.size, YjsItem.size]; omega
       constructor <;> (constructor; assumption)
-    | ltOriginSame _ _ _ _ o r id c =>
+    | ltOriginSame h1' h2' _ _ o r id c d1' d2' =>
       exists o1, o1
       constructor
       . apply hP.closedLeft at hpx; assumption
@@ -51,9 +51,9 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
       constructor;
       . simp [YjsPtr.size, YjsItem.size]; omega
       constructor <;> (constructor; assumption)
-  | ltOriginSame _ _ o r1 r2 id1 id2 c1 c2 hlt1 hlt2 hidlt =>
+  | ltOriginSame h1 h2 o r1 r2 id1 id2 c1 c2 d1 d2 hlt1 hlt2 hidlt =>
     cases hltyx with
-    | ltOriginDiff _ _ _ _ o1 o2 r1' r2' id1' id2' c1' c2' hlt1' hlt2' hlt3' hlt4' =>
+    | ltOriginDiff h5 h6 h7 h8 o1 o2 r1' r2' id1' id2' c1' c2' d1' d2' hlt1' hlt2' hlt3' hlt4' =>
       exists o, o
       constructor;
       . apply hP.closedLeft at hpx; assumption
@@ -62,7 +62,7 @@ theorem yjs_lt_conflict_lt_decreases {A} {P : ItemSet A} :
       constructor
       . simp [YjsPtr.size, YjsItem.size]; omega
       constructor <;> (constructor; assumption)
-    | ltOriginSame _ _ _ _ o r id c =>
+    | ltOriginSame h5 h6 _ _ o r id c d3 d4 =>
       unfold ClientId at *
       obtain h := YjsId_lt_asymm hidlt
       contradiction
@@ -74,9 +74,9 @@ theorem yjs_leq_right_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv 
   YjsLt' y x →
   ∃ (x' y' : YjsPtr A), P x' ∧ P y' ∧ x'.size + y'.size < x.size + y.size ∧ YjsLt' x' y' ∧ YjsLt' y' x' := by
   intros hpx hpy hP hxrleq hxy
-  obtain ⟨ o, r, id, c ⟩ := x
+  obtain ⟨ o, r, id, c, d ⟩ := x
   have hyxr : YjsLt' y r := by
-    apply yjs_lt_trans hP (y := (YjsItem.item o r id c)) <;> try assumption
+    apply yjs_lt_trans hP (y := (YjsItem.mk o r id c d)) <;> try assumption
     . apply hP.closedRight at hpx; assumption
     . use 1; apply YjsLt.ltRightOrigin; try assumption
       left
@@ -103,9 +103,9 @@ theorem yjs_leq_origin_decreases {A} [DecidableEq A] {P : ItemSet A} (inv : Item
   YjsLt' y x →
   ∃ (x' y' : YjsPtr A), P x' ∧ P y' ∧ x'.size + y'.size < x.size + y.size ∧ YjsLt' x' y' ∧ YjsLt' y' x' := by
   intros hpx hpy hP hxrleq hxy
-  obtain ⟨ o, r, id, c ⟩ := y
+  obtain ⟨ o, r, id, c, d ⟩ := y
   have hyxr : YjsLt' o x := by
-    apply yjs_lt_trans hP (y := (YjsItem.item o r id c)) <;> try assumption
+    apply yjs_lt_trans hP (y := (YjsItem.mk o r id c d)) <;> try assumption
     . apply hP.closedLeft at hpy; assumption
     . use 1; apply YjsLt.ltOrigin; try assumption
       left

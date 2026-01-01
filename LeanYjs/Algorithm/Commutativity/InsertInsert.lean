@@ -11,9 +11,12 @@ import LeanYjs.Order.Totality
 import LeanYjs.Order.Transitivity
 import LeanYjs.Order.Asymmetry
 import LeanYjs.Order.NoCrossOrigin
-import LeanYjs.Algorithm.Integrate
-import LeanYjs.Algorithm.YjsArray
-import LeanYjs.Algorithm.IntegrateSpec
+import LeanYjs.Algorithm.Basic
+import LeanYjs.Algorithm.Insert.Basic
+import LeanYjs.Algorithm.Insert.Lemmas
+import LeanYjs.Algorithm.Insert.Spec
+import LeanYjs.Algorithm.Invariant.Basic
+import LeanYjs.Algorithm.Invariant.YjsArray
 
 variable {A : Type}
 variable [DecidableEq A]
@@ -249,7 +252,7 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
     rw [h_other_ok, ok_bind]
 
     have ArrSet_other_origin : ArrSet arr.toList other.origin := by
-      obtain ⟨ o, r, id, c ⟩ := other
+      obtain ⟨ o, r, id, c, d ⟩ := other
       apply harrinv.closed.closedLeft o r id c
       simp [ArrSet]
       rw [getElem?_eq_some_iff] at h_other_eq
@@ -258,7 +261,7 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
       simp
 
     have ArrSet_other_rightOrigin : ArrSet arr.toList other.rightOrigin := by
-      obtain ⟨ o, r, id, c ⟩ := other
+      obtain ⟨ o, r, id, c, d ⟩ := other
       apply harrinv.closed.closedRight o r id c
       simp [ArrSet]
       rw [getElem?_eq_some_iff] at h_other_eq
@@ -348,7 +351,7 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsIt
         intros heq
         rw [<-heq, <-h_origin_eq] at h_not_reachable
         apply h_not_reachable
-        obtain ⟨ o, r, id, c ⟩ := newItem
+        obtain ⟨ o, r, id, c, d ⟩ := newItem
         apply OriginReachable.reachable_single
         apply OriginReachableStep.reachable
     rw [heqleft']
@@ -358,7 +361,7 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsIt
     cases heqleft' : findPtrIdx newItem.origin (arr.insertIdxIfInBounds idx other) with
     | error e =>
       simp [bind, Except.bind]
-      apply Nonempty.intro IntegrateError.notFound
+      apply Nonempty.intro IntegrateError.error
     | ok leftIdx' =>
       rw [ok_bind]
       cases heqright : findPtrIdx newItem.rightOrigin arr with
@@ -381,7 +384,7 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsIt
             intros heq
             rw [<-heq, <-h_rightOrigin_eq] at h_not_reachable
             apply h_not_reachable
-            obtain ⟨ o, r, id, c ⟩ := newItem
+            obtain ⟨ o, r, id, c, d ⟩ := newItem
             apply OriginReachable.reachable_single
             apply OriginReachableStep.reachable_right
         rw [heqright']
@@ -450,7 +453,7 @@ theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : YjsItem A} 
   intros harrinv hcid_neq_bid h_a_valid h_b_valid h_not_reachable h_integrate_a h_integrate_b
   simp [integrateSafe] at *
   split_ifs at *
-  constructor; constructor; apply IntegrateError.notFound
+  constructor; constructor; apply IntegrateError.error
   intros hsafe
   rw [<-isClockSafe_uniqueId] at *
   have ⟨ idx, h_arr2 ⟩  : ∃ i, arr2 = arr.insertIdxIfInBounds i b := by
