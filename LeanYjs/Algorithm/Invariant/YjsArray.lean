@@ -13,11 +13,14 @@ import LeanYjs.Algorithm.Invariant.Basic
 variable {A : Type}
 variable [DecidableEq A]
 
+abbrev maximalId (items : List (YjsItem A)) : Prop :=
+  List.Pairwise (fun x y => x.id ≠ y.id) items
+
 structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
   closed : IsClosedItemSet (ArrSet arr)
   item_set_inv : ItemSetInvariant (ArrSet arr)
   sorted : List.Pairwise (fun (x y : YjsItem A) => YjsLt' (A := A) x y) arr
-  unique : List.Pairwise (fun x y => x.id ≠ y.id) arr
+  unique : maximalId arr
 
 theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
   YjsArrInvariant xs_all ->
@@ -143,6 +146,7 @@ theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
           subst heq
           obtain ⟨ t', heq ⟩ := hsubset2
           subst heq
+          simp [maximalId] at *
           rw [List.pairwise_append] at huniq1
           rw [List.pairwise_append] at huniq2
           simp at *
@@ -570,6 +574,135 @@ theorem findPtrIdx_ArrSet {A : Type} [DecidableEq A] {arr : Array (YjsItem A)} {
     simp at heq
     subst p
     simp [ArrSet]
+
+-- TODO: refactor proof
+-- YjsArrInvariant is needed to ensure the array is unique and
+theorem IntegrateInput.toItem_ok_iff {A : Type} [DecidableEq A] (input : IntegrateInput A) (arr : Array (YjsItem A)) (newItem : YjsItem A) :
+  maximalId arr.toList →
+  (input.toItem arr = Except.ok newItem ↔
+  ∃origin rightOrigin id content,
+    newItem = YjsItem.mk origin rightOrigin id content false ∧
+    (match input.originId with
+    | none => origin = YjsPtr.first
+    | some p => ∃ originItem : YjsItem A, origin = originItem ∧ originItem.id = p ∧ originItem ∈ arr) ∧
+    (match input.rightOriginId with
+    | none => rightOrigin = YjsPtr.last
+    | some p => ∃ rightOriginItem : YjsItem A, rightOrigin = rightOriginItem ∧ rightOriginItem.id = p ∧ rightOriginItem ∈ arr) ∧
+    id = input.id ∧
+    content = input.content) := by
+  intros h_unique
+  constructor
+  . intros h_toItem
+    simp [IntegrateInput.toItem] at h_toItem
+    cases h_originId : input.originId with
+    | none =>
+      simp [h_originId] at h_toItem
+      cases h_rightOriginId : input.rightOriginId with
+      | none =>
+        simp [h_rightOriginId] at h_toItem
+        cases h_toItem
+        simp
+      | some rightOrigin =>
+        simp [h_rightOriginId] at h_toItem
+        cases h_find : Array.find? (fun item => decide (item.id = rightOrigin)) arr with
+        | none =>
+          simp [h_find] at h_toItem
+          cases h_toItem
+        | some rightOriginItem =>
+          simp [h_find] at h_toItem
+          cases h_toItem
+          grind only [→ Array.mem_of_find?_eq_some, → Array.find?_some]
+    | some origin =>
+      simp [h_originId] at h_toItem
+      cases h_find_origin : Array.find? (fun item => decide (item.id = origin)) arr with
+      | none =>
+        simp [h_find_origin] at h_toItem
+        cases h_toItem
+      | some originItem =>
+        simp [h_find_origin] at h_toItem
+        cases h_rightOriginId : input.rightOriginId with
+        | none =>
+          simp [h_rightOriginId] at h_toItem
+          cases h_toItem
+          grind only [→ Array.mem_of_find?_eq_some, → Array.find?_some]
+        | some rightOrigin =>
+          simp [h_rightOriginId] at h_toItem
+          cases h_find : Array.find? (fun item => decide (item.id = rightOrigin)) arr with
+          | none =>
+            simp [h_find] at h_toItem
+            cases h_toItem
+          | some rightOriginItem =>
+            simp [h_find] at h_toItem
+            cases h_toItem
+            grind only [→ Array.mem_of_find?_eq_some, → Array.find?_some]
+  . intros h_exists
+    obtain ⟨ origin, rightOrigin, id, content, hdef, h_origin, h_rightOrigin, h_id, h_content ⟩ := h_exists
+    simp [IntegrateInput.toItem]
+    cases h_originId : input.originId with
+    | none =>
+      rw [h_originId] at h_origin
+      simp [h_originId] at *
+      cases h_rightOriginId : input.rightOriginId with
+      | none =>
+        rw [h_rightOriginId] at h_rightOrigin
+        simp [h_rightOriginId] at *
+        rw [hdef, h_origin, h_rightOrigin, h_id, h_content]
+        rfl
+      | some rightOriginId =>
+        rw [h_rightOriginId] at h_rightOrigin
+        simp [h_rightOriginId] at *
+        obtain ⟨ rightOriginItem, h_rightOrigin_eq, h_rightOrigin_id_eq, h_rightOrigin_in_arr ⟩ := h_rightOrigin
+        rw [hdef, h_origin, h_rightOrigin_eq, h_id, h_content]
+        have h_find : Array.find? (fun item => decide (item.id = rightOriginId)) arr = some rightOriginItem := by
+          have h := h_unique
+          grind [Array.find?_eq_some_iff_getElem, List.pairwise_iff_getElem, Array.mem_iff_getElem]
+        rw [h_find]
+        simp
+        rfl
+    | some originId =>
+      rw [h_originId] at h_origin
+      simp [h_originId] at *
+      obtain ⟨ originItem, h_origin_eq, h_origin_id_eq, h_origin_in_arr ⟩ := h_origin
+      rw [hdef, h_origin_eq, h_id, h_content]
+      have h_find : Array.find? (fun item => decide (item.id = originId)) arr = some originItem := by
+        have h := h_unique
+        grind [Array.find?_eq_some_iff_getElem, List.pairwise_iff_getElem, Array.mem_iff_getElem]
+      rw [h_find]
+      simp
+      cases h_rightOriginId : input.rightOriginId with
+      | none =>
+        rw [h_rightOriginId] at h_rightOrigin
+        simp [h_rightOriginId] at *
+        rw [h_rightOrigin]
+        rfl
+      | some rightOriginId =>
+        rw [h_rightOriginId] at h_rightOrigin
+        simp [h_rightOriginId] at *
+        obtain ⟨ rightOriginItem, h_rightOrigin_eq, h_rightOrigin_id_eq, h_rightOrigin_in_arr ⟩ := h_rightOrigin
+        have h_find_right : Array.find? (fun item => decide (item.id = rightOriginId)) arr = some rightOriginItem := by
+          have h := h_unique
+          grind [Array.find?_eq_some_iff_getElem, List.pairwise_iff_getElem, Array.mem_iff_getElem]
+        rw [h_find_right, h_rightOrigin_eq]
+        simp
+        rfl
+
+theorem findLeftIdx_ArrSet {A : Type} [DecidableEq A] {input : IntegrateInput A} {newItem : YjsItem A} {arr : Array (YjsItem A)} {idx : ℤ} :
+  maximalId arr.toList →
+  input.toItem arr = Except.ok newItem →
+  findLeftIdx input.originId arr = Except.ok idx →
+  ArrSet arr.toList newItem.origin := by
+  intros h_unique h_newItem_def hfind
+  rw [IntegrateInput.toItem_ok_iff _ _ _ h_unique] at h_newItem_def
+  grind [ArrSet]
+
+theorem findRightIdx_ArrSet {A : Type} [DecidableEq A] {input : IntegrateInput A} {newItem : YjsItem A} {arr : Array (YjsItem A)} {idx : ℤ} :
+  maximalId arr.toList →
+  input.toItem arr = Except.ok newItem →
+  findRightIdx input.rightOriginId arr = Except.ok idx →
+  ArrSet arr.toList newItem.rightOrigin := by
+  intros h_unique h_newItem_def hfind
+  rw [IntegrateInput.toItem_ok_iff _ _ _ h_unique] at h_newItem_def
+  grind [ArrSet]
 
 theorem findPtrIdx_insert_some {arr other} {newItem : YjsItem A} :
   YjsArrInvariant (arr.insertIdxIfInBounds i newItem).toList

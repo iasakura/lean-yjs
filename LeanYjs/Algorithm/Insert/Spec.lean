@@ -1574,33 +1574,34 @@ structure IsItemValid (item : YjsItem A) where
 
 abbrev YjsItem.isValid : YjsItem A → Prop := IsItemValid
 
-def UniqueId (newItem : YjsItem A) (arr : Array (YjsItem A)) :=
+def maximalId (newItem : YjsItem A) (arr : Array (YjsItem A)) :=
   ∀ (x : YjsItem A),
     ArrSet arr.toList (YjsPtr.itemPtr x) →
     x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock
 
-theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
+theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
+  → input.toItem arr = Except.ok newItem
   → newItem.isValid
-  -> UniqueId newItem arr
-  -> integrate newItem arr = Except.ok newArr
-  -> ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList := by
-  intros harrinv h_valid h_UniqueId hintegrate
+  → maximalId newItem arr
+  → integrate input arr = Except.ok newArr
+  → ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList := by
+  intros harrinv h_newItem_def h_valid h_maximalId hintegrate
   obtain ⟨ horigin_consistent, hreachable_consistent ⟩ := h_valid
   unfold integrate at hintegrate
-  generalize heqleft : findPtrIdx newItem.origin arr = leftIdx at hintegrate
+  generalize heqleft : findLeftIdx input.originId arr = leftIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ leftIdx ⟩ := leftIdx; cases hintegrate
   rw [ok_bind] at hintegrate
 
-  generalize heqright : findPtrIdx newItem.rightOrigin arr = rightIdx at hintegrate
+  generalize heqright : findRightIdx input.rightOriginId arr = rightIdx at hintegrate
   obtain ⟨ _ ⟩ | ⟨ rightIdx ⟩ := rightIdx; cases hintegrate
   rw [ok_bind] at hintegrate
 
   have horigin : ArrSet arr.toList newItem.origin := by
-    apply findPtrIdx_ArrSet heqleft
+    apply findLeftIdx_ArrSet harrinv.unique h_newItem_def heqleft
 
   have hrorigin : ArrSet arr.toList newItem.rightOrigin := by
-    apply findPtrIdx_ArrSet heqright
+    apply findRightIdx_ArrSet harrinv.unique h_newItem_def heqright
 
   have hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)) := by
     apply arr_set_closed_push _ _ _ horigin hrorigin
@@ -1613,9 +1614,15 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
     apply horigin_consistent
     apply hreachable_consistent
     intros x hmem heq
-    have h := h_UniqueId x hmem (by rw [heq])
+    have h := h_maximalId x hmem (by rw [heq])
     rw [heq] at h
     simp at h
+
+  have heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx := by
+    sorry
+
+  have heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx := by
+    sorry
 
   have hleftIdxrightIdx : leftIdx < rightIdx := by
     apply YjsLt'_findPtrIdx_lt leftIdx rightIdx newItem.origin newItem.rightOrigin arr harrinv _ (by assumption) (by assumption) heqleft heqright
@@ -1636,19 +1643,25 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
       if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
         else
           if oLeftIdx = leftIdx then
-            if other.id.clientId < newItem.id.clientId then pure (ForInStep.yield ⟨(leftIdx + ↑offset) ⊔ 0 + 1, false⟩)
+            if other.id.clientId < input.id.clientId then
+              pure (ForInStep.yield ⟨max (leftIdx + ↑offset) 0 + 1, false⟩)
             else
               if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
               else pure (ForInStep.yield ⟨r.fst, true⟩)
           else
-            if r.snd = false then pure (ForInStep.yield ⟨(leftIdx + ↑offset) ⊔ 0 + 1, r.snd⟩)
+            if r.snd = false then pure (ForInStep.yield ⟨max (leftIdx + ↑offset) 0 + 1, r.snd⟩)
             else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
+
+  have h_eq : input.id = newItem.id := by
+    rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
+    grind only
+  rw [h_eq] at hloop
 
   obtain ⟨ _ ⟩ | ⟨ resState ⟩ := l; cases hintegrate
   apply for_in_list_loop_invariant (I := fun x state => loopInv arr newItem leftIdx rightIdx.toNat x state) at hloop
   . -- Here, we prove that the array is still pairwise ordered after the integration.
     -- So, what we need is arr[res.first] < newItem < arr[res.first + 1] (and also, 0 <= res.first <= arr.size)
-    simp at hintegrate
+    rw [ok_bind] at hintegrate
     rw [<-hintegrate]
     obtain ⟨ offset, res', hres', hloopInv, hdone ⟩ := hloop
     have h_resState : resState.fst.toNat ≤ arr.size := by
@@ -1858,12 +1871,12 @@ theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (Yjs
         (repeat' (split <;> try simp)) <;> try simp [pure, Except.pure]
 
     apply loopInv_preserve1
-      newItem arr horigin hrorigin horigin_consistent hreachable_consistent h_UniqueId
+      newItem arr horigin hrorigin horigin_consistent hreachable_consistent h_maximalId
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx
       state hloop i hlt hlt2 hinv other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx hnext
 
 omit [DecidableEq A] in theorem isClockSafe_uniqueId (arr : Array (YjsItem A)) (newItem : YjsItem A) :
-  UniqueId newItem arr ↔ isClockSafe newItem arr := by
+  maximalId newItem arr ↔ isClockSafe newItem arr := by
   constructor
   . intros h_UniqueId
     simp [isClockSafe]
