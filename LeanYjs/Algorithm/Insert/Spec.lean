@@ -507,7 +507,7 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
       rw [<-heq]
       obtain ⟨ o, r, id, c, d ⟩ := newItem
       apply YjsLt'.ltOrigin
-      simp [YjsItem.origin]
+      simp
       exists 0; apply YjsLeq.leqSame
     . intros; simp; right; assumption
     . simp
@@ -538,7 +538,7 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
               have h_otherOrigin_in_arr : ArrSet arr.toList (YjsPtr.itemPtr otherOrigin) := by
                 obtain ⟨ o, r, id, c, d ⟩ := other
                 -- rw [heq] at h_other_origin_eq
-                simp [YjsItem.origin] at h_other_origin_eq
+                simp at h_other_origin_eq
                 subst o
                 apply harrinv.closed.closedLeft (YjsPtr.itemPtr otherOrigin) r id c d
                 rw [<-heq]
@@ -586,14 +586,12 @@ omit [DecidableEq A] in theorem idx_between_id_neq {i : ℕ} {newItem other : Yj
 
 theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin {A : Type}
   [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
-  (horigin : ArrSet arr.toList newItem.origin)
-  (hrorigin : ArrSet arr.toList newItem.rightOrigin)
   (hsameid_consistent : ∀ (x : YjsItem A),
     ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
   (harrinv : YjsArrInvariant arr.toList)
   (leftIdx : ℤ)
   (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx) (rightIdx : ℤ)
-  (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx) (hleftIdxrightIdx : leftIdx < rightIdx)
+  (hleftIdxrightIdx : leftIdx < rightIdx)
   (next : ForInStep (MProd ℤ Bool)) (i : ℕ) (hlt2 : i < (rightIdx - leftIdx).toNat - 1) (other : YjsItem A)
   (hother : getElemExcept arr (leftIdx + (1 + ↑i)).toNat = Except.ok other) (oLeftIdx : ℤ)
   (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx) (oRightIdx : ℤ)
@@ -816,12 +814,12 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
               apply YjsLeq'_findPtrIdx_leq _ _ _ _ _ harrinv _ _ hleq hoLeftIdx; try assumption
               rw [h_arr_nDest_origin_eq_newItem_origin]
               assumption
-              . obtain ⟨ o, r, id, c, d ⟩ := other; simp [YjsItem.origin]
+              . obtain ⟨ o, r, id, c, d ⟩ := other; simp
                 apply harrinv.closed.closedLeft o r id c d
                 rw [<-heq_other_arr_j]
                 simp [ArrSet]
               . generalize h_eq : arr[nDest.toNat] = arr_nDest at *
-                obtain ⟨ o, r, id, c, d ⟩ := arr_nDest; simp [YjsItem.origin]
+                obtain ⟨ o, r, id, c, d ⟩ := arr_nDest; simp
                 apply harrinv.closed.closedLeft o r id c d
                 rw [<-h_eq]
                 simp [ArrSet]
@@ -1004,7 +1002,7 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
     subst other; simp [ArrSet]
   have harr_other_origin : ArrSet arr.toList other.origin := by
     obtain ⟨ o, r, id, c, d ⟩ := other
-    simp [YjsItem.origin]
+    simp
     apply harrinv.closed.closedLeft o r id c d
     rw [<-heq]
     simp [ArrSet]
@@ -1113,10 +1111,10 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
       obtain ⟨ o, r, id, c, d ⟩ := newItem
       obtain ⟨ o', r', id', c', d' ⟩ := other
       have h_o_eq_o' : o = o' := by
-        simp [YjsItem.origin] at *
+        simp at *
         apply findPtrIdx_eq_ok_inj _ _ heqleft hoLeftIdx
       have h_r_eq_r' : r = r' := by
-        simp [YjsItem.origin] at *
+        simp at *
         apply findPtrIdx_eq_ok_inj _ _ heqright hoRightIdx
       subst o r
       apply ConflictLt'.ltOriginSame
@@ -1164,7 +1162,7 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
         apply not_ptr_lt_first hclosed at horigin_consistent <;> try assumption
         contradiction
         obtain ⟨ o, r, id, c, d ⟩ := newItem
-        simp [YjsItem.origin]
+        simp
         apply hclosed.closedLeft o r id c d
         simp [ArrSet]
       | last =>
@@ -1176,7 +1174,7 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
         . contradiction
     subst hitem
     obtain ⟨ o, r, id, c, d ⟩ := newItem
-    simp [YjsItem.rightOrigin]
+    simp
     apply YjsLt'.ltRightOrigin
     apply YjsLeq'.leqSame
 
@@ -1314,7 +1312,7 @@ theorem loopInv_preserve1
     apply hclosed.closedLeft _ _ _ _ _ h_in_other
   have h_other_origin_lt : YjsLt' (A := A) other.origin other := by
     obtain ⟨ o, r, id, c, d ⟩ := other
-    simp only [YjsItem.origin]
+    simp
     apply YjsLt'.ltOrigin
     apply YjsLeq'.leqSame
   constructor
@@ -1404,8 +1402,8 @@ theorem loopInv_preserve1
   constructor
   . -- extract_goal using nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin
     apply nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin
-      newItem arr horigin hrorigin hsameid_consistent harrinv
-      leftIdx heqleft rightIdx heqright hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx
+      newItem arr hsameid_consistent harrinv
+      leftIdx heqleft rightIdx hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx
       oRightIdx hoRightIdx dest scanning h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hrightIdx hlt hinv
       hbody hidx hdest_current h_not_scanning h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq
       hlt_current heq h_in_other h_in_other_origin h_other_origin_lt nDest_lt_size
@@ -1662,6 +1660,10 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
   . -- Here, we prove that the array is still pairwise ordered after the integration.
     -- So, what we need is arr[res.first] < newItem < arr[res.first + 1] (and also, 0 <= res.first <= arr.size)
     rw [ok_bind] at hintegrate
+    use resState.fst.toNat
+    have h : mkItemByIndex leftIdx rightIdx input arr = Except.ok newItem := by
+      sorry
+    rw [h] at hintegrate; simp at hintegrate
     rw [<-hintegrate]
     obtain ⟨ offset, res', hres', hloopInv, hdone ⟩ := hloop
     have h_resState : resState.fst.toNat ≤ arr.size := by
@@ -1680,7 +1682,6 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
         | some offset =>
           simp [offsetToIndex]; omega
       omega
-    exists resState.fst.toNat
     constructor
     . assumption
     constructor
@@ -1729,7 +1730,7 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
           rw [Int.max_eq_left hrightIdx] at hdest_current
           obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
       . intros a hmem heq
-        have h := h_UniqueId a (by simp [ArrSet]; assumption) (by rw [heq])
+        have h := h_maximalId a (by simp [ArrSet]; assumption) (by rw [heq])
         rw [heq] at h
         omega
   . -- initial
@@ -1777,7 +1778,7 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
       intros i h_i_lt h_i_lt_size
       obtain ⟨ o, r, id, c, d ⟩ := newItem
       apply YjsLt'.ltOrigin
-      simp [YjsItem.origin] at *
+      simp at *
 
       apply findPtrIdx_leq_YjsLeq' (i := i) _ _ _ harrinv _ heqleft _
       . apply findPtrIdx_getElem _ _ harrinv
@@ -1875,30 +1876,35 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx
       state hloop i hlt hlt2 hinv other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx hnext
 
-omit [DecidableEq A] in theorem isClockSafe_uniqueId (arr : Array (YjsItem A)) (newItem : YjsItem A) :
-  maximalId newItem arr ↔ isClockSafe newItem arr := by
+omit [DecidableEq A] in theorem isClockSafe_maximalId {arr : Array (YjsItem A)} {input : IntegrateInput A} {newItem : YjsItem A} :
+  uniqueId arr.toList →
+  input.toItem arr = Except.ok newItem →
+  (maximalId newItem arr ↔ isClockSafe input.id arr) := by
+  intros h_arr_uniqueId h_newItem_def
+  rw [IntegrateInput.toItem_ok_iff _ _ _ h_arr_uniqueId] at h_newItem_def
   constructor
   . intros h_UniqueId
     simp [isClockSafe]
     intros x h_x
     replace h_UniqueId := h_UniqueId arr[x] (by simp [ArrSet])
-    grind
+    grind only
   . intros hisClockSafe
     simp [isClockSafe] at hisClockSafe
     intros x hmem heq
     simp [ArrSet] at hmem
     rw [Array.mem_iff_getElem] at hmem
     obtain ⟨ i, _, heq_getElem ⟩ := hmem
-    grind
+    grind only
 
-theorem YjsArrInvariant_integrateSafe (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
+theorem YjsArrInvariant_integrateSafe (input : IntegrateInput A) (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
+  → input.toItem arr = Except.ok newItem
   → newItem.isValid
-  -> integrateSafe newItem arr = Except.ok newArr
+  -> integrateSafe input arr = Except.ok newArr
   -> ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList := by
-  intros harrinv h_valid hintegrate
+  intros harrinv h_newItem_def h_valid hintegrate
   simp [integrateSafe] at hintegrate
   split at hintegrate
-  . rw [<-isClockSafe_uniqueId arr newItem] at *
-    apply YjsArrInvariant_integrate newItem arr newArr harrinv h_valid (by assumption) hintegrate
+  . rw [<-isClockSafe_maximalId harrinv.unique h_newItem_def] at *
+    apply YjsArrInvariant_integrate input arr newArr harrinv h_newItem_def h_valid (by assumption) hintegrate
   . cases hintegrate

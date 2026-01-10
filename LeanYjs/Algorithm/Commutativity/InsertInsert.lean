@@ -15,6 +15,7 @@ import LeanYjs.Algorithm.Basic
 import LeanYjs.Algorithm.Insert.Basic
 import LeanYjs.Algorithm.Insert.Lemmas
 import LeanYjs.Algorithm.Insert.Spec
+import LeanYjs.Algorithm.Invariant.Lemmas
 import LeanYjs.Algorithm.Invariant.Basic
 import LeanYjs.Algorithm.Invariant.YjsArray
 
@@ -41,8 +42,8 @@ theorem uniqueId_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
   -> YjsArrInvariant arr2.toList
   -> (∀ a, a ∈ arr1 → a ∈ arr2)
   -> (∀ a, a ∈ arr2 → a ∉ arr1 -> a.id.clientId ≠ x.id.clientId)
-  -> UniqueId x arr1
-  -> UniqueId x arr2 := by
+  -> maximalId x arr1
+  -> maximalId x arr2 := by
   intros harrinv1 harrinv2 h_arr1_subset_arr2 h_id_neq h_UniqueId
   intros y hy_in_arr2 hid_eq
   have hy_in_arr1 : ArrSet arr1.toList y := by
@@ -63,9 +64,9 @@ theorem uniqueId_mono (arr1 arr2 : Array (YjsItem A)) (x : YjsItem A) :
 theorem insertIdxIfInBounds_UniqueId (arr : Array (YjsItem A)) (a x : YjsItem A) :
   YjsArrInvariant arr.toList
   → YjsArrInvariant (arr.insertIdxIfInBounds idx a).toList
-  → UniqueId x arr
+  → maximalId x arr
   → a.id.clientId ≠ x.id.clientId
-  → UniqueId x (arr.insertIdxIfInBounds idx a) := by
+  → maximalId x (arr.insertIdxIfInBounds idx a) := by
   intros harrinv harrinv2 ha_neq_x h_UniqueId
   wlog hidx : idx ≤ arr.size
   case inr =>
@@ -94,60 +95,52 @@ theorem insertIdxIfInBounds_UniqueId (arr : Array (YjsItem A)) (a x : YjsItem A)
       contradiction
   . assumption
 
-theorem integrate_ok_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
+theorem integrate_ok_commutative (a b : IntegrateInput A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
-  -> a.id.clientId ≠ b.id.clientId
-  → a.isValid
-  → b.isValid
-  -> integrateSafe a arr1 = Except.ok arr2
-  -> integrateSafe b arr2 = Except.ok arr3
-  -> integrateSafe b arr1 = Except.ok arr2'
-  -> integrateSafe a arr2' = Except.ok arr3'
-  -> arr3 = arr3' := by
-  intros harrinv hcid_neq_bid h_a_valid h_b_valid hintegrate_a hintegrate_b hintegrate_b' hintegrate_a'
+  → a.toItem arr1 = Except.ok aItem
+  → b.toItem arr1 = Except.ok bItem
+  → a.id.clientId ≠ b.id.clientId
+  → aItem.isValid
+  → bItem.isValid
+  → integrateSafe a arr1 = Except.ok arr2
+  → integrateSafe b arr2 = Except.ok arr3
+  → integrateSafe b arr1 = Except.ok arr2'
+  → integrateSafe a arr2' = Except.ok arr3'
+  → arr3 = arr3' := by
+  intros harrinv h_aItem_def h_bItem_def hcid_neq_bid h_a_valid h_b_valid hintegrate_a hintegrate_b hintegrate_b' hintegrate_a'
 
   simp [integrateSafe] at *
   split_ifs at *
-  rw [<-isClockSafe_uniqueId] at *
+  rw [<-isClockSafe_maximalId harrinv.unique h_aItem_def] at *
+  rw [<-isClockSafe_maximalId harrinv.unique h_bItem_def] at *
 
-  have ⟨ idx2, h_idx2, arr2_insertIdx, arr2_inv ⟩ : ∃ idx ≤ arr1.size, arr2 = arr1.insertIdxIfInBounds idx a ∧ YjsArrInvariant arr2.toList := by
-    apply YjsArrInvariant_integrate a arr1 arr2
-    assumption
-    assumption
-    assumption
-    assumption
+  have h_aItem_tmp := h_aItem_def
+  have h_bItem_tmp := h_bItem_def
 
-  have h_UniqueId_arr2_b : UniqueId b arr2 := by
-    subst arr2
-    apply insertIdxIfInBounds_UniqueId <;> assumption
+  rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_aItem_tmp h_bItem_tmp
 
-  have ⟨ idx2', h_idx2', arr2'_insertIdx, arr2'_inv ⟩ : ∃ idx ≤ arr1.size, arr2' = arr1.insertIdxIfInBounds idx b ∧ YjsArrInvariant arr2'.toList := by
-    apply YjsArrInvariant_integrate b arr1 arr2'
-    assumption
-    assumption
-    assumption
-    assumption
+  obtain ⟨ ao, ar, aid, acontent, haItem_eq, haorigin, harorigin, haid, hac ⟩ := h_aItem_tmp
+  obtain ⟨ bo, br, bid, bcontent, hbItem_eq, hborigin, hbrorigin, hbid, hbc ⟩ := h_bItem_tmp
 
-  have h_UniqueId_arr2'_a : UniqueId a arr2' := by
-    subst arr2'
-    apply insertIdxIfInBounds_UniqueId <;> try assumption
-    intros heq
-    rw [heq] at hcid_neq_bid
-    contradiction
+  have ⟨ idx2, h_idx2, arr2_insertIdx, arr2_inv ⟩ : ∃ idx ≤ arr1.size, arr2 = arr1.insertIdxIfInBounds idx aItem ∧ YjsArrInvariant arr2.toList := by
+    grind only [YjsArrInvariant_integrate]
 
-  have ⟨ idx3, h_idx3, arr3_insertIdx,  arr3_inv ⟩ : ∃ idx ≤ arr2.size, arr3 = arr2.insertIdxIfInBounds idx b ∧ YjsArrInvariant arr3.toList := by
-    apply YjsArrInvariant_integrate b arr2 arr3
-    assumption
-    assumption
-    assumption
-    assumption
+  have h_UniqueId_arr2_b : maximalId bItem arr2 := by
+    grind only [insertIdxIfInBounds_UniqueId]
 
-  have ⟨ idx3', h_idx3', arr3'_insertIdx, arr3'_inv ⟩ : ∃ idx ≤ arr2'.size, arr3' = arr2'.insertIdxIfInBounds idx a ∧ YjsArrInvariant arr3'.toList := by
-    apply YjsArrInvariant_integrate a arr2' arr3'
-    assumption
-    assumption
-    assumption
-    assumption
+  have ⟨ idx2', h_idx2', arr2'_insertIdx, arr2'_inv ⟩ : ∃ idx ≤ arr1.size, arr2' = arr1.insertIdxIfInBounds idx bItem ∧ YjsArrInvariant arr2'.toList := by
+    grind only [YjsArrInvariant_integrate]
+
+  have h_UniqueId_arr2'_a : maximalId aItem arr2' := by
+    grind only [insertIdxIfInBounds_UniqueId]
+
+  have ⟨ idx3, h_idx3, arr3_insertIdx,  arr3_inv ⟩ : ∃ idx ≤ arr2.size, arr3 = arr2.insertIdxIfInBounds idx bItem ∧ YjsArrInvariant arr3.toList := by
+    apply YjsArrInvariant_integrate b arr2 arr3 <;> try assumption
+    sorry
+
+  have ⟨ idx3', h_idx3', arr3'_insertIdx, arr3'_inv ⟩ : ∃ idx ≤ arr2'.size, arr3' = arr2'.insertIdxIfInBounds idx aItem ∧ YjsArrInvariant arr3'.toList := by
+    apply YjsArrInvariant_integrate a arr2' arr3' <;> try assumption
+    sorry
 
   subst arr2 arr2' arr3 arr3'
 
@@ -170,7 +163,7 @@ theorem integrate_ok_commutative (a b : YjsItem A) (arr1 arr2 arr3 arr2' arr3' :
     simp [ArrSet]
     rw [List.mem_insertIdx h_idx3, List.mem_insertIdx h_idx3', List.mem_insertIdx h_idx2, List.mem_insertIdx h_idx2']
     simp
-    tauto
+    grind only
 
 theorem forIn_ok {α β : Type} {lst : List α} {init : β} {f : α → β → Except IntegrateError (ForInStep β)} :
   (∀ x ∈ lst, ∀ state, ∃ state', f x state = Except.ok state')
@@ -208,17 +201,20 @@ theorem ArrSet_findPtrIdx_eq_some {p : YjsPtr A} {arr : Array (YjsItem A)} :
     simp [ArrSet] at h_arrset
     use p; simp; assumption
 
-theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem A)} {newItem: YjsItem A} :
+theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem A)} {input : IntegrateInput A} {newItem: YjsItem A} :
   YjsArrInvariant arr.toList
+  → input.toItem arr = Except.ok newItem
   → -1 ≤ leftIdx → leftIdx ≤ arr.size
   → -1 ≤ rightIdx → rightIdx ≤ arr.size
-  → ∃ idx', findIntegratedIndex leftIdx rightIdx newItem arr = Except.ok idx' := by
-  intros harrinv hleft_ge hleft_le hright_ge hright_le
+  → ∃ idx', findIntegratedIndex leftIdx rightIdx input arr = Except.ok idx' := by
+  intros harrinv h_newItem_def hleft_ge hleft_le hright_ge hright_le
   unfold findIntegratedIndex
   simp
 
+  rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
+
   have ⟨ ⟨ dest, scanning ⟩, loop_ok ⟩ :
-    ∃ idx, forIn (m := Except IntegrateError) (ρ := List ℕ) (α := ℕ) (β := MProd ℤ Bool)
+    ∃ state, forIn (m := Except IntegrateError) (ρ := List ℕ) (α := ℕ) (β := MProd ℤ Bool)
       (List.range' 1 ((rightIdx - leftIdx).toNat - 1)) ⟨leftIdx + 1, false⟩ (fun offset r => do
         let other ← getElemExcept arr (leftIdx + ↑offset).toNat
         let oLeftIdx ← findPtrIdx other.origin arr
@@ -226,14 +222,14 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
         if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
           else
             if oLeftIdx = leftIdx then
-              if other.id.clientId < newItem.id.clientId then
+              if other.id.clientId < input.id.clientId then
                 pure (ForInStep.yield ⟨max (leftIdx + ↑offset) 0 + 1, false⟩)
               else
                 if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
                 else pure (ForInStep.yield ⟨r.fst, true⟩)
             else
               if r.snd = false then pure (ForInStep.yield ⟨max (leftIdx + ↑offset) 0 + 1, r.snd⟩)
-              else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = Except.ok idx := by
+              else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = Except.ok state := by
     apply forIn_ok
     intros offset h_offset_mem state
     obtain ⟨ destIdx, scanning ⟩ := state
@@ -286,123 +282,152 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
   use dest.toNat; rw [loop_ok]
   eq_refl
 
-theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {newItem other: YjsItem A} :
+theorem findPtrIdx_none_insert {p : YjsItem A} {arr : Array (YjsItem A)} {a : YjsItem A} :
+  findPtrIdx a arr = Except.error e
+  → a ≠ p
+  → findPtrIdx a (arr.insertIdxIfInBounds idx p) = Except.error e := by
+  intros h_neq_other heq
+  simp [findPtrIdx] at *
+  cases h_findPtrIdx_arr : Array.findIdx? (fun i => decide (i = a)) arr with
+  | some idx' =>
+    rw [h_findPtrIdx_arr] at h_neq_other; contradiction
+  | none =>
+    rw [h_findPtrIdx_arr] at h_neq_other; cases h_neq_other
+    rw [Array.findIdx?_insertIdxIfInBounds_none (by grind) h_findPtrIdx_arr]
+
+theorem findLeftIdx_none_insert {originId : Option YjsId} {arr : Array (YjsItem A)} {a : YjsItem A} :
+  findLeftIdx originId arr = Except.error e
+  → originId ≠ a.id
+  → findLeftIdx originId (arr.insertIdxIfInBounds idx a) = Except.error e := by
+  intros h_neq_other heq
+  cases originId with
+  | none =>
+    simp [findLeftIdx] at *
+    rw [h_neq_other]
+  | some id =>
+    simp [findLeftIdx] at *
+    cases h_findLeftIdx_arr : arr.findIdx? (fun item => item.id = id) with
+    | some idx' =>
+      rw [h_findLeftIdx_arr] at h_neq_other; contradiction
+    | none =>
+      rw [h_findLeftIdx_arr] at h_neq_other; cases h_neq_other
+      rw [Array.findIdx?_insertIdxIfInBounds_none (by grind) h_findLeftIdx_arr]
+
+theorem findRightIdx_none_insert {originId : Option YjsId} {arr : Array (YjsItem A)} {a : YjsItem A} :
+  findRightIdx originId arr = Except.error e
+  → originId ≠ a.id
+  → findRightIdx originId (arr.insertIdxIfInBounds idx a) = Except.error e := by
+  intros h_neq_other heq
+  cases originId with
+  | none =>
+    simp [findRightIdx] at *
+    cases h_neq_other
+  | some id =>
+    simp [findRightIdx] at *
+    cases h_findRightIdx_arr : arr.findIdx? (fun item => item.id = id) with
+    | some idx' =>
+      rw [h_findRightIdx_arr] at h_neq_other; contradiction
+    | none =>
+      rw [h_findRightIdx_arr] at h_neq_other; cases h_neq_other
+      rw [Array.findIdx?_insertIdxIfInBounds_none (by grind) h_findRightIdx_arr]
+
+theorem findLeftIdx_some_getPtrExcept_some {originId : Option YjsId} {arr : Array (YjsItem A)}:
+  findLeftIdx originId arr = Except.ok idx
+  → ∃ p, getPtrExcept arr idx = Except.ok p ∧
+      (match originId with
+       | some id => ∃(item : YjsItem A), p = item ∧ item.id = id
+       | none => p = YjsPtr.first) := by
+  intros h_findLeftIdx
+  simp [findLeftIdx, getPtrExcept] at *
+  cases originId with
+  | none =>
+    use YjsPtr.first; simp at *
+    cases h_findLeftIdx
+    grind
+  | some id =>
+    simp at *
+    cases heq : Array.findIdx? (fun item => item.id = id) arr with
+    | none =>
+      simp [heq] at h_findLeftIdx
+    | some idx =>
+      simp [heq] at h_findLeftIdx
+      cases h_findLeftIdx
+      grind [Array.findIdx?_eq_some_iff_getElem]
+
+
+theorem findRightIdx_some_getPtrExcept_some {originId : Option YjsId} {arr : Array (YjsItem A)}:
+  findRightIdx originId arr = Except.ok idx
+  → ∃ p, getPtrExcept arr idx = Except.ok p ∧
+      (match originId with
+       | some id => ∃(item : YjsItem A), p = item ∧ item.id = id
+       | none => p = YjsPtr.last) := by
+  intros h_findRightIdx
+  simp [findRightIdx, getPtrExcept] at *
+  cases originId with
+  | none =>
+    use YjsPtr.last; simp at *
+    cases h_findRightIdx
+    grind
+  | some id =>
+    simp at *
+    cases heq : Array.findIdx? (fun item => item.id = id) arr with
+    | none =>
+      simp [heq] at h_findRightIdx
+    | some idx =>
+      simp [heq] at h_findRightIdx
+      cases h_findRightIdx
+      grind [Array.findIdx?_eq_some_iff_getElem]
+
+theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {input : IntegrateInput A} {newItem other: YjsItem A} :
   YjsArrInvariant arr.toList
+  → input.toItem arr = Except.ok newItem
   → ¬OriginReachable newItem (YjsPtr.itemPtr other)
-  → integrate newItem arr = Except.error e
-  → ∃ e', integrate newItem (arr.insertIdxIfInBounds idx other) = Except.error e' := by
-  intros harrinv h_not_reachable hintegrate
+  → integrate input arr = Except.error e
+  → ∃ e', integrate input (arr.insertIdxIfInBounds idx other) = Except.error e' := by
+  intros harrinv h_newItem_def h_not_reachable hintegrate
   unfold integrate at *
 
-  have h_neq_other_error : ∀ (t : YjsItem A), t ≠ other
-    → findPtrIdx t arr = Except.error e
-    → findPtrIdx t (arr.insertIdxIfInBounds idx other) = Except.error e := by
-    intros t heq h_neq_other
-    clear hintegrate
-    simp [findPtrIdx] at *
-    cases h_findPtrIdx_arr : Array.findIdx? (fun i => decide (i = t)) arr with
-    | some idx' =>
-      rw [h_findPtrIdx_arr] at h_neq_other; contradiction
-    | none =>
-      rw [h_findPtrIdx_arr] at h_neq_other; cases h_neq_other
-      cases heq' : Array.findIdx? (fun i => decide (i = t)) (arr.insertIdxIfInBounds idx other) with
-      | none =>
-        simp
-      | some idx' =>
-        have h_not_mem : t ∉ arr := by
-          intros hmem
-          rw [Array.findIdx?_eq_none_iff] at h_findPtrIdx_arr
-          simp at h_findPtrIdx_arr
-          apply h_findPtrIdx_arr _ hmem
-          simp
-        have h_mem : t ∈ arr.insertIdxIfInBounds idx other := by
-          rw [Array.findIdx?_eq_some_iff_getElem] at heq'
-          obtain ⟨ hlt, h1, _ ⟩ := heq'
-          simp at h1
-          subst t
-          simp
-        simp [Array.insertIdxIfInBounds] at h_mem
-        split at h_mem
-        . rw [Array.mem_insertIdx] at h_mem
-          cases h_mem with
-          | inl heq =>
-            contradiction
-          | inr hmem =>
-            contradiction
-        . contradiction
-
-  cases heqleft : findPtrIdx newItem.origin arr with
+  cases heqleft : findLeftIdx input.originId arr with
   | error e =>
     rw [heqleft] at hintegrate
     cases hintegrate
-    have heqleft' : findPtrIdx newItem.origin (arr.insertIdxIfInBounds idx other) = Except.error e := by
-      cases h_origin_eq : newItem.origin with
-      | first =>
-        rw [h_origin_eq] at heqleft
-        simp [findPtrIdx] at heqleft
-        contradiction
-      | last =>
-        rw [h_origin_eq] at heqleft
-        simp [findPtrIdx] at heqleft
-        contradiction
-      | itemPtr p =>
-        rw [h_origin_eq] at heqleft
-        apply h_neq_other_error _ _ heqleft
-        intros heq
-        rw [<-heq, <-h_origin_eq] at h_not_reachable
-        apply h_not_reachable
-        obtain ⟨ o, r, id, c, d ⟩ := newItem
-        apply OriginReachable.reachable_single
-        apply OriginReachableStep.reachable
-    rw [heqleft']
-    exists e
+    rw [findLeftIdx_none_insert heqleft _]
+    . use e; rfl
+    . sorry
   | ok leftIdx =>
     rw [heqleft, ok_bind] at hintegrate
-    cases heqleft' : findPtrIdx newItem.origin (arr.insertIdxIfInBounds idx other) with
+    cases heqleft' : findLeftIdx input.originId (arr.insertIdxIfInBounds idx other) with
     | error e =>
-      simp [bind, Except.bind]
-      apply Nonempty.intro IntegrateError.error
+      exists e
     | ok leftIdx' =>
       rw [ok_bind]
-      cases heqright : findPtrIdx newItem.rightOrigin arr with
+      cases heqright : findRightIdx input.rightOriginId arr with
       | error e =>
         rw [heqright] at hintegrate
         cases hintegrate
-        have heqright' : findPtrIdx newItem.rightOrigin (arr.insertIdxIfInBounds idx other) = Except.error e := by
-          cases h_rightOrigin_eq : newItem.rightOrigin with
-          | first =>
-            rw [h_rightOrigin_eq] at heqright
-            simp [findPtrIdx] at heqright
-            contradiction
-          | last =>
-            rw [h_rightOrigin_eq] at heqright
-            simp [findPtrIdx] at heqright
-            contradiction
-          | itemPtr p =>
-            rw [h_rightOrigin_eq] at heqright
-            apply h_neq_other_error _ _ heqright
-            intros heq
-            rw [<-heq, <-h_rightOrigin_eq] at h_not_reachable
-            apply h_not_reachable
-            obtain ⟨ o, r, id, c, d ⟩ := newItem
-            apply OriginReachable.reachable_single
-            apply OriginReachableStep.reachable_right
-        rw [heqright']
-        exists e
+        rw [findRightIdx_none_insert heqright _]
+        . exists e
+        . sorry
       | ok rightIdx =>
-        rw [heqright, ok_bind] at hintegrate
-        have ⟨ destIdx, h_destIdx ⟩ : ∃ destdx, findIntegratedIndex leftIdx rightIdx newItem arr = Except.ok destdx := by
-          apply findIntegratedIndex_safe harrinv
-          apply findPtrIdx_ge_minus_1 at heqleft
-          assumption
-          apply findPtrIdx_le_size at heqleft
-          assumption
-          apply findPtrIdx_ge_minus_1 at heqright
-          assumption
-          apply findPtrIdx_le_size at heqright
-          assumption
-        rw [h_destIdx, ok_bind] at hintegrate
-        cases hintegrate
+        cases heqright' : findRightIdx input.rightOriginId (arr.insertIdxIfInBounds idx other) with
+        | error e =>
+          exists e
+        | ok rightIdx' =>
+          simp [heqright, ok_bind] at hintegrate
+          simp [ok_bind]
+          have ⟨ destIdx, h_destIdx ⟩ : ∃ destdx, findIntegratedIndex leftIdx rightIdx input arr = Except.ok destdx := by
+            apply findIntegratedIndex_safe harrinv h_newItem_def
+            . sorry
+            . sorry
+            . sorry
+            . sorry
+          rw [h_destIdx, ok_bind] at hintegrate
+          simp [mkItemByIndex] at hintegrate
+          have ⟨ item, hitem, hitemid ⟩ := findLeftIdx_some_getPtrExcept_some heqleft
+          rw [hitem] at hintegrate
+          have ⟨ item', hitem', hitemid' ⟩ := findRightIdx_some_getPtrExcept_some heqright
+          rw [hitem'] at hintegrate
+          simp [bind, Except.bind] at hintegrate
 
 theorem Except.bind_eq_ok {α β ε : Type} (e : Except ε α) (f : α → Except ε β) (b : β) :
   e >>= f = Except.ok b →
@@ -441,32 +466,60 @@ theorem Except.map_eq_ok {α β ε : Type} (f : α → β) {e : Except ε α} (b
     simp at heq
     use val
 
-theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : YjsItem A} :
+-- TODO: Move to YjsArray
+theorem maximalId_insert {arr : Array (YjsItem A)} {a x : YjsItem A} :
   YjsArrInvariant arr.toList
+  → maximalId x (arr.insertIdxIfInBounds idx a)
+  → maximalId x arr := by
+  intros harrinv h_UniqueId_insert
+  intros y hy_in_arr hid_eq
+  rw [List.insertIdxIfInBounds_toArray] at *
+  simp [maximalId, ArrSet] at *
+  apply h_UniqueId_insert y _ hid_eq
+  by_cases idx <= arr.size
+  . grind [List.mem_insertIdx]
+  . rw [List.insertIdx_of_length_lt]
+    grind
+    grind
+
+theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : IntegrateInput A} {aItem bItem : YjsItem A}:
+  YjsArrInvariant arr.toList
+  → a.toItem arr = Except.ok aItem
+  → b.toItem arr = Except.ok bItem
   → a.id.clientId ≠ b.id.clientId
-  → a.isValid
-  → b.isValid
-  → ¬OriginReachable a (YjsPtr.itemPtr b)
+  → aItem.isValid
+  → bItem.isValid
+  → ¬OriginReachable aItem (YjsPtr.itemPtr bItem)
   → integrateSafe a arr = Except.error e
   → integrateSafe b arr = Except.ok arr2
   → ∃ e', integrateSafe a arr2 = Except.error e' := by
-  intros harrinv hcid_neq_bid h_a_valid h_b_valid h_not_reachable h_integrate_a h_integrate_b
+  intros harrinv haItem hbItem hcid_neq_bid h_a_valid h_b_valid h_not_reachable h_integrate_a h_integrate_b
   simp [integrateSafe] at *
   split_ifs at *
   constructor; constructor; apply IntegrateError.error
   intros hsafe
-  rw [<-isClockSafe_uniqueId] at *
-  have ⟨ idx, h_arr2 ⟩  : ∃ i, arr2 = arr.insertIdxIfInBounds i b := by
+  have haItem_arr2 : a.toItem arr2 = Except.ok aItem := by
+    sorry
+
+  rw [<-isClockSafe_maximalId harrinv.unique haItem] at *
+  rw [<-isClockSafe_maximalId harrinv.unique hbItem] at *
+
+  have ⟨ idx, h_arr2 ⟩  : ∃ i, arr2 = arr.insertIdxIfInBounds i bItem := by
     simp [integrate] at h_integrate_b
     apply Except.bind_eq_ok at h_integrate_b
     replace ⟨ leftIdx, h_leftIdx_eq, h_integrate_a ⟩ := h_integrate_b
     apply Except.bind_eq_ok at h_integrate_a
     replace ⟨ rightIdx, h_rightIdx_eq, h_integrate_a ⟩ := h_integrate_a
+    apply Except.bind_eq_ok at h_integrate_a
+    obtain ⟨ destIdx, h_destIdx_eq, h_integrate_a ⟩ := h_integrate_a
     apply Except.map_eq_ok at h_integrate_a
-    obtain ⟨ destIdx, h_destIdx_eq, h_eq ⟩ := h_integrate_a
-    use destIdx; simp [h_eq]
-  suffices UniqueId a arr by
-    have ⟨ e, h ⟩ := integrate_insert_eq_none (idx := idx) harrinv h_not_reachable (h_integrate_a this)
+    obtain ⟨ bItem', hbItem', heq ⟩ := h_integrate_a
+    have hbItem' : bItem' = bItem := by
+      sorry
+    grind
+
+  suffices maximalId aItem arr by
+    have ⟨ e, h ⟩ := integrate_insert_eq_none (idx := idx) harrinv haItem h_not_reachable (h_integrate_a this)
     rw [h_arr2, h]
 
   simp [integrate] at h_integrate_b
@@ -474,30 +527,99 @@ theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : YjsItem A} 
   replace ⟨ leftIdx, h_leftIdx_eq, h_integrate_b ⟩ := h_integrate_b
   apply Except.bind_eq_ok at h_integrate_b
   replace ⟨ rightIdx, h_rightIdx_eq, h_integrate_b ⟩ := h_integrate_b
+  apply Except.bind_eq_ok at h_integrate_b
+  obtain ⟨ destIdx, h_destIdx_eq, h_integrate_b ⟩ := h_integrate_b
   apply Except.map_eq_ok at h_integrate_b
-  obtain ⟨ destIdx, h_destIdx_eq, h_eq ⟩ := h_integrate_b
-
-  intros x hmem heq
-  apply hsafe x _ heq
+  obtain ⟨ bItem', hbItem', heq' ⟩ := h_integrate_b
   subst arr2
-  simp [ArrSet, Array.insertIdxIfInBounds] at *
-  split_ifs
-  . rw [Array.mem_insertIdx]
-    right; assumption
-  . assumption
+  apply maximalId_insert harrinv (idx := idx) (a := bItem)
+  intros x hmem heq
+  rw [<-isClockSafe_maximalId] at hsafe
+  . apply hsafe x hmem heq
+  . sorry
+  . sorry
 
-theorem integrate_integrate_eq_some {arr : Array (YjsItem A)} {a b : YjsItem A} :
+theorem findLeftIdx_insert {originId : Option YjsId} {arr : Array (YjsItem A)} {a : YjsItem A} :
+  findLeftIdx originId arr = Except.ok leftIdx
+  → a.id ≠ originId
+  → findLeftIdx originId (arr.insertIdxIfInBounds idx a) = if leftIdx < idx then Except.ok leftIdx else Except.ok (leftIdx + 1) := by
+  intros h_findLeftIdx hneq
+  simp [findLeftIdx] at *
+  cases originId with
+  | none =>
+    simp at *
+    cases h_findLeftIdx
+    split
+    . rfl
+    . omega
+  | some id =>
+    simp at *
+    cases heq : arr.findIdx? (fun item => item.id = id) with
+    | none =>
+      simp [heq] at h_findLeftIdx
+    | some idx' =>
+      simp [heq] at h_findLeftIdx
+      cases h_findLeftIdx
+      rw [Array.findIdx?_insertIdxIfInBounds_some _ heq]
+      . split_ifs
+        . rfl
+        . omega
+        . omega
+        . rfl
+      . grind
+
+
+theorem findRightIdx_insert {originId : Option YjsId} {arr : Array (YjsItem A)} {a : YjsItem A} :
+  findRightIdx originId arr = Except.ok rigthIdx
+  → a.id ≠ originId
+  → findRightIdx originId (arr.insertIdxIfInBounds idx a) =
+   if rigthIdx < idx then Except.ok rigthIdx
+   else Except.ok (rigthIdx + 1) := by
+  intros h_findLeftIdx hneq
+  simp [findRightIdx] at *
+  cases originId with
+  | none =>
+    simp at *
+    cases h_findLeftIdx
+    split
+    . simp [Array.insertIdxIfInBounds]
+      split
+      . omega
+      . rfl
+    . simp [Array.insertIdxIfInBounds]
+      split
+      . rw [Array.size_insertIdx]; rfl
+      . omega
+  | some id =>
+    simp at *
+    cases heq : arr.findIdx? (fun item => item.id = id) with
+    | none =>
+      simp [heq] at h_findLeftIdx
+    | some idx' =>
+      simp [heq] at h_findLeftIdx
+      cases h_findLeftIdx
+      rw [Array.findIdx?_insertIdxIfInBounds_some _ heq]
+      . split_ifs
+        . rfl
+        . omega
+        . omega
+        . rfl
+      . grind
+
+theorem integrate_integrate_eq_some {arr : Array (YjsItem A)} {a b : IntegrateInput A} {aItem bItem : YjsItem A} {arr2 arr2' : Array (YjsItem A)}:
   YjsArrInvariant arr.toList
+  → a.toItem arr = Except.ok aItem
+  → b.toItem arr = Except.ok bItem
   → a.id.clientId ≠ b.id.clientId
-  → a.isValid
-  → b.isValid
+  → aItem.isValid
+  → bItem.isValid
   → integrateSafe a arr = Except.ok arr2
   → integrateSafe b arr = Except.ok arr2'
   → ∃ arr3, integrateSafe b arr2 = Except.ok arr3 := by
-  intros harrinv h_aid_neq_bid h_a_valid h_b_valid h_integrate_a h_integrate_b
+  intros harrinv h_aItem h_bItem h_aid_neq_bid h_a_valid h_b_valid h_integrate_a h_integrate_b
 
   have harrinv_arr2 : YjsArrInvariant arr2.toList := by
-    have ⟨ _, _, _, h ⟩ := YjsArrInvariant_integrateSafe a arr arr2 harrinv h_a_valid h_integrate_a
+    have ⟨ _, _, _, h ⟩ := YjsArrInvariant_integrateSafe a aItem arr arr2 harrinv h_aItem h_a_valid h_integrate_a
     assumption
 
   simp [integrateSafe] at *
@@ -508,59 +630,77 @@ theorem integrate_integrate_eq_some {arr : Array (YjsItem A)} {a b : YjsItem A} 
   replace ⟨ leftIdx, h_leftIdx_eq, h_integrate_a ⟩ := h_integrate_a
   apply Except.bind_eq_ok at h_integrate_a
   replace ⟨ rightIdx, h_rightIdx_eq, h_integrate_a ⟩ := h_integrate_a
+  apply Except.bind_eq_ok at h_integrate_a
+  replace ⟨ destIdx, h_destIdx_eq, h_integrate_a ⟩ := h_integrate_a
   apply Except.map_eq_ok at h_integrate_a
-  obtain ⟨ destIdx, h_destIdx_eq, h_eq ⟩ := h_integrate_a
+  obtain ⟨ item, h_item_eq, h_eq ⟩ := h_integrate_a
 
   simp [integrate] at h_integrate_b
   apply Except.bind_eq_ok at h_integrate_b
   replace ⟨ leftIdx', h_leftIdx'_eq, h_integrate_b ⟩ := h_integrate_b
   apply Except.bind_eq_ok at h_integrate_b
   replace ⟨ rightIdx', h_rightIdx'_eq, h_integrate_b ⟩ := h_integrate_b
+  apply Except.bind_eq_ok at h_integrate_b
+  replace ⟨ destIdx', h_destIdx'_eq, h_integrate_b ⟩ := h_integrate_b
   apply Except.map_eq_ok at h_integrate_b
-  obtain ⟨ destIdx', h_destIdx'_eq, h_eq' ⟩ := h_integrate_b
+  obtain ⟨ item', h_item'_eq, h_eq' ⟩ := h_integrate_b
 
   subst arr2
   simp [integrate]
 
-  have ⟨ leftIdx'', h_leftIdx''_eq ⟩ : ∃ leftIdx'', findPtrIdx b.origin (arr.insertIdxIfInBounds destIdx a) = Except.ok leftIdx'' := by
-    rw [findPtrIdx_insert_some harrinv_arr2 h_leftIdx'_eq]
+  have heq_item_aItem : item = aItem := by
+    sorry
+  subst item
+
+  have ⟨ leftIdx'', h_leftIdx''_eq ⟩ : ∃ leftIdx'', findLeftIdx b.originId (arr.insertIdxIfInBounds destIdx aItem) = Except.ok leftIdx'' := by
+    rw [findLeftIdx_insert h_leftIdx'_eq]
     split_ifs <;> simp
-  have h_leftIdx''_range : -1 ≤ leftIdx'' ∧ leftIdx'' ≤ (arr.insertIdxIfInBounds destIdx a).size := by
-    constructor
-    . apply findPtrIdx_ge_minus_1 at h_leftIdx''_eq; omega
-    . apply findPtrIdx_le_size at h_leftIdx''_eq; omega
-  have ⟨ rightIdx'', h_rightIdx''_eq ⟩ : ∃ rightIdx'', findPtrIdx b.rightOrigin (arr.insertIdxIfInBounds destIdx a) = Except.ok rightIdx'' := by
-    rw [findPtrIdx_insert_some harrinv_arr2 h_rightIdx'_eq]
+    sorry
+  have h_leftIdx''_range : -1 ≤ leftIdx'' ∧ leftIdx'' ≤ (arr.insertIdxIfInBounds destIdx aItem).size := by
+    sorry
+  have ⟨ rightIdx'', h_rightIdx''_eq ⟩ : ∃ rightIdx'', findRightIdx b.rightOriginId (arr.insertIdxIfInBounds destIdx aItem) = Except.ok rightIdx'' := by
+    rw [findRightIdx_insert h_rightIdx'_eq]
     split_ifs <;> simp
-  have h_rightIdx''_range : -1 ≤ rightIdx'' ∧ rightIdx'' ≤ (arr.insertIdxIfInBounds destIdx a).size := by
-    constructor
-    . apply findPtrIdx_ge_minus_1 at h_rightIdx''_eq; omega
-    . apply findPtrIdx_le_size at h_rightIdx''_eq; omega
+    sorry
+  have h_rightIdx''_range : -1 ≤ rightIdx'' ∧ rightIdx'' ≤ (arr.insertIdxIfInBounds destIdx aItem).size := by
+    sorry
 
   split_ifs
   . rw [h_leftIdx''_eq, h_rightIdx''_eq]
     rw [ok_bind, ok_bind]
-    have ⟨ _, h ⟩ := findIntegratedIndex_safe (leftIdx := leftIdx'') (rightIdx := rightIdx'') (newItem := b) harrinv_arr2 (by omega) (by omega) (by omega) (by omega)
-    rw [h]; simp
-  . rw [<-isClockSafe_uniqueId] at *
-    have h_contra : UniqueId b (arr.insertIdxIfInBounds destIdx a) := by
+    have h : b.toItem (arr.insertIdxIfInBounds destIdx aItem) = Except.ok bItem := by
+      sorry
+    have ⟨ _, h ⟩ := findIntegratedIndex_safe (leftIdx := leftIdx'') (rightIdx := rightIdx'') (newItem := bItem) harrinv_arr2 h (by omega) (by omega) (by omega) (by omega)
+    rw [h]
+    rw [ok_bind]
+    have h : mkItemByIndex leftIdx'' rightIdx'' b (arr.insertIdxIfInBounds destIdx aItem) = Except.ok bItem := by
+      sorry
+    rw [h]
+    constructor; rfl
+  . have h_contra : maximalId bItem (arr.insertIdxIfInBounds destIdx aItem) := by
+      rw [<-isClockSafe_maximalId harrinv.unique h_bItem] at *
       apply insertIdxIfInBounds_UniqueId <;> try assumption
+      sorry
+    rw [isClockSafe_maximalId harrinv_arr2.unique] at h_contra
     contradiction
+    sorry
 
-theorem integrate_commutative (a b : YjsItem A) (arr1 : Array (YjsItem A)) :
+theorem integrate_commutative (a b : IntegrateInput A) (aItem bItem : YjsItem A) (arr1 : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
-  -> a.id.clientId ≠ b.id.clientId
-  → ¬OriginReachable a (YjsPtr.itemPtr b)
-  → ¬OriginReachable b (YjsPtr.itemPtr a)
-  → a.isValid
-  → b.isValid
-  -> (do
+  → a.toItem arr1 = Except.ok aItem
+  → b.toItem arr1 = Except.ok bItem
+  → a.id.clientId ≠ b.id.clientId
+  → ¬OriginReachable aItem (YjsPtr.itemPtr bItem)
+  → ¬OriginReachable bItem (YjsPtr.itemPtr aItem)
+  → aItem.isValid
+  → bItem.isValid
+  → (do
     let arr2 <- integrateSafe a arr1;
     integrateSafe b arr2) =
   (do
     let arr2' <- integrateSafe b arr1;
     integrateSafe a arr2') := by
-  intros harrinv hcid_neq_bid h_not_a_origin_b h_not_b_origin_a h_a_valid h_b_valid
+  intros harrinv h_aItem h_bItem hcid_neq_bid h_not_a_origin_b h_not_b_origin_a h_a_valid h_b_valid
   cases h_eq_a : integrateSafe a arr1 with
   | error e_a =>
     cases h_eq_b : integrateSafe b arr1 with
@@ -569,22 +709,20 @@ theorem integrate_commutative (a b : YjsItem A) (arr1 : Array (YjsItem A)) :
     | ok arr2' =>
       simp [bind, Except.bind]
       have ⟨ e_a', h_integrate_a' ⟩ : ∃ e_a', integrateSafe a arr2' = Except.error e_a' := by
-        apply integrate_integrate_eq_none harrinv hcid_neq_bid h_a_valid h_b_valid h_not_a_origin_b h_eq_a h_eq_b
+        apply integrate_integrate_eq_none harrinv h_aItem h_bItem hcid_neq_bid h_a_valid h_b_valid h_not_a_origin_b h_eq_a h_eq_b
       rw [h_integrate_a']
   | ok arr2 =>
     cases h_eq_b : integrateSafe b arr1 with
     | error e_b =>
       simp [bind, Except.bind]
       have ⟨ e_b', h_integrate_b' ⟩ : ∃ e_b', integrateSafe b arr2 = Except.error e_b' := by
-        apply integrate_integrate_eq_none harrinv _ h_b_valid h_a_valid h_not_b_origin_a h_eq_b h_eq_a
-        intros heq; rw [heq] at hcid_neq_bid; contradiction
+        apply integrate_integrate_eq_none harrinv h_bItem h_aItem (by grind)  h_b_valid h_a_valid h_not_b_origin_a h_eq_b  h_eq_a
       rw [h_integrate_b']
     | ok arr2' =>
       simp [bind, Except.bind]
       have ⟨ arr3', h_integrate_comm ⟩ : ∃ arr3', integrateSafe a arr2' = Except.ok arr3' := by
-        apply integrate_integrate_eq_some harrinv _ h_b_valid h_a_valid h_eq_b h_eq_a
-        intros heq; rw [heq] at hcid_neq_bid; contradiction
+        apply integrate_integrate_eq_some harrinv h_bItem h_aItem (by grind) h_b_valid h_a_valid h_eq_b h_eq_a
       have ⟨ arr3, h_integrate_comm' ⟩ : ∃ arr3, integrateSafe b arr2 = Except.ok arr3 := by
-        apply integrate_integrate_eq_some harrinv hcid_neq_bid h_a_valid h_b_valid h_eq_a h_eq_b
+        apply integrate_integrate_eq_some harrinv h_aItem h_bItem hcid_neq_bid h_a_valid h_b_valid h_eq_a h_eq_b
       rw [h_integrate_comm, h_integrate_comm']
-      rw [integrate_ok_commutative a b arr1 arr2 arr3 arr2' arr3' harrinv hcid_neq_bid h_a_valid h_b_valid h_eq_a h_integrate_comm' h_eq_b h_integrate_comm]
+      rw [integrate_ok_commutative a b arr1 arr2 arr3 arr2' arr3' harrinv h_aItem h_bItem hcid_neq_bid h_a_valid h_b_valid h_eq_a h_integrate_comm' h_eq_b h_integrate_comm]

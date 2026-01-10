@@ -8,19 +8,20 @@ import LeanYjs.Order.Transitivity
 import LeanYjs.Order.Asymmetry
 import LeanYjs.Algorithm.Insert.Basic
 import LeanYjs.Algorithm.Insert.Lemmas
+import LeanYjs.Algorithm.Invariant.Lemmas
 import LeanYjs.Algorithm.Invariant.Basic
 
 variable {A : Type}
 variable [DecidableEq A]
 
-abbrev maximalId (items : List (YjsItem A)) : Prop :=
+abbrev uniqueId (items : List (YjsItem A)) : Prop :=
   List.Pairwise (fun x y => x.id ≠ y.id) items
 
 structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
   closed : IsClosedItemSet (ArrSet arr)
   item_set_inv : ItemSetInvariant (ArrSet arr)
   sorted : List.Pairwise (fun (x y : YjsItem A) => YjsLt' (A := A) x y) arr
-  unique : maximalId arr
+  unique : uniqueId arr
 
 theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
   YjsArrInvariant xs_all ->
@@ -146,7 +147,7 @@ theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
           subst heq
           obtain ⟨ t', heq ⟩ := hsubset2
           subst heq
-          simp [maximalId] at *
+          simp [uniqueId] at *
           rw [List.pairwise_append] at huniq1
           rw [List.pairwise_append] at huniq2
           simp at *
@@ -380,11 +381,11 @@ theorem getElem_YjsLt'_index_lt (arr : Array (YjsItem A)) (i j : Nat) :
     simp [ArrSet]
 
 lemma YjsLt'_findPtrIdx_lt (i j : ℤ) (x y : YjsPtr A) (arr : Array (YjsItem A)) :
-  YjsArrInvariant arr.toList ->
-  ArrSet arr.toList x -> ArrSet arr.toList y ->
-  YjsLt' (A := A) x y ->
-  findPtrIdx x arr = Except.ok i ->
-  findPtrIdx y arr = Except.ok j ->
+  YjsArrInvariant arr.toList →
+  ArrSet arr.toList x → ArrSet arr.toList y →
+  YjsLt' (A := A) x y →
+  findPtrIdx x arr = Except.ok i →
+  findPtrIdx y arr = Except.ok j →
   i < j := by
   intros hinv harrx harry hlt hleft hright
   cases x with
@@ -577,17 +578,17 @@ theorem findPtrIdx_ArrSet {A : Type} [DecidableEq A] {arr : Array (YjsItem A)} {
 
 -- TODO: refactor proof
 -- YjsArrInvariant is needed to ensure the array is unique and
-theorem IntegrateInput.toItem_ok_iff {A : Type} [DecidableEq A] (input : IntegrateInput A) (arr : Array (YjsItem A)) (newItem : YjsItem A) :
-  maximalId arr.toList →
+theorem IntegrateInput.toItem_ok_iff {A : Type} (input : IntegrateInput A) (arr : Array (YjsItem A)) (newItem : YjsItem A) :
+  uniqueId arr.toList →
   (input.toItem arr = Except.ok newItem ↔
   ∃origin rightOrigin id content,
     newItem = YjsItem.mk origin rightOrigin id content false ∧
     (match input.originId with
     | none => origin = YjsPtr.first
-    | some p => ∃ originItem : YjsItem A, origin = originItem ∧ originItem.id = p ∧ originItem ∈ arr) ∧
+    | some p => ∃(originItem : YjsItem A), origin = originItem ∧ arr.find? (fun item => item.id = p) = some originItem) ∧
     (match input.rightOriginId with
     | none => rightOrigin = YjsPtr.last
-    | some p => ∃ rightOriginItem : YjsItem A, rightOrigin = rightOriginItem ∧ rightOriginItem.id = p ∧ rightOriginItem ∈ arr) ∧
+    | some p => ∃(rightOriginItem : YjsItem A), rightOrigin = rightOriginItem ∧ arr.find? (fun item => item.id = p) = some rightOriginItem) ∧
     id = input.id ∧
     content = input.content) := by
   intros h_unique
@@ -649,45 +650,33 @@ theorem IntegrateInput.toItem_ok_iff {A : Type} [DecidableEq A] (input : Integra
         rw [hdef, h_origin, h_rightOrigin, h_id, h_content]
         rfl
       | some rightOriginId =>
-        rw [h_rightOriginId] at h_rightOrigin
-        simp [h_rightOriginId] at *
-        obtain ⟨ rightOriginItem, h_rightOrigin_eq, h_rightOrigin_id_eq, h_rightOrigin_in_arr ⟩ := h_rightOrigin
-        rw [hdef, h_origin, h_rightOrigin_eq, h_id, h_content]
-        have h_find : Array.find? (fun item => decide (item.id = rightOriginId)) arr = some rightOriginItem := by
-          have h := h_unique
-          grind [Array.find?_eq_some_iff_getElem, List.pairwise_iff_getElem, Array.mem_iff_getElem]
-        rw [h_find]
         simp
-        rfl
+        rw [h_rightOriginId] at h_rightOrigin
+        simp at h_rightOrigin
+        obtain ⟨ rightOriginItem, h_rightOrigin, h_rightOrigin_in_arr ⟩ := h_rightOrigin
+        rw [hdef, h_origin, h_id, h_content, h_rightOrigin_in_arr]
+        simp [bind, Except.bind]
+        grind only
     | some originId =>
       rw [h_originId] at h_origin
       simp [h_originId] at *
-      obtain ⟨ originItem, h_origin_eq, h_origin_id_eq, h_origin_in_arr ⟩ := h_origin
-      rw [hdef, h_origin_eq, h_id, h_content]
-      have h_find : Array.find? (fun item => decide (item.id = originId)) arr = some originItem := by
-        have h := h_unique
-        grind [Array.find?_eq_some_iff_getElem, List.pairwise_iff_getElem, Array.mem_iff_getElem]
-      rw [h_find]
-      simp
+      generalize h_originItem : arr.find? (fun item => decide (item.id = originId)) = originItem at *
+      rcases originItem with ⟨ ⟩ | ⟨ originItem ⟩ <;> simp at *
+      rw [hdef, h_id, h_content]
       cases h_rightOriginId : input.rightOriginId with
       | none =>
         rw [h_rightOriginId] at h_rightOrigin
         simp [h_rightOriginId] at *
         rw [h_rightOrigin]
-        rfl
+        simp [bind, Except.bind]; grind only
       | some rightOriginId =>
         rw [h_rightOriginId] at h_rightOrigin
         simp [h_rightOriginId] at *
-        obtain ⟨ rightOriginItem, h_rightOrigin_eq, h_rightOrigin_id_eq, h_rightOrigin_in_arr ⟩ := h_rightOrigin
-        have h_find_right : Array.find? (fun item => decide (item.id = rightOriginId)) arr = some rightOriginItem := by
-          have h := h_unique
-          grind [Array.find?_eq_some_iff_getElem, List.pairwise_iff_getElem, Array.mem_iff_getElem]
-        rw [h_find_right, h_rightOrigin_eq]
-        simp
-        rfl
+        simp [bind, Except.bind]
+        grind
 
 theorem findLeftIdx_ArrSet {A : Type} [DecidableEq A] {input : IntegrateInput A} {newItem : YjsItem A} {arr : Array (YjsItem A)} {idx : ℤ} :
-  maximalId arr.toList →
+  uniqueId arr.toList →
   input.toItem arr = Except.ok newItem →
   findLeftIdx input.originId arr = Except.ok idx →
   ArrSet arr.toList newItem.origin := by
@@ -696,7 +685,7 @@ theorem findLeftIdx_ArrSet {A : Type} [DecidableEq A] {input : IntegrateInput A}
   grind [ArrSet]
 
 theorem findRightIdx_ArrSet {A : Type} [DecidableEq A] {input : IntegrateInput A} {newItem : YjsItem A} {arr : Array (YjsItem A)} {idx : ℤ} :
-  maximalId arr.toList →
+  uniqueId arr.toList →
   input.toItem arr = Except.ok newItem →
   findRightIdx input.rightOriginId arr = Except.ok idx →
   ArrSet arr.toList newItem.rightOrigin := by
@@ -704,64 +693,146 @@ theorem findRightIdx_ArrSet {A : Type} [DecidableEq A] {input : IntegrateInput A
   rw [IntegrateInput.toItem_ok_iff _ _ _ h_unique] at h_newItem_def
   grind [ArrSet]
 
+theorem uniqueId_id_eq_implies_eq {A : Type} [DecidableEq A] {arr : Array (YjsItem A)} :
+  uniqueId arr.toList →
+  ∀ x y, x ∈ arr → y ∈ arr → x.id = y.id → x = y := by
+  intros h_uniqueId x y h_x_mem h_y_mem h_eq
+  simp [uniqueId] at h_uniqueId; rw [List.pairwise_iff_getElem] at h_uniqueId
+  rw [Array.mem_iff_getElem] at h_x_mem
+  obtain ⟨ i, h_i_lt, h_x_eq ⟩ := h_x_mem
+  rw [Array.mem_iff_getElem] at h_y_mem
+  obtain ⟨ j, h_j_lt, h_y_eq ⟩ := h_y_mem
+  grind
+
+theorem findLeftIdx_findPtrIdx_eq {A : Type} [DecidableEq A] {input : IntegrateInput A} {newItem : YjsItem A} {arr : Array (YjsItem A)} :
+  uniqueId arr.toList →
+  input.toItem arr = Except.ok newItem →
+  findLeftIdx input.originId arr = findPtrIdx newItem.origin arr := by
+  intros h_uniqueId h_newItem_def
+  rw [IntegrateInput.toItem_ok_iff _ _ _ h_uniqueId] at h_newItem_def
+  simp [findLeftIdx, findPtrIdx]
+  obtain ⟨ origin, rightOrigin, id, content, hdef, h_origin, h_rightOrigin, h_id, h_content ⟩ := h_newItem_def
+  cases h_origin_eq : input.originId with
+  | none =>
+    simp [h_origin_eq] at *
+    grind only
+  | some originId =>
+    simp [h_origin_eq] at *
+    obtain ⟨ originItem, h_origin_eq, h_origin_id_eq ⟩ := h_origin
+    subst newItem origin; simp
+    rw [Array.findIdx?_pred_eq_eq]
+    intros a h_a_mem
+    simp
+    constructor
+    . intros h_eq
+      rw [Array.find?_eq_some_iff_getElem] at h_origin_id_eq
+      obtain ⟨ h_id_eq, h_getElem_eq, h_lt, h_eq, h_neq ⟩ := h_origin_id_eq
+      subst originItem originId
+      simp at *
+      have h := uniqueId_id_eq_implies_eq h_uniqueId _ _  (by simp) h_a_mem h_id_eq
+      grind only
+    . grind
+
+
+theorem findRightIdx_findPtrIdx_eq {A : Type} [DecidableEq A] {input : IntegrateInput A} {newItem : YjsItem A} {arr : Array (YjsItem A)} :
+  uniqueId arr.toList →
+  input.toItem arr = Except.ok newItem →
+  findRightIdx input.rightOriginId arr = findPtrIdx newItem.rightOrigin arr := by
+  intros h_uniqueId h_newItem_def
+  rw [IntegrateInput.toItem_ok_iff _ _ _ h_uniqueId] at h_newItem_def
+  simp [findRightIdx, findPtrIdx]
+  obtain ⟨ origin, rightOrigin, id, content, hdef, h_origin, h_rightOrigin, h_id, h_content ⟩ := h_newItem_def
+  cases h_origin_eq : input.rightOriginId with
+  | none =>
+    simp [h_origin_eq] at *
+    grind only
+  | some originId =>
+    simp [h_origin_eq] at *
+    obtain ⟨ rightOriginItem, h_origin_eq, h_origin_id_eq ⟩ := h_rightOrigin
+    subst newItem rightOrigin; simp
+    rw [Array.findIdx?_pred_eq_eq]
+    intros a h_a_mem
+    simp
+    constructor
+    . intros h_eq
+      rw [Array.find?_eq_some_iff_getElem] at h_origin_id_eq
+      obtain ⟨ h_id_eq, h_getElem_eq, h_lt, h_eq, h_neq ⟩ := h_origin_id_eq
+      subst rightOriginItem originId
+      simp at *
+      have h := uniqueId_id_eq_implies_eq h_uniqueId _ _  (by simp) h_a_mem h_id_eq
+      grind only
+    . grind
+
+omit [DecidableEq A] in theorem uniqueId_insertIdxIfInBounds_id_neq {arr : Array (YjsItem A)} {newItem : YjsItem A} :
+  uniqueId (arr.insertIdxIfInBounds i newItem).toList →
+  i ≤ arr.size →
+  a ∈ arr → newItem.id ≠ a.id := by
+  intros h_unique h_i_le_a_size h_a_mem
+  simp [Array.insertIdxIfInBounds] at *
+  split_ifs at h_unique
+  . simp [uniqueId] at h_unique
+    rw [List.pairwise_iff_getElem] at h_unique
+    rw [Array.mem_iff_getElem] at h_a_mem
+    obtain ⟨ j, h_j_lt, h_a_eq ⟩ := h_a_mem
+    have hlength : (arr.toList.insertIdx i newItem).length = arr.size + 1 := by
+      simp [h_i_le_a_size, List.length_insertIdx]
+    by_cases hlt : j < i
+    . have h := h_unique (if j < i then j else j + 1) i (by split <;> omega) (by omega) (by split <;> omega)
+      grind only [= List.getElem_insertIdx, = Array.getElem_toList]
+    . by_cases hlt : i ≤ j
+      . have h := h_unique i (if j < i then j else j + 1) (by omega) (by split <;> omega) (by split <;> omega)
+        grind only [= List.getElem_insertIdx, = Array.getElem_toList]
+      . omega
+
 theorem findPtrIdx_insert_some {arr other} {newItem : YjsItem A} :
-  YjsArrInvariant (arr.insertIdxIfInBounds i newItem).toList
+  uniqueId (arr.insertIdxIfInBounds i newItem).toList
   → findPtrIdx other arr = Except.ok idx
   → findPtrIdx other (arr.insertIdxIfInBounds i newItem) = if i ≤ idx then Except.ok (idx + 1) else Except.ok idx := by
-  intros h_inv h_findPtrIdx_other
-  cases other with
-  | first =>
-    simp [findPtrIdx] at *
-    cases h_findPtrIdx_other
-    split; omega
-    eq_refl
-  | last =>
-    simp [findPtrIdx] at *
-    cases h_findPtrIdx_other
-    simp [Array.insertIdxIfInBounds]
-    split
-    . simp; eq_refl
-    . eq_refl
-  | itemPtr p =>
-    apply findPtrIdx_item_exists at h_findPtrIdx_other
-    obtain ⟨ j, h_j, h_getElem_eq ⟩ := h_findPtrIdx_other
-    have h_j_lt : j < arr.size := by
-      rw [Array.getElem?_eq_some_iff] at h_getElem_eq
-      obtain ⟨ h, h_eq ⟩ := h_getElem_eq
+  intros hinv h_findPtrIdx_other
+  by_cases hleq : ¬i ≤ arr.size
+  . simp [Array.insertIdxIfInBounds, hleq] at |- hinv
+    have h : idx ≤ arr.size := by
+      apply findPtrIdx_le_size at h_findPtrIdx_other
       assumption
-    have h_idx_eq_j : idx = j := by
-      cases idx with
-      | negSucc n =>
-        simp [Int.toNat?] at *
-      | ofNat n =>
-        simp [Int.toNat?] at *
-        omega
-
-    subst idx
-    simp
-
-    have h_lt : (if i ≤ j then j + 1 else j) < (arr.insertIdxIfInBounds i newItem).size := by
-      simp [Array.insertIdxIfInBounds]
-      split_ifs
-      . simp
-        omega
+    split
+    . omega
+    . assumption
+  . cases other with
+    | first =>
+      simp [findPtrIdx] at *
+      cases h_findPtrIdx_other
+      split; simp at *
       . omega
-      . simp
-        omega
-      . omega
-
-    have h_getElem : (arr.insertIdxIfInBounds i newItem)[if i ≤ j then j + 1 else j] = p := by
-      rw [Array.getElem_eq_iff]
-      simp [Array.insertIdxIfInBounds] at *
-      split_ifs
-      . rw [Array.getElem?_insertIdx]
-        split_ifs <;> try omega
-        simp; assumption
-      . rw [Array.getElem?_insertIdx]
-        split_ifs <;> try omega
-      . omega
-      . omega
-
-    rw [<-h_getElem]
-    rw [findPtrIdx_getElem _ _ h_inv]
-    split_ifs <;> eq_refl
+      . rfl
+    | last =>
+      simp [findPtrIdx, Array.insertIdxIfInBounds] at *
+      cases h_findPtrIdx_other
+      split
+      . split
+        . simp; rfl
+        . omega
+      . split
+        . omega
+        . omega
+    | itemPtr p =>
+      simp [findPtrIdx] at *
+      cases heq : Array.findIdx? (fun i => decide (i = p)) arr with
+      | none =>
+        simp [heq] at h_findPtrIdx_other
+      | some idx =>
+        simp [heq] at h_findPtrIdx_other
+        have hneq : newItem ≠ p := by
+          intros hpeq
+          have hmem : p ∈ arr := by
+            rw [Array.findIdx?_eq_some_iff_getElem] at heq
+            obtain ⟨ _, hgetElem, _ ⟩ := heq
+            simp at *
+            grind
+          apply uniqueId_insertIdxIfInBounds_id_neq hinv hleq hmem (by rw [hpeq])
+        rw [Array.findIdx?_insertIdxIfInBounds_some (by grind) heq]
+        cases h_findPtrIdx_other
+        split_ifs
+        . omega
+        . rfl
+        . rfl
+        . omega

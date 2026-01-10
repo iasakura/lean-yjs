@@ -78,7 +78,7 @@ def findLeftIdx (originId : Option YjsId) (arr : Array (YjsItem A)) : Except Int
 def findRightIdx (rightOriginId : Option YjsId) (arr : Array (YjsItem A)) : Except IntegrateError Int :=
   match rightOriginId with
   | some id =>
-    match arr.findFinIdx? (fun item => item.id = id) with
+    match arr.findIdx? (fun item => item.id = id) with
     | some idx => return idx
     | none => Except.error IntegrateError.error
   | none => return arr.size
@@ -104,11 +104,11 @@ def integrate (newItem : IntegrateInput A) (arr : Array (YjsItem A)) : Except In
   let newItem := ← mkItemByIndex leftIdx rightIdx newItem arr
   return arr.insertIdxIfInBounds (Int.toNat destIdx) newItem
 
-def isClockSafe (newItem : IntegrateInput A) (arr : Array (YjsItem A)) : Bool :=
-  arr.all (fun item => item.id.clientId = newItem.id.clientId → newItem.id.clock > item.id.clock)
+def isClockSafe (id : YjsId) (arr : Array (YjsItem A)) : Bool :=
+  arr.all (fun item => item.id.clientId = id.clientId → id.clock > item.id.clock)
 
 def integrateSafe (newItem : IntegrateInput A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
-  if isClockSafe newItem arr then
+  if isClockSafe newItem.id arr then
     integrate newItem arr
   else
     Except.error IntegrateError.error
