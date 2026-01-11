@@ -10,6 +10,7 @@ structure IntegrateInput (A : Type) where
   rightOriginId : Option YjsId
   content : A
   id : YjsId
+deriving Repr, DecidableEq
 
 def IntegrateInput.toItem (input : IntegrateInput A) (arr : Array (YjsItem A)) : Except IntegrateError (YjsItem A) := do
   let originPtr <- match input.originId with

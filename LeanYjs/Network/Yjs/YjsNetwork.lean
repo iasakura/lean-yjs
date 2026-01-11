@@ -14,19 +14,14 @@ section YjsNetwork
 
 open NetworkModels
 
-abbrev YjsValidItem A := { item : YjsItem A // item.isValid }
-
-def YjsValidItem.id {A} (item : YjsValidItem A) : YjsId :=
-  item.val.id
-
 inductive YjsOperation A where
-| insert (item : YjsValidItem A) : YjsOperation A
+| insert (item : IntegrateInput A) : YjsOperation A
 | delete (id deletedId : YjsId) : YjsOperation A
 deriving Repr, DecidableEq
 
 def YjsOperation.id {A} (op : YjsOperation A) : YjsId :=
   match op with
-  | YjsOperation.insert item => item.val.id
+  | YjsOperation.insert item => item.id
   | YjsOperation.delete id _ => id
 
 abbrev YjsArray A := { array : Array (YjsItem A) // YjsArrInvariant array.toList }
@@ -41,19 +36,22 @@ theorem YjsArrayInvariant_empty {A} : YjsArrInvariant ([] : List (YjsItem A)) :=
 def YjsEmptyArray {A} : YjsArray A :=
   ⟨ #[], (by simp [YjsArrayInvariant_empty]) ⟩
 
-def integrateValid {A} [DecidableEq A] (item : YjsValidItem A) (state : YjsArray A) : Except IntegrateError (YjsArray A) :=
-  let integrated := integrateSafe item.val state.val
+def integrateValid {A} [DecidableEq A] (input : IntegrateInput A) (state : YjsArray A) : Except IntegrateError (YjsArray A) :=
+  let integrated := integrateSafe input state.val
   match (motive := (arr : Except IntegrateError (Array (YjsItem A))) → arr = integrated → Except IntegrateError (YjsArray A)) integrated, rfl with
   | Except.error e, _ => Except.error e
   | Except.ok arr, h_eq =>
     let proof : YjsArrInvariant arr.toList := by
-      have ⟨ _, _, _, h ⟩ := YjsArrInvariant_integrateSafe item state arr state.prop item.prop (by subst integrated; rw [h_eq])
+      have ⟨ item, hitem ⟩ : ∃item, input.toItem state.val = Except.ok item := by
+        sorry
+      have hvalid : item.isValid := by sorry
+      have ⟨ _, _, _, h ⟩ := YjsArrInvariant_integrateSafe input item state arr state.prop hitem hvalid (by subst integrated; rw [h_eq])
       apply h
     Except.ok ⟨ arr, proof ⟩
 
-theorem integrateValid_eq_integrateSafe {A} [DecidableEq A] (item : YjsValidItem A) (state : YjsArray A) :
-  (fun v => ↑v) <$> (integrateValid item state) = integrateSafe item.val state.val := by
-  cases h_eq : integrateSafe item.val state.val with
+theorem integrateValid_eq_integrateSafe {A} [DecidableEq A] (item : IntegrateInput A) (state : YjsArray A) :
+  (fun v => ↑v) <$> (integrateValid item state) = integrateSafe item state.val := by
+  cases h_eq : integrateSafe item state.val with
   | error err =>
     simp [integrateValid]
     -- rw [heq] at h_integrate_valid causes error at dependent type of rfl depending integrateSafe ..., so use conv mode.`
@@ -78,7 +76,7 @@ def deleteValid {A} [DecidableEq A] (id : YjsId) (state : YjsArray A) : YjsArray
 
 instance : Message (YjsOperation A) YjsId where
   messageId item := match item with
-  | YjsOperation.insert item => item.val.id
+  | YjsOperation.insert item => item.id
   | YjsOperation.delete id _ => id
 
 instance [DecidableEq A] : Operation (YjsOperation A) where
@@ -90,11 +88,14 @@ instance [DecidableEq A] : Operation (YjsOperation A) where
   | YjsOperation.delete _id deletedId =>
     Except.ok <| deleteValid deletedId state
 
-def IsValidMessage (state : YjsArray A) (item : YjsOperation A) : Prop :=
-  match item with
-  | YjsOperation.insert item =>
-    ArrSet state.val.toList item.val.origin ∧
-    ArrSet state.val.toList item.val.rightOrigin
+def IsValidMessage (state : YjsArray A) (op : YjsOperation A) : Prop :=
+  match op with
+  | YjsOperation.insert input =>
+    ∃item,
+      input.toItem state.val = Except.ok item ∧
+      item.isValid ∧
+      ArrSet state.val.toList item.origin ∧
+      ArrSet state.val.toList item.rightOrigin
   | YjsOperation.delete _ _ =>
     True
 
@@ -140,7 +141,7 @@ theorem Subtype_eq_of_val {α : Type} {P : α → Prop} {x y : { a : α // P a }
   simp at h
   congr
 
-theorem integrateValid_bind_integrateSafe {A} [DecidableEq A] (state : YjsArray A) (a b : YjsValidItem A) :
+theorem integrateValid_bind_integrateSafe {A} [DecidableEq A] (state : YjsArray A) (a b : IntegrateInput A) :
   (fun (x : YjsArray A) => x.val) <$> (do let arr ← integrateValid a state; integrateValid b arr) =
   (do let arr ← integrateSafe ↑a ↑state; integrateSafe ↑b arr) := by
   rw [map_bind]
@@ -226,15 +227,16 @@ theorem same_history_not_hb_concurrent {A} [DecidableEq A] {network : CausalNetw
       grind
 
 theorem integrateValid_exists_insertIdxIfBounds {A : Type} [inst : DecidableEq A]
-  {init : YjsArray A} {item : YjsValidItem A}
+  {init : YjsArray A} {input : IntegrateInput A} {item : YjsItem A}
   {state' : YjsArray A} :
-  (h_effect : integrateValid item init = Except.ok state') →
-  ∃ i, state'.val = init.val.insertIdxIfInBounds i ↑item := by
-  intro h_effect
+  (h_effect : integrateValid input init = Except.ok state') →
+  (hitem : input.toItem init.val = Except.ok item) →
+  ∃ i, state'.val = init.val.insertIdxIfInBounds i item := by
+  intros h_effect hitem
   simp [integrateValid] at h_effect
   have h_init_inv : YjsArrInvariant init.val.toList := init.prop
-  have h_eq : integrateSafe ↑item init.val = Except.ok state'.val := by
-    generalize h_effect' : integrateSafe ↑item init.val = res
+  have h_eq : integrateSafe input init.val = Except.ok state'.val := by
+    generalize h_effect' : integrateSafe input init.val = res
     cases res with
     | error err =>
       conv at h_effect =>
@@ -252,15 +254,17 @@ theorem integrateValid_exists_insertIdxIfBounds {A : Type} [inst : DecidableEq A
       simp at h_effect
       subst state'
       simp
+  have hvalid : item.isValid := by
+    sorry
 
-  have ⟨ i, _, h_eq, _ ⟩ := YjsArrInvariant_integrateSafe item.val init.val state'.val init.prop item.prop h_eq
+  have ⟨ i, _, h_eq, _ ⟩ := YjsArrInvariant_integrateSafe input item init.val state'.val init.prop hitem hvalid h_eq
   use i
 
 theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation A))} {state init : Operation.State (YjsOperation A)} {x : YjsItem A}:
   interpHistory items init = Except.ok state →
   ArrSet state.val.toList x →
   (∃y, ArrSet init.val.toList (YjsPtr.itemPtr y) ∧ y.id = x.id) ∨
-  (∃y, y.val.id = x.id ∧ Event.Deliver (YjsOperation.insert y) ∈ items) := by
+  (∃y, y.id = x.id ∧ Event.Deliver (YjsOperation.insert y) ∈ items) := by
   intros h_interp h_in_state
   induction items generalizing init state x with
   | nil =>
@@ -300,9 +304,9 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
           right; use y
           simp; constructor; assumption
           assumption
-      | insert item =>
+      | insert input =>
         simp at h_interp
-        generalize h_effect : Operation.effect (YjsOperation.insert item) init = state' at *
+        generalize h_effect : Operation.effect (YjsOperation.insert input) init = state' at *
         cases state' with
         | error err =>
           cases h_interp
@@ -312,8 +316,10 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
           cases h_in_state with
           | inl h_init_mem =>
             simp [Operation.effect] at h_effect
+            have ⟨ item, hitem ⟩ : ∃item, input.toItem init.val = Except.ok item := by
+              sorry
             have ⟨ _, h_insert ⟩ : ∃i, state'.val = init.val.insertIdxIfInBounds i item := by
-              apply integrateValid_exists_insertIdxIfBounds h_effect
+              apply integrateValid_exists_insertIdxIfBounds h_effect hitem
             rw [h_insert] at h_init_mem
             simp [Array.insertIdxIfInBounds] at h_init_mem
             split at h_init_mem
@@ -323,10 +329,12 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
               cases h_y_mem with
               | inl h_mem =>
                 right
-                use item
+                use input
                 constructor
-                grind only
-                simp
+                sorry
+                sorry
+                -- grind only
+                -- simp
               | inr h_eq =>
                 left; use y; constructor; simp [ArrSet] at *; assumption
                 assumption
@@ -338,12 +346,12 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
             right; assumption
 
 theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
-  {network : YjsOperationNetwork A} {i : ClientId} {a b : CausalNetworkElem (YjsOperation A) network.toCausalNetwork} {item_a item_b : YjsValidItem A} :
+  {network : YjsOperationNetwork A} {i : ClientId} {a b : CausalNetworkElem (YjsOperation A) network.toCausalNetwork} {input_a input_b : IntegrateInput A} {itemA itemB : YjsItem A} :
   a ∈ network.toDeliverMessages i →
   b ∈ network.toDeliverMessages i →
-  a.elem = YjsOperation.insert item_a →
-  b.elem = YjsOperation.insert item_b →
-  OriginReachable (YjsPtr.itemPtr item_a.val) (YjsPtr.itemPtr item_b.val) →
+  a.elem = YjsOperation.insert input_a →
+  b.elem = YjsOperation.insert input_b →
+  OriginReachable (YjsPtr.itemPtr itemA) (YjsPtr.itemPtr itemB) →
   b ≤ a := by
   intros h_a_mem h_b_mem h_item_a h_item_b h_reachable
 
@@ -388,7 +396,7 @@ theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
   simp [ValidMessage.isValidMessage] at h_valid_message_a
   obtain ⟨ h_a_origin_in_state_a, h_a_rightOrigin_in_state_a ⟩ := h_valid_message_a
 
-  generalize h_a_ptr_def : YjsPtr.itemPtr item_a.val = a_ptr at *
+  generalize h_a_ptr_def : YjsPtr.itemPtr itemA = a_ptr at *
 
   have h_OriginReachableStep_ArrSet : ∀ x,
     OriginReachableStep a_ptr x → ArrSet state_a.val.toList x := by
@@ -405,7 +413,7 @@ theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
       simp at h_a_rightOrigin_in_state_a
       assumption
 
-  have h_b_in_state_a : ArrSet (state_a.val.toList) item_b.val := by
+  have h_b_in_state_a : ArrSet (state_a.val.toList) itemB := by
     cases h_reachable with
     | reachable_single _ _ h_step =>
       apply h_OriginReachableStep_ArrSet _ h_step
@@ -433,7 +441,7 @@ theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
 
     rw [h_a_history, h_b_in_items_history]
     simp at *
-    have h_b_id_eq : Message.messageId (YjsOperation.insert item_b') = Message.messageId (YjsOperation.insert item_b) := by
+    have h_b_id_eq : Message.messageId (YjsOperation.insert item_b') = Message.messageId (YjsOperation.insert input_b) := by
       assumption
     have h_item_b'_in_ja : Event.Deliver (YjsOperation.insert item_b') ∈ network.histories j_a := by
       rw [h_a_history, h_b_in_items_history]; simp
@@ -523,6 +531,8 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
         apply integrate_commutative
         . obtain ⟨ s, h_s ⟩ := s
           simp; assumption
+        . sorry
+        . sorry
         . apply hb_concurrent_diff_id _ _
             (a := ⟨ YjsOperation.insert a ⟩) (b := ⟨YjsOperation.insert b ⟩) h_a_mem h_b_mem h_a_b_happens_before
         . intros h_reachable
