@@ -345,56 +345,68 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
             simp; constructor; assumption
             right; assumption
 
+def IsStateAt {A M} [DecidableEq A] [Operation A] [DecidableEq M] [Message A M] [ValidMessage A] {network : OperationNetwork A} (a : CausalNetworkElem A network.toCausalNetwork) (arr : Operation.State A) : Prop :=
+  ∃i hist1 hist2, network.histories i = hist1 ++ [Event.Broadcast a.elem] ++ hist2 ∧
+    interpHistory hist1 Operation.init = Except.ok arr ∧
+    ValidMessage.isValidMessage arr a.elem
+
 theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
-  {network : YjsOperationNetwork A} {i : ClientId} {a b : CausalNetworkElem (YjsOperation A) network.toCausalNetwork} {input_a input_b : IntegrateInput A} {itemA itemB : YjsItem A} :
-  a ∈ network.toDeliverMessages i →
-  b ∈ network.toDeliverMessages i →
-  a.elem = YjsOperation.insert input_a →
-  b.elem = YjsOperation.insert input_b →
+  {network : YjsOperationNetwork A} {i : ClientId} {a b : CausalNetworkElem (YjsOperation A) network.toCausalNetwork} {inputA inputB : IntegrateInput A} {itemA itemB : YjsItem A} {state_a state_b : YjsArray A}:
+  IsStateAt a state_a →
+  IsStateAt b state_b →
+  a.elem = YjsOperation.insert inputA →
+  b.elem = YjsOperation.insert inputB →
+  inputA.toItem state_a.val = Except.ok itemA →
+  inputB.toItem state_b.val = Except.ok itemB →
   OriginReachable (YjsPtr.itemPtr itemA) (YjsPtr.itemPtr itemB) →
   b ≤ a := by
-  intros h_a_mem h_b_mem h_item_a h_item_b h_reachable
+  intros hstateAtA hstateAtB h_item_a h_item_b htoItemA htoItemB h_reachable
 
-  simp [CausalNetwork.toDeliverMessages] at h_b_mem h_a_mem
-  replace ⟨ a, h_a_mem, h_a_eq ⟩ := h_a_mem
-  have ⟨ a', h_a_eq ⟩ : ∃ a', Event.Deliver a' = a := by
-    cases a with
-    | Deliver it =>
-      use it
-    | Broadcast e =>
-      simp at h_a_eq
-  subst h_a_eq
-  replace ⟨ b, h_b_mem, h_b_eq ⟩ := h_b_mem
-  have ⟨ b', h_b_eq ⟩ : ∃ b', Event.Deliver b' = b := by
-    cases b with
-    | Deliver it =>
-      use it
-    | Broadcast e =>
-      simp at h_b_eq
-  subst h_b_eq
-  have ⟨ j_a, h_a_mem_history_j_a ⟩ := network.deliver_has_a_cause h_a_mem
-  have ⟨ j_b, h_b_mem_history_j_b  ⟩ := network.deliver_has_a_cause h_b_mem
+  -- simp [CausalNetwork.toDeliverMessages] at h_b_mem h_a_mem
+  -- replace ⟨ a, h_a_mem, h_a_eq ⟩ := h_a_mem
+  -- have ⟨ a', h_a_eq ⟩ : ∃ a', Event.Deliver a' = a := by
+  --   cases a with
+  --   | Deliver it =>
+  --     use it
+  --   | Broadcast e =>
+  --     simp at h_a_eq
+  -- subst h_a_eq
+  -- replace ⟨ b, h_b_mem, h_b_eq ⟩ := h_b_mem
+  -- have ⟨ b', h_b_eq ⟩ : ∃ b', Event.Deliver b' = b := by
+  --   cases b with
+  --   | Deliver it =>
+  --     use it
+  --   | Broadcast e =>
+  --     simp at h_b_eq
+  -- subst h_b_eq
+  -- have ⟨ j_a, h_a_mem_history_j_a ⟩ := network.deliver_has_a_cause h_a_mem
+  -- have ⟨ j_b, h_b_mem_history_j_b  ⟩ := network.deliver_has_a_cause h_b_mem
 
-  rw [List.mem_iff_append] at h_a_mem_history_j_a h_b_mem_history_j_b
+  -- rw [List.mem_iff_append] at h_a_mem_history_j_a h_b_mem_history_j_b
 
-  obtain ⟨ pre_a, post_a, h_a_history ⟩ := h_a_mem_history_j_a
-  obtain ⟨ pre_b, post_b, h_b_history ⟩ := h_b_mem_history_j_b
+  -- obtain ⟨ pre_a, post_a, h_a_history ⟩ := h_a_mem_history_j_a
+  -- obtain ⟨ pre_b, post_b, h_b_history ⟩ := h_b_mem_history_j_b
 
-  have ⟨ state_a, h_state_a, h_valid_message_a ⟩ : ∃state, interpHistory pre_a Operation.init = Except.ok state ∧ ValidMessage.isValidMessage state a' := by
-    apply network.broadcast_only_valid_messages (pre := pre_a) (post := post_a) j_a
-    rw [h_a_history]; simp
+  -- have ⟨ state_a, h_state_a, h_valid_message_a ⟩ : ∃state, interpHistory pre_a Operation.init = Except.ok state ∧ ValidMessage.isValidMessage state a' := by
+  --   apply network.broadcast_only_valid_messages (pre := pre_a) (post := post_a) j_a
+  --   rw [h_a_history]; simp
 
-  have ⟨ state_b, h_state_b, h_valid_message_b ⟩ : ∃state, interpHistory pre_b Operation.init = Except.ok state ∧ ValidMessage.isValidMessage state b' := by
-    apply network.broadcast_only_valid_messages (pre := pre_b) (post := post_b) j_b
-    rw [h_b_history]; simp
+  -- have ⟨ state_b, h_state_b, h_valid_message_b ⟩ : ∃state, interpHistory pre_b Operation.init = Except.ok state ∧ ValidMessage.isValidMessage state b' := by
+  --   apply network.broadcast_only_valid_messages (pre := pre_b) (post := post_b) j_b
+  --   rw [h_b_history]; simp
 
-  simp at h_a_eq h_b_eq
-  subst h_a_eq h_b_eq
+  obtain ⟨ j_a, pre_a, post_a, h_a_history, h_state_a, h_valid_message_a ⟩ := hstateAtA
+  obtain ⟨ j_b, pre_b, post_b, h_b_history, h_state_b, h_valid_message_b ⟩ := hstateAtB
 
-  simp at h_item_a h_item_b
-  subst a' b'
+  -- simp at h_a_eq h_b_eq
+  -- subst h_a_eq h_b_eq
+
+  -- simp at h_item_a h_item_b
+  -- subst a' b'
   simp [ValidMessage.isValidMessage] at h_valid_message_a
-  obtain ⟨ h_a_origin_in_state_a, h_a_rightOrigin_in_state_a ⟩ := h_valid_message_a
+  rw [h_item_a] at h_a_history h_valid_message_a
+  rw [h_item_b] at h_b_history h_valid_message_b
+  obtain ⟨ aItem, haItemDef, haItemValid, h_a_origin_in_state_a, h_a_rightOrigin_in_state_a ⟩ := h_valid_message_a
 
   generalize h_a_ptr_def : YjsPtr.itemPtr itemA = a_ptr at *
 
@@ -404,14 +416,10 @@ theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
     cases h_step with
     | reachable o r id c =>
       simp at h_a_ptr_def
-      rw [h_a_ptr_def] at h_a_origin_in_state_a
-      simp at h_a_origin_in_state_a
-      assumption
+      sorry
     | reachable_right o r id c =>
       simp at h_a_ptr_def
-      rw [h_a_ptr_def] at h_a_rightOrigin_in_state_a
-      simp at h_a_rightOrigin_in_state_a
-      assumption
+      sorry
 
   have h_b_in_state_a : ArrSet (state_a.val.toList) itemB := by
     cases h_reachable with
@@ -441,8 +449,8 @@ theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
 
     rw [h_a_history, h_b_in_items_history]
     simp at *
-    have h_b_id_eq : Message.messageId (YjsOperation.insert item_b') = Message.messageId (YjsOperation.insert input_b) := by
-      assumption
+    have h_b_id_eq : Message.messageId (YjsOperation.insert item_b') = Message.messageId (YjsOperation.insert inputB) := by
+      sorry
     have h_item_b'_in_ja : Event.Deliver (YjsOperation.insert item_b') ∈ network.histories j_a := by
       rw [h_a_history, h_b_in_items_history]; simp
     apply network.deliver_has_a_cause at h_item_b'_in_ja
@@ -451,7 +459,7 @@ theorem OriginReachable_HappensBefore {A : Type} [DecidableEq A]
     . obtain ⟨ _, h_eq ⟩ := h_b_id_eq
       simp at h_eq
       subst item_b'
-      rfl
+      grind only
     . assumption
     . rw [h_b_history]; simp
 
