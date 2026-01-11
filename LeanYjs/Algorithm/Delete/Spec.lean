@@ -270,6 +270,7 @@ theorem YjsArrInvariant_deleteById (arr : Array (YjsItem A)) (id : YjsId) :
     apply deletePtrById_YjsLt' (x := YjsPtr.itemPtr arr[i]) (y := YjsPtr.itemPtr arr[j]) id
     grind
   . have h := hinv.unique
+    simp [uniqueId] at *
     rw [List.pairwise_iff_getElem] at *
     intros i j hi hj hij
     simp [deleteById]
