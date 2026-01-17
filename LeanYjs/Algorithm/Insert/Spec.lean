@@ -1422,6 +1422,70 @@ theorem loopInv_preserve1
       hbody hidx hdest_current h_not_scanning h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq
       hlt_current heq h_in_other h_in_other_origin h_other_origin_lt hdone item hitem
 
+theorem findLeftIdx_getElemExcept {arr : Array (YjsItem A)} {input : IntegrateInput A} :
+  findLeftIdx input.originId arr = Except.ok leftIdx →
+  ∃ptr, getPtrExcept arr leftIdx = Except.ok ptr ∧ isLeftIdPtr arr input.originId ptr := by
+  intros h
+  cases heq : input.originId with
+  | none =>
+    simp [heq, findLeftIdx, getPtrExcept] at *
+    cases h
+    grind
+  | some originId =>
+    simp [heq, findLeftIdx, getPtrExcept] at *
+    cases heq' : Array.findIdx? (fun item => decide (item.id = originId)) arr with
+    | none =>
+      simp [heq'] at h
+    | some idx =>
+      simp [heq'] at h
+      cases h
+      simp
+      rw [Array.findIdx?_eq_some_iff_getElem] at heq'
+      obtain ⟨ hlt, heq, hj ⟩ := heq'
+      have hlt : idx < arr.size := by
+        omega
+      split; omega
+      exists arr[idx]
+      constructor
+      . grind
+      . rw [Array.find?_eq_some_iff_getElem]
+        constructor; grind
+        use idx
+        constructor; grind
+        grind
+
+theorem findRightIdx_getElemExcept {arr : Array (YjsItem A)} {input : IntegrateInput A} :
+  findRightIdx input.rightOriginId arr = Except.ok rightIdx →
+  ∃ptr, getPtrExcept arr rightIdx = Except.ok ptr ∧ isRightIdPtr arr input.rightOriginId ptr := by
+  intros h
+  cases heq : input.rightOriginId with
+  | none =>
+    simp [heq, findRightIdx, getPtrExcept] at *
+    cases h
+    grind
+  | some originId =>
+    simp [heq, findRightIdx, getPtrExcept] at *
+    cases heq' : Array.findIdx? (fun item => decide (item.id = originId)) arr with
+    | none =>
+      simp [heq'] at h
+    | some idx =>
+      simp [heq'] at h
+      cases h
+      simp
+      rw [Array.findIdx?_eq_some_iff_getElem] at heq'
+      obtain ⟨ hlt, heq, hj ⟩ := heq'
+      have hlt : idx < arr.size := by
+        omega
+      split; omega
+      exists arr[idx]
+      constructor
+      . grind
+      . rw [Array.find?_eq_some_iff_getElem]
+        constructor; grind
+        use idx
+        constructor; grind
+        grind
+
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)
   -> ItemSetInvariant (ArrSet $ newItem :: arr.toList)
@@ -1616,19 +1680,19 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
     rw [heq] at h
     simp at h
 
-  have heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx := by
-    sorry
+  have heqleft' : findPtrIdx newItem.origin arr = Except.ok leftIdx := by
+    rw [<-findLeftIdx_findPtrIdx_eq harrinv.unique h_newItem_def]; assumption
 
-  have heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx := by
-    sorry
+  have heqright' : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx := by
+    rw [<-findRightIdx_findPtrIdx_eq harrinv.unique h_newItem_def]; assumption
 
   have hleftIdxrightIdx : leftIdx < rightIdx := by
-    apply YjsLt'_findPtrIdx_lt leftIdx rightIdx newItem.origin newItem.rightOrigin arr harrinv _ (by assumption) (by assumption) heqleft heqright
+    apply YjsLt'_findPtrIdx_lt leftIdx rightIdx newItem.origin newItem.rightOrigin arr harrinv _ (by assumption) (by assumption) heqleft' heqright'
     assumption
 
   have hrightIdx : rightIdx ≥ 0 := by
-    apply findPtrIdx_ge_minus_1 at heqright
-    apply findPtrIdx_ge_minus_1 at heqleft
+    apply findPtrIdx_ge_minus_1 at heqright'
+    apply findPtrIdx_ge_minus_1 at heqleft'
     omega
 
   simp [findIntegratedIndex] at hintegrate
@@ -1662,14 +1726,24 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
     rw [ok_bind] at hintegrate
     use resState.fst.toNat
     have h : mkItemByIndex leftIdx rightIdx input arr = Except.ok newItem := by
-      sorry
+      rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
+      obtain ⟨ origin, rightOrigin, id, content, h_eq, horigin, hrightOrigin, hid, hcontent ⟩ := h_newItem_def
+      apply findLeftIdx_getElemExcept at heqleft
+      obtain ⟨ originPtr, horiginptr, hleftIdPtr ⟩ := heqleft
+      apply findRightIdx_getElemExcept at heqright
+      obtain ⟨ rightOriginPtr, hrightoriginptr, hrightIdPtr ⟩ := heqright
+      simp only [mkItemByIndex]
+      rw [horiginptr, hrightoriginptr]; simp [bind, Except.bind, pure, Except.pure]
+      have h := isLeftIdPtr_unique _ _ _ _ harrinv.unique hleftIdPtr horigin
+      have h' := isRightIdPtr_unique _ _ _ _ harrinv.unique hrightIdPtr hrightOrigin
+      grind only
     rw [h] at hintegrate; simp at hintegrate
     rw [<-hintegrate]
     obtain ⟨ offset, res', hres', hloopInv, hdone ⟩ := hloop
     have h_resState : resState.fst.toNat ≤ arr.size := by
       obtain ⟨ hidx, hdest_current, _, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
       simp at *
-      apply findPtrIdx_le_size at heqright
+      apply findPtrIdx_le_size at heqright'
       subst resState
       have h_dest_leq_size : res'.value.fst.toNat ≤ offsetToIndex leftIdx rightIdx offset (isBreak res') := by
         cases res' <;> simp at *
@@ -1695,7 +1769,7 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
         assumption
       . have current_lt : offsetToIndex leftIdx rightIdx offset (isBreak res') ≤ arr.size := by
           obtain ⟨ hidx, dest, hdest, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
-          apply findPtrIdx_le_size at heqright
+          apply findPtrIdx_le_size at heqright'
           cases offset <;> simp [offsetToIndex] <;> omega
         intros hisize
         apply loopInv_YjsLt' (current := offsetToIndex leftIdx rightIdx offset (isBreak res')) <;> try assumption
@@ -1770,7 +1844,7 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
         split at heq <;> cases heq
         simp [isBreak]
         have hlt : -1 ≤ leftIdx := by
-          apply findPtrIdx_ge_minus_1 at heqleft
+          apply findPtrIdx_ge_minus_1 at heqleft'
           assumption
         omega
     constructor
@@ -1780,7 +1854,7 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
       apply YjsLt'.ltOrigin
       simp at *
 
-      apply findPtrIdx_leq_YjsLeq' (i := i) _ _ _ harrinv _ heqleft _
+      apply findPtrIdx_leq_YjsLeq' (i := i) _ _ _ harrinv _ heqleft' _
       . apply findPtrIdx_getElem _ _ harrinv
       . omega
     constructor
@@ -1818,7 +1892,7 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
             obtain ⟨ _, h_getElem_eq ⟩ := h_getElem_eq
             subst h_getElem_eq
             have heq : arr[rightIdx.toNat] = newItem.rightOrigin := by
-              apply findPtrIdx_lt_size_getElem heqright (by omega)
+              apply findPtrIdx_lt_size_getElem heqright' (by omega)
             rw [heq]
             obtain ⟨ o, r, id, c, d ⟩ := newItem
             apply YjsLt'.ltRightOrigin
@@ -1873,7 +1947,7 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
 
     apply loopInv_preserve1
       newItem arr horigin hrorigin horigin_consistent hreachable_consistent h_maximalId
-      harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx
+      harrinv hclosed harrsetinv leftIdx heqleft' rightIdx heqright' hleftIdxrightIdx hrightIdx
       state hloop i hlt hlt2 hinv other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx hnext
 
 omit [DecidableEq A] in theorem isClockSafe_maximalId {arr : Array (YjsItem A)} {input : IntegrateInput A} {newItem : YjsItem A} :

@@ -576,6 +576,50 @@ theorem findPtrIdx_ArrSet {A : Type} [DecidableEq A] {arr : Array (YjsItem A)} {
     subst p
     simp [ArrSet]
 
+@[simp] abbrev isLeftIdPtr (arr : Array (YjsItem A)) (id : Option YjsId) (ptr : YjsPtr A) : Prop :=
+  match id with
+  | none => ptr = YjsPtr.first
+  | some pid =>
+    ∃(item : YjsItem A), ptr = YjsPtr.itemPtr item ∧ arr.find? (fun i => i.id = pid) = some item
+
+theorem isLeftIdPtr_unique {A : Type} (arr : Array (YjsItem A)) (id : Option YjsId) (ptr1 ptr2 : YjsPtr A) :
+  uniqueId arr.toList →
+  isLeftIdPtr arr id ptr1 →
+  isLeftIdPtr arr id ptr2 →
+  ptr1 = ptr2 := by
+  intros h_unique h_ptr1 h_ptr2
+  cases id with
+  | none =>
+    simp [isLeftIdPtr] at h_ptr1 h_ptr2
+    rw [h_ptr1, h_ptr2]
+  | some pid =>
+    simp [isLeftIdPtr] at h_ptr1 h_ptr2
+    obtain ⟨ item1, heq1, hfind1 ⟩ := h_ptr1
+    obtain ⟨ item2, heq2, hfind2 ⟩ := h_ptr2
+    grind
+
+@[simp] abbrev isRightIdPtr (arr : Array (YjsItem A)) (id : Option YjsId) (ptr : YjsPtr A) : Prop :=
+  match id with
+  | none => ptr = YjsPtr.last
+  | some pid =>
+    ∃(item : YjsItem A), ptr = YjsPtr.itemPtr item ∧ arr.find? (fun i => i.id = pid) = some item
+
+theorem isRightIdPtr_unique {A : Type} (arr : Array (YjsItem A)) (id : Option YjsId) (ptr1 ptr2 : YjsPtr A) :
+  uniqueId arr.toList →
+  isRightIdPtr arr id ptr1 →
+  isRightIdPtr arr id ptr2 →
+  ptr1 = ptr2 := by
+  intros h_unique h_ptr1 h_ptr2
+  cases id with
+  | none =>
+    simp [isRightIdPtr] at h_ptr1 h_ptr2
+    rw [h_ptr1, h_ptr2]
+  | some pid =>
+    simp [isRightIdPtr] at h_ptr1 h_ptr2
+    obtain ⟨ item1, heq1, hfind1 ⟩ := h_ptr1
+    obtain ⟨ item2, heq2, hfind2 ⟩ := h_ptr2
+    grind
+
 -- TODO: refactor proof
 -- YjsArrInvariant is needed to ensure the array is unique and
 theorem IntegrateInput.toItem_ok_iff {A : Type} (input : IntegrateInput A) (arr : Array (YjsItem A)) (newItem : YjsItem A) :
@@ -583,12 +627,8 @@ theorem IntegrateInput.toItem_ok_iff {A : Type} (input : IntegrateInput A) (arr 
   (input.toItem arr = Except.ok newItem ↔
   ∃origin rightOrigin id content,
     newItem = YjsItem.mk origin rightOrigin id content false ∧
-    (match input.originId with
-    | none => origin = YjsPtr.first
-    | some p => ∃(originItem : YjsItem A), origin = originItem ∧ arr.find? (fun item => item.id = p) = some originItem) ∧
-    (match input.rightOriginId with
-    | none => rightOrigin = YjsPtr.last
-    | some p => ∃(rightOriginItem : YjsItem A), rightOrigin = rightOriginItem ∧ arr.find? (fun item => item.id = p) = some rightOriginItem) ∧
+    isLeftIdPtr arr input.originId origin ∧
+    isRightIdPtr arr input.rightOriginId rightOrigin ∧
     id = input.id ∧
     content = input.content) := by
   intros h_unique
