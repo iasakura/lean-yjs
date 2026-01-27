@@ -12,13 +12,28 @@ abbrev CausalOrder A := PartialOrder A
 
 section CausalOrder
 
-class Operation (A : Type) where
+class WithId (A : Type) (S : outParam Type) [DecidableEq S] where
+  id : A → S
+
+class Operation (A : Type) (S : outParam Type) [DecidableEq S] [WithId A S] where
   State : Type
   Error : Type
   init : State
   effect : A → State → Except Error State
+  isValidState : A → State → Prop
+  -- TODO: is this enough to strong assumption for yjs?
+  isValidState_mono : ∀ {l₁ l₂ : List A},
+    l₁ ⊆ l₂ →
+    List.Pairwise (fun a b => WithId.id a ≠ WithId.id b) l₁ →
+    List.Pairwise (fun a b => WithId.id a ≠ WithId.id b) l₂ →
+    l₁.foldr (fun a f => fun s => effect a s >>= f) (fun a => return a) init = Except.ok s₁ →
+    l₂.foldr (fun a f => fun s => effect a s >>= f) (fun a => return a) init = Except.ok s₂ →
+    isValidState a s₁ →
+    isValidState a s₂
 
 variable {A : Type} [DecidableEq A] (hb : CausalOrder A)
+
+section hb_concurrent
 
 def hb_concurrent (a b : A) : Prop :=
   ¬ (hb.le a b) ∧ ¬ (hb.le b a)
@@ -33,13 +48,6 @@ inductive hb_consistent : List A → Prop where
       hb_consistent ops →
       (∀ b, b ∈ ops → ¬ b ≤ a) →
       hb_consistent (a :: ops)
-
-inductive hb_strong_consistent : List A → List A → Prop where
-  | nil : hb_strong_consistent ops []
-  | cons : ∀ (a : A) (ops₀ ops₁ : List A),
-      hb_strong_consistent (a :: ops₀) ops₁ →
-      (∀b, b < a → b ∈ ops₀) →
-      hb_strong_consistent ops₀ (a :: ops₁)
 
 theorem List.sublist_mem {A : Type} {l₁ l₂ : List A} (h_sublist : l₁ <+ l₂) {a : A} :
   a ∈ l₁ → a ∈ l₂ := by
@@ -86,6 +94,13 @@ omit [DecidableEq A] in lemma hb_consistent_tail (a : A) (ops : List A) :
   cases h_consistent
   assumption
 
+end hb_concurrent
+
+def hbClosed (ops : List A) : Prop :=
+  ∀a b l₁ l₂, ops = l₁ ++ a :: l₂ → b < a → b ∈ l₁
+
+section effect
+
 variable [Operation A]
 
 abbrev Effect := Operation.State A → Except (Operation.Error A) (Operation.State A)
@@ -104,18 +119,15 @@ omit [DecidableEq A] in theorem effect_comp_assoc (op1 op2 op3 : Effect (A := A)
   unfold effect_comp
   simp
 
-def compatibleOp [DecidableEq A] (s : Operation.State A) (op : A) : Prop :=
-  ∃ops, hb_consistent hb ops ∧
-    (∀ a, a < op → a ∈ ops) ∧
-    (∀ a ∈ ops, ¬op ≤ a) ∧
-    (ops.map (fun a => effect a) |> List.foldr effect_comp Except.pure) Operation.init = Except.ok s
+end effect
 
-def concurrent_commutative (list : List A) : Prop :=
-  ∀ a b, a ∈ list → b ∈ list → hb_concurrent hb a b →
-    ∀ s : Operation.State A, compatibleOp hb s a → compatibleOp hb s b →
+def concurrent_commutative [Operation A] (list : List A) : Prop :=
+  ∀ a b (s : Operation.State A), a ∈ list → b ∈ list → hb_concurrent hb a b →
+      Operation.isValidState a s →
+      Operation.isValidState b s →
       effect_comp (effect a) (effect b) s = effect_comp (effect b) (effect a) s
 
-omit [DecidableEq A] [Operation A] in theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
+omit [DecidableEq A] in theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
   hb_consistent hb (ops₀ ++ a :: ops₁) →
   ∀ x, x ∈ ops₀ → ¬a ≤ x := by
   intro h_consistent x h_mem
