@@ -8,13 +8,14 @@ import LeanYjs.ListLemmas
 
 open List
 
--- import LeanYjs.Network.Basic
-
 abbrev CausalOrder A := PartialOrder A
 
 section CausalOrder
 
-class Operation (A : Type) where
+class WithId (A : Type) (S : outParam Type) [DecidableEq S] where
+  id : A → S
+
+class Operation (A : Type) (S : outParam Type) [DecidableEq S] [WithId A S] where
   State : Type
   Error : Type
   init : State
@@ -23,12 +24,16 @@ class Operation (A : Type) where
   -- TODO: is this enough to strong assumption for yjs?
   isValidState_mono : ∀ {l₁ l₂ : List A},
     l₁ ⊆ l₂ →
-    l₁.foldr (fun a s => s >>= effect a) (Except.ok init) = Except.ok s₁ →
-    l₂.foldr (fun a s => s >>= effect a) (Except.ok init) = Except.ok s₂ →
+    List.Pairwise (fun a b => WithId.id a ≠ WithId.id b) l₁ →
+    List.Pairwise (fun a b => WithId.id a ≠ WithId.id b) l₂ →
+    l₁.foldr (fun a f => fun s => effect a s >>= f) (fun a => return a) init = Except.ok s₁ →
+    l₂.foldr (fun a f => fun s => effect a s >>= f) (fun a => return a) init = Except.ok s₂ →
     isValidState a s₁ →
     isValidState a s₂
 
 variable {A : Type} [DecidableEq A] (hb : CausalOrder A)
+
+section hb_concurrent
 
 def hb_concurrent (a b : A) : Prop :=
   ¬ (hb.le a b) ∧ ¬ (hb.le b a)
@@ -36,8 +41,6 @@ def hb_concurrent (a b : A) : Prop :=
 omit [DecidableEq A] in theorem hb_concurrent_symm {a b : A} :
   hb_concurrent hb a b ↔ hb_concurrent hb b a := by
   simp [hb_concurrent, and_comm]
-
-section hb_concurrent
 
 inductive hb_consistent : List A → Prop where
   | nil : hb_consistent []

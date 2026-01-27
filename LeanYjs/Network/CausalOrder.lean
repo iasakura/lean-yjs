@@ -8,8 +8,6 @@ import LeanYjs.ListLemmas
 
 open List
 
--- import LeanYjs.Network.Basic
-
 abbrev CausalOrder A := PartialOrder A
 
 section CausalOrder
@@ -80,7 +78,6 @@ omit [DecidableEq A] in theorem hb_consistent_sublist {ops₀ ops₁ : List A} :
         have h_b_mem_l₂ : b ∈ l₂ := by
           apply List.sublist_mem h_sublist; assumption
         apply h_consistent_h_no_lt b h_b_mem_l₂ h_b_leq_x
-
 
 omit [DecidableEq A] in lemma hb_consistent_tail (a : A) (ops : List A) :
   (h_consistent : hb_consistent hb (a :: ops)) →

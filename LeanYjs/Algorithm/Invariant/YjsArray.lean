@@ -876,3 +876,67 @@ theorem findPtrIdx_insert_some {arr other} {newItem : YjsItem A} :
         . rfl
         . rfl
         . omega
+
+theorem findLeftIdx_getElemExcept {arr : Array (YjsItem A)} {input : IntegrateInput A} :
+  findLeftIdx input.originId arr = Except.ok leftIdx →
+  ∃ptr, getPtrExcept arr leftIdx = Except.ok ptr ∧ isLeftIdPtr arr input.originId ptr := by
+  intros h
+  cases heq : input.originId with
+  | none =>
+    simp [heq, findLeftIdx, getPtrExcept] at *
+    cases h
+    grind
+  | some originId =>
+    simp [heq, findLeftIdx, getPtrExcept] at *
+    cases heq' : Array.findIdx? (fun item => decide (item.id = originId)) arr with
+    | none =>
+      simp [heq'] at h
+    | some idx =>
+      simp [heq'] at h
+      cases h
+      simp
+      rw [Array.findIdx?_eq_some_iff_getElem] at heq'
+      obtain ⟨ hlt, heq, hj ⟩ := heq'
+      have hlt : idx < arr.size := by
+        omega
+      split; omega
+      exists arr[idx]
+      constructor
+      . grind
+      . rw [Array.find?_eq_some_iff_getElem]
+        constructor; grind
+        use idx
+        constructor; grind
+        grind
+
+theorem findRightIdx_getElemExcept {arr : Array (YjsItem A)} {input : IntegrateInput A} :
+  findRightIdx input.rightOriginId arr = Except.ok rightIdx →
+  ∃ptr, getPtrExcept arr rightIdx = Except.ok ptr ∧ isRightIdPtr arr input.rightOriginId ptr := by
+  intros h
+  cases heq : input.rightOriginId with
+  | none =>
+    simp [heq, findRightIdx, getPtrExcept] at *
+    cases h
+    grind
+  | some originId =>
+    simp [heq, findRightIdx, getPtrExcept] at *
+    cases heq' : Array.findIdx? (fun item => decide (item.id = originId)) arr with
+    | none =>
+      simp [heq'] at h
+    | some idx =>
+      simp [heq'] at h
+      cases h
+      simp
+      rw [Array.findIdx?_eq_some_iff_getElem] at heq'
+      obtain ⟨ hlt, heq, hj ⟩ := heq'
+      have hlt : idx < arr.size := by
+        omega
+      split; omega
+      exists arr[idx]
+      constructor
+      . grind
+      . rw [Array.find?_eq_some_iff_getElem]
+        constructor; grind
+        use idx
+        constructor; grind
+        grind

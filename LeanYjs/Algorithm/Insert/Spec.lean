@@ -25,8 +25,7 @@ set_option maxHeartbeats 0
 theorem ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
   (do
     let x <- Except.ok x
-    f x) = f x := by
-  eq_refl
+    f x) = f x := by eq_refl
 
 theorem for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (body : α -> β -> Except ε (ForInStep β)) (I : Option α -> ForInStep β -> Prop) :
   I ls.head? (ForInStep.yield init) ->
@@ -1421,70 +1420,6 @@ theorem loopInv_preserve1
       oRightIdx hoRightIdx dest scanning h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hrightIdx hlt hinv
       hbody hidx hdest_current h_not_scanning h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq
       hlt_current heq h_in_other h_in_other_origin h_other_origin_lt hdone item hitem
-
-theorem findLeftIdx_getElemExcept {arr : Array (YjsItem A)} {input : IntegrateInput A} :
-  findLeftIdx input.originId arr = Except.ok leftIdx →
-  ∃ptr, getPtrExcept arr leftIdx = Except.ok ptr ∧ isLeftIdPtr arr input.originId ptr := by
-  intros h
-  cases heq : input.originId with
-  | none =>
-    simp [heq, findLeftIdx, getPtrExcept] at *
-    cases h
-    grind
-  | some originId =>
-    simp [heq, findLeftIdx, getPtrExcept] at *
-    cases heq' : Array.findIdx? (fun item => decide (item.id = originId)) arr with
-    | none =>
-      simp [heq'] at h
-    | some idx =>
-      simp [heq'] at h
-      cases h
-      simp
-      rw [Array.findIdx?_eq_some_iff_getElem] at heq'
-      obtain ⟨ hlt, heq, hj ⟩ := heq'
-      have hlt : idx < arr.size := by
-        omega
-      split; omega
-      exists arr[idx]
-      constructor
-      . grind
-      . rw [Array.find?_eq_some_iff_getElem]
-        constructor; grind
-        use idx
-        constructor; grind
-        grind
-
-theorem findRightIdx_getElemExcept {arr : Array (YjsItem A)} {input : IntegrateInput A} :
-  findRightIdx input.rightOriginId arr = Except.ok rightIdx →
-  ∃ptr, getPtrExcept arr rightIdx = Except.ok ptr ∧ isRightIdPtr arr input.rightOriginId ptr := by
-  intros h
-  cases heq : input.rightOriginId with
-  | none =>
-    simp [heq, findRightIdx, getPtrExcept] at *
-    cases h
-    grind
-  | some originId =>
-    simp [heq, findRightIdx, getPtrExcept] at *
-    cases heq' : Array.findIdx? (fun item => decide (item.id = originId)) arr with
-    | none =>
-      simp [heq'] at h
-    | some idx =>
-      simp [heq'] at h
-      cases h
-      simp
-      rw [Array.findIdx?_eq_some_iff_getElem] at heq'
-      obtain ⟨ hlt, heq, hj ⟩ := heq'
-      have hlt : idx < arr.size := by
-        omega
-      split; omega
-      exists arr[idx]
-      constructor
-      . grind
-      . rw [Array.find?_eq_some_iff_getElem]
-        constructor; grind
-        use idx
-        constructor; grind
-        grind
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)

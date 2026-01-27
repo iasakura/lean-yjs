@@ -93,9 +93,7 @@ def IsValidMessage (state : YjsArray A) (op : YjsOperation A) : Prop :=
   | YjsOperation.insert input =>
     ∃item,
       input.toItem state.val = Except.ok item ∧
-      item.isValid ∧
-      ArrSet state.val.toList item.origin ∧
-      ArrSet state.val.toList item.rightOrigin
+      item.isValid
   | YjsOperation.delete _ _ =>
     True
 
