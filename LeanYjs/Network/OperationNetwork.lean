@@ -10,8 +10,8 @@ def interpOps (items : List A) (init : Operation.State A) : Except (Operation.Er
 def interpHistory (history : List (Event A)) (init : Operation.State A) : Except (Operation.Error A) (Operation.State A) :=
   interpOps (history.filterMap (fun ev => match ev with | Event.Deliver it => some it | _ => none)) init
 
-def interpDeliveredOps {network : CausalNetwork A} (items : List (CausalNetworkElem A network)) (init : Operation.State A) : Except (Operation.Error A) (Operation.State A) :=
-  let deliveredItems := items.map (fun item => item.elem)
+def interpDeliveredOps (items : List A) (init : Operation.State A) : Except (Operation.Error A) (Operation.State A) :=
+  let deliveredItems := items.map (fun item => item)
   interpOps deliveredItems init
 
 class ValidMessage A [Operation A] where
