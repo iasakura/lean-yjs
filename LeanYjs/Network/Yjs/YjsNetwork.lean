@@ -270,7 +270,7 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
   intros h_interp h_in_state
   induction items generalizing init state x with
   | nil =>
-    simp [interpHistory, interpOps, pure] at h_interp
+    simp [interpHistory, interpOps] at h_interp
     cases h_interp
     simp [ArrSet] at h_in_state |-
     use x
