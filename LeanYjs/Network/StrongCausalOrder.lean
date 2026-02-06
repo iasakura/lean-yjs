@@ -166,36 +166,24 @@ theorem Except.bind_eq_ok_exist {α β : Type} {e : Except α β} {f : β → Ex
     refine ⟨ u, by rfl, ?_ ⟩
     assumption
 
-def effect_list (ops : List A) (s : Except (Operation.Error A) (Operation.State A)) :=
-  foldl (fun s op => s >>= effect op) s ops
+def effect_list (ops : List A) (s : Operation.State A) :=
+  foldlM (fun s op => effect op s) s ops
 
-@[simp, grind =] theorem effect_list_nil (s : Except (Operation.Error A) (Operation.State A)) :
-  effect_list [] s = s := by rfl
+@[simp, grind =] theorem effect_list_nil (s : Operation.State A) :
+  effect_list [] s = Except.ok s := by rfl
 
 @[simp, grind =] theorem effect_list_cons (a : A) (ops : List A)
-  (s : Except (Operation.Error A) (Operation.State A)) :
-  effect_list (a :: ops) s = effect_list ops (s >>= effect a) := by rfl
+  (s : Operation.State A) :
+  effect_list (a :: ops) s = (do let s <- effect a s; effect_list ops s) := by rfl
 
 @[simp, grind =] theorem effect_list_append (ops₀ ops₁ : List A)
-  (s : Except (Operation.Error A) (Operation.State A)) :
-  effect_list (ops₀ ++ ops₁) s = effect_list ops₁ (effect_list ops₀ s) := by
+  (s : Operation.State A) :
+  effect_list (ops₀ ++ ops₁) s = (do let s <- effect_list ops₀ s; effect_list ops₁ s) := by
   induction ops₀ with
   | nil =>
     simp [effect_list]
   | cons a ops₀ ih =>
     simp [effect_list]
-
-theorem effect_list_ok_init_ok (ops : List A) (h : effect_list ops s = Except.ok s') :
-  ∃u, s = Except.ok u := by
-  induction ops generalizing s with
-  | nil =>
-    use s'; grind
-  | cons a ops ih =>
-    simp at *
-    apply ih at h
-    obtain ⟨ u, h_s_eq ⟩ := h
-    apply Except.bind_eq_ok_exist at h_s_eq
-    grind
 
 theorem Except.ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
   (do
@@ -208,19 +196,23 @@ theorem hb_concurrent_foldr :
   hb_consistent hb (ops₀ ++ a :: ops₁) →
   hbClosed hb (ops₀ ++ a :: ops₁) →
   IdNoDup (ops₀ ++ a :: ops₁) →
-  effect_list ops₁
-    (effect_list ops₀ (Except.ok Operation.init) >>= effect a) = Except.ok s →
-  effect_list ops₁
-    (effect_list ops₀ (Except.ok Operation.init)) >>= effect a = Except.ok s := by
+  (do let s <- effect_list ops₀ Operation.init >>= effect a; effect_list ops₁ s) = Except.ok s →
+  (do let s <- effect_list ops₀ Operation.init; effect_list ops₁ s) >>= effect a = Except.ok s := by
   induction ops₁ generalizing ops₀ with
   | nil =>
     simp [effect_list]
   | cons b ops₁ ih =>
     intro h_comm h_concurrent h_consistent h_closed h_no_dup heq
     simp at *
-    have ⟨ s', h ⟩ : ∃ s, (effect_list ops₀ (Except.ok Operation.init) >>= fun x => effect a x >>= effect b) = Except.ok s := by
-      apply effect_list_ok_init_ok
-      assumption
+    have ⟨ s', h ⟩ : ∃ s, (effect_list ops₀ Operation.init >>= fun x => effect a x >>= effect b) = Except.ok s := by
+      have h : (do
+        let s <- (do
+          let x ← effect_list ops₀ Operation.init
+          let s ← effect a x
+          effect b s)
+        effect_list ops₁ s) = Except.ok s := by
+        simp; assumption
+      grind [Except.bind_eq_ok_exist]
     obtain ⟨ u, h_effects_eq, h_effect_b_eq ⟩ := Except.bind_eq_ok_exist h
     have hba : (effect b u >>= effect a) = Except.ok s' := by
       apply h_comm a b u s'
@@ -234,8 +226,17 @@ theorem hb_concurrent_foldr :
       apply Except.bind_eq_ok_exist at hba
       grind
     rw [h_effects_eq] at heq |-
-    rw [Except.ok_bind, h_effect_b_eq, ←hba] at heq
-    have heq' : effect_list ops₁ (effect b u >>= effect a) = effect_list ops₁ (effect_list (ops₀ ++ [b]) (Except.ok Operation.init) >>= effect a) := by
+    rw [Except.ok_bind, ←bind_assoc, h_effect_b_eq, ←hba] at heq
+    simp at heq
+    have heq' : (do
+      let x ← effect b u
+      let s ← effect a x
+      effect_list ops₁ s) =
+    (do
+      let s ← effect_list (ops₀ ++ [b]) Operation.init
+      let s <- effect a s
+      effect_list ops₁ s) :=
+      by
       simp
       rw [h_effects_eq]; rfl
     rw [heq'] at heq
@@ -259,8 +260,8 @@ theorem hb_consistent_effect_convergent (ops₀ ops₁ : List A)
   (h_commutative : concurrent_commutative (hb := hb) ops₀)
   (no_dup₀ : IdNoDup ops₀) (no_dup₁ : IdNoDup ops₁) :
   (∀ a, a ∈ ops₀ ↔ a ∈ ops₁) →
-  effect_list ops₀ (Except.ok Operation.init) = Except.ok s →
-  effect_list ops₁ (Except.ok Operation.init) = Except.ok s :=
+  effect_list ops₀ Operation.init = Except.ok s →
+  effect_list ops₁ Operation.init = Except.ok s :=
 by
   induction ops₁ using List.reverseRecOn generalizing ops₀ s with
   | nil =>
@@ -340,41 +341,99 @@ by
           --     assumption
           --   . assumption
         subst h_ops₀_eq
-        have heq : effect_list ops₀_last (effect_list ops₀_first (Except.ok Operation.init) >>= effect b) =
-          effect_list ops₀_last (effect_list ops₀_first (Except.ok Operation.init)) >>= effect b := by
-          have ⟨ s', ⟨ h, heq ⟩  ⟩ := Except.bind_eq_ok_exist hops₀
-          rw [h]
+        have heq :
+          (do let s ← (effect_list ops₀_first Operation.init >>= effect b); effect_list ops₀_last s)  =
+          (do let s ← effect_list ops₀_first Operation.init; effect_list ops₀_last s >>= effect b) := by
+          have h : (do
+              let s <- (do
+                let s ← effect_list ops₀_first Operation.init >>= effect b
+                effect_list ops₀_last s);
+              let s ← effect a s
+              Except.ok s) =
+            Except.ok s := by
+            simp; assumption
+          have ⟨ s', ⟨ h, heq ⟩  ⟩ := Except.bind_eq_ok_exist h
+          simp
+          have h' := h
           apply hb_concurrent_foldr (hb := hb) at h
-          rw [←h]
+          . simp at *
+            rw [h', ←h]
           . sorry
           . sorry
           . sorry
           . sorry
           . sorry
+        replace hops₀ : (do
+            do let s ← (do
+              let s ← effect_list ops₀_first Operation.init >>= effect b
+              effect_list ops₀_last s)
+            let s ← effect a s
+            Except.ok s) =
+          Except.ok s := by
+          simp; assumption
         rw [heq] at hops₀
-        replace heq : effect_list ops₀_last (effect_list ops₀_first (Except.ok Operation.init)) >>= effect b >>= effect a =
-          effect_list ops₀_last (effect_list ops₀_first (Except.ok Operation.init)) >>= effect a >>= effect b := by
+        simp at hops₀
+        replace heq : (do
+          let x ← effect_list ops₀_first Operation.init >>= effect_list ops₀_last
+          let s ← effect b x
+          let s ← effect a s
+          Except.ok s) = (do
+          let x ← effect_list ops₀_first Operation.init >>= effect_list ops₀_last
+          let s ← effect a x
+          let s ← effect b s
+          Except.ok s) := by
+          replace hops₀ : (do
+            let x ← effect_list ops₀_first Operation.init >>= effect_list ops₀_last
+            let s ← effect b x
+            let s ← effect a s
+            Except.ok s) = Except.ok s := by
+            simp at *; assumption
           have ⟨ s', ⟨ h, heq ⟩  ⟩ := Except.bind_eq_ok_exist hops₀
-          have ⟨ s'', h_effects_eq, h_effect_a_eq ⟩ := Except.bind_eq_ok_exist h
-          rw [h_effects_eq] at hops₀ |-
+          -- have ⟨ s'', h_effects_eq, h_effect_a_eq ⟩ := Except.bind_eq_ok_exist h
+          -- rw [h_effects_eq] at hops₀ |-
           rw [hops₀]
-          apply h_commutative b a at hops₀
-          rw [Except.ok_bind, hops₀]
+          have hab : (do
+            let s ← effect b s'
+            effect a s) = Except.ok s := by
+            sorry
+          apply h_commutative b a at hab
+          . sorry
           . simp
           . simp
           . sorry
           . sorry
           . sorry
+        simp at heq
         rw [heq] at hops₀
-        replace heq : effect_list ops₀_last (effect_list ops₀_first (Except.ok Operation.init)) >>= effect a =
-          effect_list ops₁ (Except.ok Operation.init) := by
+        replace heq : (do
+          let x ← effect_list ops₀_first Operation.init
+          let x ← effect_list ops₀_last x
+          let s ← effect a x
+          let s ← effect b s
+          Except.ok s) = (do
+          let x ← effect_list ops₁ Operation.init
+          let s ← effect b x
+          Except.ok s) := by
+          have heq :
+            (do
+              let x ← effect_list ops₀_first Operation.init
+              let x ← effect_list ops₀_last x
+              let s ← effect a x
+              let s ← effect b s
+              Except.ok s)
+            = (do
+              let s ← effect_list (ops₀_first ++ ops₀_last ++ [a]) Operation.init
+              let s ← effect b s
+              Except.ok s) := by
+              simp; rfl
+          rw [heq] at hops₀
           have ⟨ s', ⟨ h, heq ⟩  ⟩ := Except.bind_eq_ok_exist hops₀
           have h := ih (ops₀ := ops₀_first ++ ops₀_last ++ [a]) (s := s') (by sorry) (by sorry) (by sorry) (by sorry) (by sorry)
-            (by sorry) (by simp; assumption)
+            (by sorry) (by simp; sorry)
+          have ⟨ s', ⟨ h, heq ⟩  ⟩ := Except.bind_eq_ok_exist hops₀
           grind
         rw [heq] at hops₀
         rw [<-hops₀]
-
         -- Here, we have ops₁ = ops₁_first ++ a :: ops₁_last and a || ops₁_first
         -- have h_concurrent : concurrent_commutative (ops₀_first ++ a :: ops₀_last) := by
         --   intros c d h_c_mem h_d_mem h_concurrent

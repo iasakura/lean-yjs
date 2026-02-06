@@ -130,10 +130,10 @@ theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] (items : List (YjsOperat
       rw [ih]
 
 theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] (items : List (YjsOperation A)),
-  interpDeliveredOps items Operation.init =
+  interpOps items Operation.init =
   List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) YjsEmptyArray := by
   intros A network items
-  simp [interpDeliveredOps, interpOps]
+  simp [interpOps]
   rw [<-foldlM_foldr_effect_comp_eq]
   eq_refl
 
@@ -292,7 +292,7 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
     | Deliver op =>
       cases op with
       | delete _ deletedId =>
-        simp [Operation.effect] at h_interp
+        simp at h_interp
         apply ih (x := x) h_interp at h_in_state
         cases h_in_state with
         | inl h =>
@@ -308,7 +308,7 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
           assumption
       | insert input =>
         simp at h_interp
-        generalize h_effect : Operation.effect (YjsOperation.insert input) init = state' at *
+        generalize h_effect : effect (YjsOperation.insert input) init = state' at *
         cases state' with
         | error err =>
           cases h_interp
@@ -317,7 +317,7 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
           apply ih h_interp at h_in_state
           cases h_in_state with
           | inl h_init_mem =>
-            simp [Operation.effect] at h_effect
+            simp [effect, Operation.effect, integrateValid] at h_effect
             have ⟨ item, hitem ⟩ : ∃item, input.toItem init.val = Except.ok item := by
               sorry
             have ⟨ _, h_insert ⟩ : ∃i, state'.val = init.val.insertIdxIfInBounds i item := by
@@ -582,8 +582,8 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
 theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsArray A),
   let hist_i := network.toDeliverMessages i
   let hist_j := network.toDeliverMessages j
-  interpDeliveredOps hist_i Operation.init = Except.ok res₀ →
-  interpDeliveredOps hist_j Operation.init = Except.ok res₁ →
+  interpOps hist_i Operation.init = Except.ok res₀ →
+  interpOps hist_j Operation.init = Except.ok res₁ →
   (∀ item, item ∈ hist_i ↔ item ∈ hist_j) →
   res₀ = res₁
   := by
@@ -606,24 +606,21 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : Yj
   have h_concurrent_commutative : concurrent_commutative (hb := hb) (network.toCausalNetwork.toDeliverMessages i) := by
     apply YjsOperationNetwork_concurrentCommutative network i
 
-  have h_effectt_eq :
-    (List.map (fun a => Operation.effect a) (network.toCausalNetwork.toDeliverMessages i) |> List.foldr effect_comp (fun s => Except.ok s)) =
-    (List.map (fun a => Operation.effect a) (network.toCausalNetwork.toDeliverMessages j) |> List.foldr effect_comp (fun s => Except.ok s)) := by
-      apply hb_consistent_effect_convergent (hb := hb)
-        (network.toCausalNetwork.toDeliverMessages i)
-        (network.toCausalNetwork.toDeliverMessages j)
-        h_consistent_i
-        h_consistent_j
-        h_concurrent_commutative
-        h_noDup_i
-        h_noDup_j
-        h_hist_mem
-
-  rw [interpDeliveredMessages_foldr_effect_comp_eq] at h_res₀ h_res₁
+  have h := hb_consistent_effect_convergent (s := res₀) (hb := hb)
+    (network.toCausalNetwork.toDeliverMessages i)
+    (network.toCausalNetwork.toDeliverMessages j)
+    h_consistent_i
+    h_consistent_j
+    h_concurrent_commutative
+    (by sorry)
+    (by sorry)
+    h_hist_mem
+    h_res₀
 
   have h_res_ok_eq : Except.ok (ε := IntegrateError) res₀ = Except.ok res₁ := by
     rw [<-h_res₀, <-h_res₁]
-    rw [h_effectt_eq]
+    simp [interpOps] at *
+    rw [h, h_res₀]
 
   cases h_res_ok_eq
   simp

@@ -5,14 +5,10 @@ open NetworkModels
 variable {A I : Type}  [DecidableEq A] [Operation A] [DecidableEq I] [Message A I]
 
 def interpOps (items : List A) (init : Operation.State A) : Except (Operation.Error A) (Operation.State A) :=
-  List.foldlM (init := init) (f := fun acc item => Operation.effect item acc) items
+  effect_list items init
 
 def interpHistory (history : List (Event A)) (init : Operation.State A) : Except (Operation.Error A) (Operation.State A) :=
   interpOps (history.filterMap (fun ev => match ev with | Event.Deliver it => some it | _ => none)) init
-
-def interpDeliveredOps (items : List A) (init : Operation.State A) : Except (Operation.Error A) (Operation.State A) :=
-  let deliveredItems := items.map (fun item => item)
-  interpOps deliveredItems init
 
 class ValidMessage A [Operation A] where
   isValidMessage : Operation.State A → A → Prop
