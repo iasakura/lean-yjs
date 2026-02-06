@@ -113,7 +113,7 @@ def effect_list [Operation A] (ops : List A) (s : Operation.State A) :=
   | cons a ops₀ ih =>
     simp [effect_list]
 
-class MonotoneOperation (A : Type) [hb : CausalOrder A] (S : outParam Type) [DecidableEq S] [WithId A S] [Operation A]  [Operation A] where
+class MonotoneOperation (A : Type) {hb : CausalOrder A} (S : outParam Type) [DecidableEq S] [WithId A S] [Operation A]  [Operation A] where
   -- TODO: is this enough to strong assumption for yjs?
   isValidState_mono : ∀ {l : List A},
     (∀x < a, x ∈ l) →
@@ -135,7 +135,7 @@ def concurrent_commutative (list : List A) : Prop :=
     Operation.isValidState b s →
     (Operation.effect a s >>= Operation.effect b) = Except.ok s' → (Operation.effect b s >>= Operation.effect a) = Except.ok s'
 
-theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
+@[grind .] theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
   hb_consistent hb (ops₀ ++ a :: ops₁) →
   ∀ x, x ∈ ops₀ → ¬a ≤ x := by
   intro h_consistent x h_mem
@@ -243,13 +243,7 @@ theorem hb_concurrent_effect_list_reorder [MonotoneOperation A (hb := hb) S] :
     . sorry
     . grind [IdNoDup]
 
-@[simp, grind .] theorem hb_consistent_before {l : List A}
-  (heq : l = ops₁ ++ a :: ops₂)
-  (hconsistent : hb_consistent hb l) :
-  ∀b ∈ ops₁, ¬ b ≤ a := by
-  sorry
-
-theorem hb_consistent_effect_convergent [MonotoneOperation A S] (ops₀ ops₁ : List A)
+theorem hb_consistent_effect_convergent [MonotoneOperation A (hb := hb) S] (ops₀ ops₁ : List A)
   (h_consistent₀ : hb_consistent hb ops₀)
   (h_consistent₁ : hb_consistent hb ops₁)
   (hclosed₀ : hbClosed hb ops₀)
@@ -314,7 +308,7 @@ by
               grind
           have h_x_b : x ≠ b := by grind [IdNoDup]
           have hnotxltb : ¬ x ≤ b := by
-            grind
+            grind [List.mem_iff_append]
           rw [List.mem_iff_append] at h_mem_ops₀_last
           grind [hb_concurrent]
         subst h_ops₀_eq

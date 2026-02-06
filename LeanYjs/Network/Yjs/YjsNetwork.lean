@@ -112,31 +112,6 @@ structure YjsOperationNetwork A [DecidableEq A] extends OperationNetwork (YjsOpe
   histories_UniqueId : forall {e i} {array : YjsArray A}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
     interpHistory hist1 Operation.init = Except.ok array → YjsOperation.UniqueId e array
 
-theorem foldlM_foldr_effect_comp_eq {A} [DecidableEq A] (items : List (YjsOperation A)) (init : YjsArray A) :
-  List.foldlM (fun acc item => Operation.effect item acc) init items =
-  List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) init := by
-  induction items generalizing init with
-  | nil =>
-    simp
-    eq_refl
-  | cons item items ih =>
-    simp [effect_comp, bind, Except.bind]
-    generalize h_init' : Operation.effect item init = init' at *
-    cases init' with
-    | error err =>
-      simp
-    | ok state' =>
-      simp
-      rw [ih]
-
-theorem interpDeliveredMessages_foldr_effect_comp_eq : forall {A} [DecidableEq A] (items : List (YjsOperation A)),
-  interpOps items Operation.init =
-  List.foldr effect_comp (fun s => Except.ok s) (items.map (fun a => Operation.effect a)) YjsEmptyArray := by
-  intros A network items
-  simp [interpOps]
-  rw [<-foldlM_foldr_effect_comp_eq]
-  eq_refl
-
 theorem Subtype_eq_of_val {α : Type} {P : α → Prop} {x y : { a : α // P a }} : x.val = y.val → x = y := by
   intros h
   cases x; cases y
@@ -308,7 +283,7 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
           assumption
       | insert input =>
         simp at h_interp
-        generalize h_effect : effect (YjsOperation.insert input) init = state' at *
+        generalize h_effect : Operation.effect (YjsOperation.insert input) init = state' at *
         cases state' with
         | error err =>
           cases h_interp
@@ -317,7 +292,7 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
           apply ih h_interp at h_in_state
           cases h_in_state with
           | inl h_init_mem =>
-            simp [effect, Operation.effect, integrateValid] at h_effect
+            simp [Operation.effect, integrateValid] at h_effect
             have ⟨ item, hitem ⟩ : ∃item, input.toItem init.val = Except.ok item := by
               sorry
             have ⟨ _, h_insert ⟩ : ∃i, state'.val = init.val.insertIdxIfInBounds i item := by
@@ -579,7 +554,10 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
   --       simp [Operation.Error, Operation.effect, deleteValid, bind, Except.bind]
   --       apply deleteById_commutative
 
-theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsArray A),
+instance [DecidableEq A] {network : YjsOperationNetwork A} : MonotoneOperation (YjsOperation A) (hb := instCausalNetworkElemCausalOrder network.toCausalNetwork) YjsId where
+  isValidState_mono := by sorry
+
+theorem YjsOperationNetwork_converge' {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsArray A) :
   let hist_i := network.toDeliverMessages i
   let hist_j := network.toDeliverMessages j
   interpOps hist_i Operation.init = Except.ok res₀ →
@@ -587,7 +565,7 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : Yj
   (∀ item, item ∈ hist_i ↔ item ∈ hist_j) →
   res₀ = res₁
   := by
-  intros A _ network i j res₀ res₁ hist_i hist_j h_res₀ h_res₁ h_hist_mem
+  intros hist_i hist_j h_res₀ h_res₁ h_hist_mem
 
   subst hist_i hist_j
 
@@ -611,6 +589,8 @@ theorem YjsOperationNetwork_converge' : forall {A} [DecidableEq A] (network : Yj
     (network.toCausalNetwork.toDeliverMessages j)
     h_consistent_i
     h_consistent_j
+    (by sorry)
+    (by sorry)
     h_concurrent_commutative
     (by sorry)
     (by sorry)
