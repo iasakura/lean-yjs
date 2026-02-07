@@ -82,6 +82,15 @@ class Operation (A : Type) where
   init : State
   effect : A → State → Except Error State
   isValidState : A → State → Prop
+  StateInv : State → Prop := fun _ => True
+  stateInv_init : StateInv init := by trivial
+  stateInv_effect : ∀ (op : A) (s s' : State),
+    StateInv s →
+    isValidState op s →
+    effect op s = Except.ok s' →
+    StateInv s' := by
+      intro _ _ _ _ _ _
+      trivial
 
 def effect_list [Operation A] (ops : List A) (s : Operation.State A) :=
   foldlM (fun s op => Operation.effect op s) s ops
@@ -120,9 +129,66 @@ variable [WithId A S]  [Operation A]
 
 def concurrent_commutative (list : List A) : Prop :=
   ∀ a b (s s' : Operation.State A), a ∈ list → b ∈ list → hb_concurrent hb a b →
+    Operation.StateInv s →
     Operation.isValidState a s →
     Operation.isValidState b s →
     (Operation.effect a s >>= Operation.effect b) = Except.ok s' → (Operation.effect b s >>= Operation.effect a) = Except.ok s'
+
+theorem Except.bind_eq_ok_exist' {α β : Type} {e : Except α β} {f : β → Except α β'} {v : β'} :
+  e >>= f = Except.ok v →
+  ∃ u : β, e = Except.ok u ∧ f u = Except.ok v := by
+  intro h
+  cases e with
+  | error err =>
+    simp [bind, Except.bind] at h
+  | ok u =>
+    refine ⟨u, rfl, ?_⟩
+    exact h
+
+theorem effect_list_stateInv [MonotoneOperation A (hb := hb) S] :
+  ∀ {ops : List A} {s : Operation.State A},
+    hb_consistent hb ops →
+    hbClosed hb ops →
+    IdNoDup ops →
+    effect_list ops Operation.init = Except.ok s →
+    Operation.StateInv s := by
+  intro ops s h_consistent h_closed h_no_dup h_effect
+  induction ops using List.reverseRecOn generalizing s with
+  | nil =>
+    cases h_effect
+    exact Operation.stateInv_init (A := A)
+  | append_singleton ops a ih =>
+    have h_consistent_ops : hb_consistent hb ops := by
+      apply hb_consistent_sublist (hb := hb) h_consistent
+      grind
+    have h_closed_ops : hbClosed hb ops := by
+      intro x y l₁ l₂ h_eq h_lt
+      apply h_closed x y l₁ (l₂ ++ [a])
+      · simpa [List.append_assoc, h_eq]
+      · exact h_lt
+    have h_no_dup_ops : IdNoDup ops := by
+      grind [IdNoDup]
+    have h_effect' :
+      (do
+        let s ← effect_list ops Operation.init
+        let s ← Operation.effect a s
+        Except.ok s) = Except.ok s := by
+      simpa [effect_list_append] using h_effect
+    obtain ⟨ s_prev, h_prefix, h_last' ⟩ := Except.bind_eq_ok_exist' h_effect'
+    have h_last : Operation.effect a s_prev = Except.ok s := by
+      obtain ⟨ s_after, h_last_ok, h_last_eq ⟩ := Except.bind_eq_ok_exist' h_last'
+      have hs_after : s_after = s := by
+        simpa using h_last_eq
+      subst hs_after
+      exact h_last_ok
+    have h_stateInv_prev : Operation.StateInv s_prev :=
+      ih h_consistent_ops h_closed_ops h_no_dup_ops h_prefix
+    have h_valid_a : Operation.isValidState a s_prev := by
+      refine MonotoneOperation.isValidState_mono (hb := hb) (a := a) (s := s_prev)
+        (l := ops) ?_ h_consistent_ops h_closed_ops h_prefix h_no_dup_ops
+      intro x hx_lt
+      exact h_closed a x ops [] (by simp) hx_lt
+    exact Operation.stateInv_effect (A := A) a s_prev s h_stateInv_prev h_valid_a h_last
 
 @[grind .] theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
   hb_consistent hb (ops₀ ++ a :: ops₁) →
@@ -245,11 +311,19 @@ theorem hb_concurrent_effect_list_reorder [MonotoneOperation A (hb := hb) S] :
         simp; assumption
       grind [Except.bind_eq_ok_exist]
     obtain ⟨ u, h_effects_eq, h_effect_b_eq ⟩ := Except.bind_eq_ok_exist h
+    have h_stateInv_u : Operation.StateInv u := by
+      apply effect_list_stateInv (hb := hb) (S := S) (ops := ops₀)
+      · apply hb_consistent_sublist (hb := hb) h_consistent
+        grind
+      · grind [hbClosed]
+      · grind [IdNoDup]
+      · exact h_effects_eq
     have hba : (Operation.effect b u >>= Operation.effect a) = Except.ok s' := by
       apply h_comm a b u s'
       . simp
       . simp
       . grind [hb_concurrent_symm]
+      . exact h_stateInv_u
       . apply MonotoneOperation.isValidState_mono (hb := hb) (a := a) (s := u) _ _ _ h_effects_eq
         . grind [IdNoDup]
         . grind [hbClosed]
@@ -540,6 +614,13 @@ by
             simpa [effect_list_append] using h
           have h_closed_prefix : hbClosed hb (ops₀_first ++ ops₀_last) :=
             hbClosed_remove_concurrent (hb := hb) ops₀_first ops₀_last a b hclosed₀ h_a_concurrent_ops₀_last
+          have h_stateInv_s' : Operation.StateInv s' := by
+            apply effect_list_stateInv (hb := hb) (S := S) (ops := ops₀_first ++ ops₀_last)
+            · apply hb_consistent_sublist (hb := hb) h_consistent₀
+              grind
+            · exact h_closed_prefix
+            · grind [IdNoDup]
+            · exact h_eff
           have hab_swap : Operation.effect a s' >>= Operation.effect b = Except.ok s := by
             apply h_commutative b a s' s
             · simp
@@ -561,6 +642,7 @@ by
                   (ops₀ := ops₁) (ops₁ := []) (by simpa using h_consistent₁) a ha_mem
                 exact h
               exact And.intro h_not_b_le_a h_not_a_le_b
+            · exact h_stateInv_s'
             · -- isValidState b s'
               refine MonotoneOperation.isValidState_mono (hb := hb) (a := b) (s := s')
                 (l := ops₀_first ++ ops₀_last) ?_ ?_ ?_ h_eff ?_
