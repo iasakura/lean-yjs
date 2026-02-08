@@ -2,6 +2,7 @@ import LeanYjs.Item
 import LeanYjs.ClientId
 import LeanYjs.Order.ItemOrder
 import LeanYjs.Algorithm.Basic
+import Std.Tactic.Do
 
 variable {A: Type} [DecidableEq A]
 
@@ -113,6 +114,69 @@ def integrateSafe (newItem : IntegrateInput A) (arr : Array (YjsItem A)) : Excep
     integrate newItem arr
   else
     Except.error IntegrateError.error
+
+open Std.Do
+
+@[spec] theorem findPtrIdx_spec (p : YjsPtr A) (arr : Array (YjsItem A)) :
+    ⦃⌜True⌝⦄ findPtrIdx p arr ⦃post⟨fun idx => ⌜(-1 : Int) ≤ idx ∧ idx ≤ arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
+  mvcgen [findPtrIdx]
+  all_goals mleave
+  case vc1.h_1.h_1 =>
+    rename_i _ h_find
+    rw [Array.findIdx?_eq_some_iff_getElem] at h_find
+    obtain ⟨ h_lt, _, _ ⟩ := h_find
+    omega
+  case vc3.h_2 =>
+    constructor
+    · omega
+    · have h_nonneg : (0 : Int) ≤ arr.size := by exact_mod_cast (Nat.zero_le arr.size)
+      omega
+  case vc4.h_3 =>
+    constructor
+    · have h_nonneg : (0 : Int) ≤ arr.size := by exact_mod_cast (Nat.zero_le arr.size)
+      omega
+    · omega
+
+@[spec] theorem getElemExcept_spec (arr : Array (YjsItem A)) (idx : Nat) :
+    ⦃⌜True⌝⦄ getElemExcept arr idx
+    ⦃post⟨fun _ => ⌜idx < arr.size⌝, fun _ => ⌜arr.size ≤ idx⌝⟩⦄ := by
+  mvcgen [getElemExcept]
+  all_goals mleave
+  case vc1.h_1 =>
+    rename_i item h_some
+    obtain ⟨h_lt, _⟩ := (Array.getElem?_eq_some_iff.mp h_some)
+    exact h_lt
+  case vc2.h_2 =>
+    rename_i h_none
+    simp [wp]
+    simpa [Array.getElem?_eq_none_iff] using h_none
+
+theorem findIntegratedIndex_ok_le_size
+  (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : Array (YjsItem A)) (destIdx : Nat) :
+  (-1 : Int) ≤ leftIdx →
+  leftIdx < arr.size →
+  rightIdx ≤ arr.size →
+  findIntegratedIndex leftIdx rightIdx input arr = Except.ok destIdx →
+  destIdx ≤ arr.size := by
+  intro h_left_ge h_left_lt h_right_le h_ok
+  have hP : (match findIntegratedIndex leftIdx rightIdx input arr with
+      | Except.ok d => d ≤ arr.size
+      | Except.error _ => True) := by
+    apply (Except.of_wp (prog := findIntegratedIndex leftIdx rightIdx input arr)
+      (P := fun r => match r with
+        | Except.ok d => d ≤ arr.size
+        | Except.error _ => True))
+    mvcgen [findIntegratedIndex, findPtrIdx_spec, getElemExcept_spec]
+    case inv1 =>
+      exact post⟨fun ⟨xs, st⟩ => ⌜st.fst ≤ arr.size⌝, fun _ => ⌜True⌝⟩
+    all_goals mleave
+    case vc1.step =>
+      omega
+    all_goals try omega
+    case vc11.step.except.handle =>
+      intro
+      trivial
+  simpa [h_ok] using hP
 
 section Test
 

@@ -269,6 +269,292 @@ theorem IntegrateInput.toItem_id_eq {A : Type} [DecidableEq A]
           cases h
           rfl
 
+theorem Array.find?_deleteById_id {A : Type} [DecidableEq A]
+  (arr : Array (YjsItem A)) (targetId deletedId : YjsId) (item : YjsItem A) :
+  arr.find? (fun i => i.id = targetId) = some item →
+  (deleteById arr deletedId).find? (fun i => i.id = targetId) = some (deleteItemById item deletedId) := by
+  intro h_find
+  rw [Array.find?_eq_some_iff_getElem] at h_find ⊢
+  obtain ⟨ h_pred, idx, h_lt, h_eq, h_before ⟩ := h_find
+  refine ⟨ ?_, idx, ?_, ?_, ?_ ⟩
+  · simpa [deleteItemById_id_eq] using h_pred
+  · simpa [deleteById] using h_lt
+  · simpa [deleteById, h_eq]
+  · intro j hj
+    specialize h_before j hj
+    simpa [deleteById, deleteItemById_id_eq] using h_before
+
+def toItemDeleteTransform {A : Type} (item : YjsItem A) (deletedId : YjsId) : YjsItem A :=
+  YjsItem.mk (deletePtrById item.origin deletedId) (deletePtrById item.rightOrigin deletedId) item.id item.content false
+
+theorem IntegrateInput.toItem_deleteById_ok {A : Type} [DecidableEq A]
+  (input : IntegrateInput A) (arr : Array (YjsItem A)) (item : YjsItem A) (deletedId : YjsId) :
+  input.toItem arr = Except.ok item →
+  input.toItem (deleteById arr deletedId) = Except.ok (toItemDeleteTransform item deletedId) := by
+  intro h
+  unfold IntegrateInput.toItem at h ⊢
+  cases h_originId : input.originId with
+  | none =>
+    simp [h_originId] at h ⊢
+    cases h_rightOriginId : input.rightOriginId with
+    | none =>
+      simp [h_rightOriginId] at h ⊢
+      cases h
+      rfl
+    | some rid =>
+      simp [h_rightOriginId] at h ⊢
+      cases h_find : arr.find? (fun item_1 => item_1.id = rid) with
+      | none =>
+        simp [h_find] at h
+        cases h
+      | some rightItem =>
+        simp [h_find] at h
+        have h_find' :
+            (deleteById arr deletedId).find? (fun item_1 => item_1.id = rid) =
+              some (deleteItemById rightItem deletedId) := by
+          exact Array.find?_deleteById_id arr rid deletedId rightItem h_find
+        simp [h_find', bind, Except.bind]
+        cases h
+        simp [toItemDeleteTransform, deletePtrById]
+  | some oid =>
+    simp [h_originId] at h ⊢
+    cases h_find_origin : arr.find? (fun item_1 => item_1.id = oid) with
+    | none =>
+      simp [h_find_origin] at h
+      cases h
+    | some originItem =>
+      simp [h_find_origin] at h
+      cases h_rightOriginId : input.rightOriginId with
+      | none =>
+        simp [h_rightOriginId] at h ⊢
+        have h_find_origin' :
+            (deleteById arr deletedId).find? (fun item_1 => item_1.id = oid) =
+              some (deleteItemById originItem deletedId) := by
+          exact Array.find?_deleteById_id arr oid deletedId originItem h_find_origin
+        simp [h_find_origin', bind, Except.bind]
+        cases h
+        simp [toItemDeleteTransform, deletePtrById]
+      | some rid =>
+        simp [h_rightOriginId] at h ⊢
+        cases h_find_right : arr.find? (fun item_1 => item_1.id = rid) with
+        | none =>
+          simp [h_find_right] at h
+          cases h
+        | some rightItem =>
+          simp [h_find_right] at h
+          have h_find_origin' :
+              (deleteById arr deletedId).find? (fun item_1 => item_1.id = oid) =
+                some (deleteItemById originItem deletedId) := by
+            exact Array.find?_deleteById_id arr oid deletedId originItem h_find_origin
+          have h_find_right' :
+              (deleteById arr deletedId).find? (fun item_1 => item_1.id = rid) =
+                some (deleteItemById rightItem deletedId) := by
+            exact Array.find?_deleteById_id arr rid deletedId rightItem h_find_right
+          simp [h_find_origin', h_find_right', bind, Except.bind]
+          cases h
+          simp [toItemDeleteTransform, deletePtrById]
+
+mutual
+def eraseDeletedPtr {A : Type} : YjsPtr A → YjsPtr A
+  | YjsPtr.itemPtr item => YjsPtr.itemPtr (eraseDeletedItem item)
+  | YjsPtr.first => YjsPtr.first
+  | YjsPtr.last => YjsPtr.last
+
+def eraseDeletedItem {A : Type} : YjsItem A → YjsItem A
+  | YjsItem.mk origin rightOrigin id content _ =>
+      YjsItem.mk (eraseDeletedPtr origin) (eraseDeletedPtr rightOrigin) id content false
+end
+
+def ItemEqIgnoreDeleted {A : Type} (a b : YjsItem A) : Prop :=
+  eraseDeletedItem a = eraseDeletedItem b
+
+infix:50 " ~ " => ItemEqIgnoreDeleted
+
+def StateEqIgnoreDeleted {A : Type} (s s' : Array (YjsItem A)) : Prop :=
+  ∀ a, a ∈ s → ∃ a', a ~ a' ∧ a' ∈ s'
+
+theorem ItemEqIgnoreDeleted.id_eq {A : Type} {a b : YjsItem A} :
+  a ~ b → a.id = b.id := by
+  intro h_rel
+  cases a with
+  | mk o r id c d =>
+    cases b with
+    | mk o' r' id' c' d' =>
+      simp [ItemEqIgnoreDeleted, eraseDeletedItem, eraseDeletedPtr] at h_rel
+      simpa [h_rel.2.2.1]
+
+theorem ItemEqIgnoreDeleted.content_eq {A : Type} {a b : YjsItem A} :
+  a ~ b → a.content = b.content := by
+  intro h_rel
+  cases a with
+  | mk o r id c d =>
+    cases b with
+    | mk o' r' id' c' d' =>
+      simp [ItemEqIgnoreDeleted, eraseDeletedItem, eraseDeletedPtr] at h_rel
+      simpa [h_rel.2.2.2]
+
+mutual
+theorem eraseDeletedPtr_deletePtrById_eq {A : Type} [DecidableEq A] (ptr : YjsPtr A) (deletedId : YjsId) :
+  eraseDeletedPtr (deletePtrById ptr deletedId) = eraseDeletedPtr ptr := by
+  cases ptr with
+  | first =>
+    simp [eraseDeletedPtr, deletePtrById]
+  | last =>
+    simp [eraseDeletedPtr, deletePtrById]
+  | itemPtr item =>
+    exact congrArg YjsPtr.itemPtr (eraseDeletedItem_deleteItemById_eq (item := item) deletedId)
+
+theorem eraseDeletedItem_deleteItemById_eq {A : Type} [DecidableEq A] (item : YjsItem A) (deletedId : YjsId) :
+  eraseDeletedItem (deleteItemById item deletedId) = eraseDeletedItem item := by
+  obtain ⟨ o, r, iid, c, d ⟩ := item
+  by_cases hid : iid = deletedId
+  · simp [eraseDeletedItem, deleteItemById, deletePtrById, eraseDeletedPtr_deletePtrById_eq, hid]
+  · simp [eraseDeletedItem, deleteItemById, deletePtrById, eraseDeletedPtr_deletePtrById_eq, hid]
+end
+
+theorem ItemEqIgnoreDeleted_deleteItemById {A : Type} [DecidableEq A] (item : YjsItem A) (deletedId : YjsId) :
+  item ~ deleteItemById item deletedId := by
+  unfold ItemEqIgnoreDeleted
+  simpa [eraseDeletedItem_deleteItemById_eq]
+
+theorem StateEqIgnoreDeleted_deleteById {A : Type} [DecidableEq A] (s : Array (YjsItem A)) (deletedId : YjsId) :
+  StateEqIgnoreDeleted s (deleteById s deletedId) := by
+  intro a h_mem
+  refine ⟨ deleteItemById a deletedId, ?_, ?_ ⟩
+  · exact ItemEqIgnoreDeleted_deleteItemById a deletedId
+  · simpa [deleteById] using (Array.mem_map.mpr ⟨ a, h_mem, rfl ⟩)
+
+theorem stateEqIgnoreDeleted_find?_id_some {A : Type} [DecidableEq A]
+  (s s' : Array (YjsItem A))
+  (h_rel : StateEqIgnoreDeleted s s')
+  (h_unique' : uniqueId s'.toList)
+  (targetId : YjsId)
+  (item : YjsItem A) :
+  s.find? (fun i => i.id = targetId) = some item →
+  ∃ item', s'.find? (fun i => i.id = targetId) = some item' ∧ item ~ item' := by
+  intro h_find
+  rw [Array.find?_eq_some_iff_getElem] at h_find
+  obtain ⟨ h_pred, idx, h_lt, h_eq, h_before ⟩ := h_find
+  have h_item_id : item.id = targetId := by simpa using h_pred
+  have h_item_mem : item ∈ s := by
+    exact Array.mem_of_getElem h_eq
+  obtain ⟨ itemCand, h_item_rel, h_itemCand_mem ⟩ := h_rel item h_item_mem
+  have h_itemCand_id : itemCand.id = targetId := by
+    calc
+      itemCand.id = item.id := (ItemEqIgnoreDeleted.id_eq h_item_rel).symm
+      _ = targetId := h_item_id
+  have h_not_none : s'.find? (fun i => i.id = targetId) ≠ none := by
+    intro h_none
+    rw [Array.find?_eq_none] at h_none
+    have h_false := h_none itemCand h_itemCand_mem
+    simp [h_itemCand_id] at h_false
+  cases h_find' : s'.find? (fun i => i.id = targetId) with
+  | none =>
+    cases h_not_none h_find'
+  | some item' =>
+    have h_item'_mem : item' ∈ s' := Array.mem_of_find?_eq_some h_find'
+    have h_find'_some := h_find'
+    rw [Array.find?_eq_some_iff_getElem] at h_find'
+    obtain ⟨ h_pred', _, _, _, _ ⟩ := h_find'
+    have h_item'_id : item'.id = targetId := by simpa using h_pred'
+    have h_item'_eq_itemCand : item' = itemCand := by
+      apply uniqueId_id_eq_implies_eq (arr := s') h_unique'
+      · exact h_item'_mem
+      · exact h_itemCand_mem
+      · exact h_item'_id.trans h_itemCand_id.symm
+    have h_rel' : item ~ item' := by simpa [h_item'_eq_itemCand] using h_item_rel
+    exact ⟨ item', by simpa using h_find'_some, h_rel' ⟩
+
+theorem exists_find?_eq_some_of_exists_mem_id {A : Type} [DecidableEq A]
+  (arr : Array (YjsItem A)) (targetId : YjsId) :
+  (∃ item, item ∈ arr ∧ item.id = targetId) →
+  ∃ item, arr.find? (fun i => i.id = targetId) = some item := by
+  intro h_exists
+  by_cases h_none : arr.find? (fun i => i.id = targetId) = none
+  · rw [Array.find?_eq_none] at h_none
+    obtain ⟨ item, h_mem, h_id ⟩ := h_exists
+    have h_false := h_none item h_mem
+    simp [h_id] at h_false
+  · cases h_find : arr.find? (fun i => i.id = targetId) with
+    | none =>
+      contradiction
+    | some item =>
+      exact ⟨ item, rfl ⟩
+
+theorem IntegrateInput.toItem_exists_eqIgnoreDeleted {A : Type} [DecidableEq A]
+  (input : IntegrateInput A)
+  (s s' : Array (YjsItem A))
+  (h_rel : StateEqIgnoreDeleted s s')
+  (h_unique' : uniqueId s'.toList)
+  (item : YjsItem A) :
+  input.toItem s = Except.ok item →
+  ∃ item', input.toItem s' = Except.ok item' ∧ item ~ item' := by
+  intro h_toItem
+  unfold IntegrateInput.toItem at h_toItem ⊢
+  cases h_originId : input.originId with
+  | none =>
+    simp [h_originId] at h_toItem ⊢
+    cases h_rightOriginId : input.rightOriginId with
+    | none =>
+      simp [h_rightOriginId] at h_toItem ⊢
+      cases h_toItem
+      refine ⟨ YjsItem.mk YjsPtr.first YjsPtr.last input.id input.content false, ?_, ?_ ⟩
+      · simp [h_originId, h_rightOriginId, bind, Except.bind]
+      · simp [ItemEqIgnoreDeleted, eraseDeletedItem, eraseDeletedPtr]
+    | some rid =>
+      simp [h_rightOriginId] at h_toItem ⊢
+      cases h_find_right : s.find? (fun item_1 => item_1.id = rid) with
+      | none =>
+        have h_contra : (Except.error IntegrateError.error : Except IntegrateError (YjsItem A)) = Except.ok item := by
+          simpa [h_originId, h_rightOriginId, h_find_right, bind, Except.bind] using h_toItem
+        cases h_contra
+      | some rightItem =>
+        simp [h_find_right] at h_toItem
+        obtain ⟨ rightItem', h_find_right', h_right_rel ⟩ :=
+          stateEqIgnoreDeleted_find?_id_some s s' h_rel h_unique' rid rightItem h_find_right
+        refine ⟨ YjsItem.mk YjsPtr.first (YjsPtr.itemPtr rightItem') input.id input.content false, ?_, ?_ ⟩
+        · simp [h_originId, h_rightOriginId, h_find_right', bind, Except.bind]
+        · cases h_toItem
+          unfold ItemEqIgnoreDeleted
+          simpa [eraseDeletedItem, eraseDeletedPtr] using h_right_rel
+  | some oid =>
+    simp [h_originId] at h_toItem ⊢
+    cases h_find_origin : s.find? (fun item_1 => item_1.id = oid) with
+    | none =>
+      have h_contra : (Except.error IntegrateError.error : Except IntegrateError (YjsItem A)) = Except.ok item := by
+        simpa [h_originId, h_find_origin, bind, Except.bind] using h_toItem
+      cases h_contra
+    | some originItem =>
+      simp [h_find_origin] at h_toItem
+      obtain ⟨ originItem', h_find_origin', h_origin_rel ⟩ :=
+        stateEqIgnoreDeleted_find?_id_some s s' h_rel h_unique' oid originItem h_find_origin
+      cases h_rightOriginId : input.rightOriginId with
+      | none =>
+        simp [h_rightOriginId] at h_toItem ⊢
+        refine ⟨ YjsItem.mk (YjsPtr.itemPtr originItem') YjsPtr.last input.id input.content false, ?_, ?_ ⟩
+        · simp [h_originId, h_rightOriginId, h_find_origin', bind, Except.bind]
+        · cases h_toItem
+          unfold ItemEqIgnoreDeleted
+          simpa [eraseDeletedItem, eraseDeletedPtr] using h_origin_rel
+      | some rid =>
+        simp [h_rightOriginId] at h_toItem ⊢
+        cases h_find_right : s.find? (fun item_1 => item_1.id = rid) with
+        | none =>
+          have h_contra : (Except.error IntegrateError.error : Except IntegrateError (YjsItem A)) = Except.ok item := by
+            simpa [h_originId, h_find_origin, h_rightOriginId, h_find_right, bind, Except.bind] using h_toItem
+          cases h_contra
+        | some rightItem =>
+          simp [h_find_right] at h_toItem
+          obtain ⟨ rightItem', h_find_right', h_right_rel ⟩ :=
+            stateEqIgnoreDeleted_find?_id_some s s' h_rel h_unique' rid rightItem h_find_right
+          refine ⟨
+              YjsItem.mk (YjsPtr.itemPtr originItem') (YjsPtr.itemPtr rightItem') input.id input.content false,
+              ?_, ?_ ⟩
+          · simp [h_originId, h_rightOriginId, h_find_origin', h_find_right', bind, Except.bind]
+          · cases h_toItem
+            unfold ItemEqIgnoreDeleted
+            simpa [eraseDeletedItem, eraseDeletedPtr] using And.intro h_origin_rel h_right_rel
+
 theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation A))} {state init : Operation.State (YjsOperation A)} {x : YjsItem A}:
   interpHistory items init = Except.ok state →
   ArrSet state.toList x →
@@ -354,6 +640,32 @@ theorem interpOps_ArrSet {A} [DecidableEq A] {items : List (Event (YjsOperation 
             right; use y
             simp; constructor; assumption
             right; assumption
+
+theorem interpHistory_find?_exists_deliver_insert {A : Type} [DecidableEq A]
+  {pre : List (Event (YjsOperation A))}
+  {state : Array (YjsItem A)}
+  {id : YjsId}
+  {item : YjsItem A} :
+  interpHistory pre Operation.init = Except.ok state →
+  state.find? (fun i => i.id = id) = some item →
+  ∃ input, Event.Deliver (YjsOperation.insert input) ∈ pre ∧ input.id = id := by
+  intro h_interp h_find
+  have h_item_mem : item ∈ state := Array.mem_of_find?_eq_some h_find
+  have h_ptr_in : ArrSet state.toList (YjsPtr.itemPtr item) := by
+    simpa [ArrSet] using h_item_mem
+  have h_from_interp := interpOps_ArrSet (A := A) (items := pre)
+    (state := state) (init := Operation.init) (x := item) h_interp h_ptr_in
+  cases h_from_interp with
+  | inl h_in_init =>
+    obtain ⟨ y, h_y_init, h_y_id ⟩ := h_in_init
+    simp [ArrSet, Operation.init, YjsEmptyArray] at h_y_init
+  | inr h_in_pre =>
+    obtain ⟨ input, h_input_id, h_input_mem ⟩ := h_in_pre
+    have h_item_id : item.id = id := by
+      rw [Array.find?_eq_some_iff_getElem] at h_find
+      simpa using h_find.1
+    refine ⟨ input, h_input_mem, ?_ ⟩
+    exact h_input_id.trans h_item_id
 
 def IsStateAt {A M} [DecidableEq A] [Operation A] [DecidableEq M] [Message A M] [ValidMessage A] {network : OperationNetwork A} (a : A) (arr : Operation.State A) : Prop :=
   ∃i hist1 hist2, network.histories i = hist1 ++ [Event.Broadcast a] ++ hist2 ∧
@@ -553,6 +865,161 @@ theorem hb_concurrent_diff_id {A : Type} [inst : DecidableEq A]
   simp at *
   subst a b
   apply same_history_not_hb_concurrent h_a'_mem_hist h_b'_mem_hist h_a_b_happens_before
+
+theorem deleteItemById_isValid {A : Type} [DecidableEq A] (item : YjsItem A) (id : YjsId) :
+  item.isValid →
+  (deleteItemById item id).isValid := by
+  obtain ⟨ o, r, iid, c, d ⟩ := item
+  intro h_valid
+  rcases h_valid with ⟨ h_lt, h_reach ⟩
+  by_cases hid : iid = id
+  · constructor
+    · simpa [deleteItemById, hid] using (deletePtrById_YjsLt' o r id h_lt)
+    · intro x h_reach_del
+      have h_del_item :
+          deletePtrById (YjsPtr.itemPtr (YjsItem.mk o r iid c d)) id =
+            YjsPtr.itemPtr (deleteItemById (YjsItem.mk o r iid c d) id) := by
+        simp [deletePtrById]
+      rw [←h_del_item] at h_reach_del
+      obtain ⟨ z, h_reach_orig, h_z_def ⟩ :=
+        deletePtrById_OriginReachable (x := YjsPtr.itemPtr (YjsItem.mk o r iid c d)) (y := x) (id := id) h_reach_del
+      have h_orig := h_reach z h_reach_orig
+      cases h_orig with
+      | inl h_le =>
+        left
+        rw [←h_z_def]
+        simpa [deleteItemById, hid] using (deletePtrById_YjsLeq' z o id h_le)
+      | inr h_le =>
+        right
+        rw [←h_z_def]
+        simpa [deleteItemById, hid] using (deletePtrById_YjsLeq' r z id h_le)
+  · constructor
+    · simpa [deleteItemById, hid] using (deletePtrById_YjsLt' o r id h_lt)
+    · intro x h_reach_del
+      have h_del_item :
+          deletePtrById (YjsPtr.itemPtr (YjsItem.mk o r iid c d)) id =
+            YjsPtr.itemPtr (deleteItemById (YjsItem.mk o r iid c d) id) := by
+        simp [deletePtrById]
+      rw [←h_del_item] at h_reach_del
+      obtain ⟨ z, h_reach_orig, h_z_def ⟩ :=
+        deletePtrById_OriginReachable (x := YjsPtr.itemPtr (YjsItem.mk o r iid c d)) (y := x) (id := id) h_reach_del
+      have h_orig := h_reach z h_reach_orig
+      cases h_orig with
+      | inl h_le =>
+        left
+        rw [←h_z_def]
+        simpa [deleteItemById, hid] using (deletePtrById_YjsLeq' z o id h_le)
+      | inr h_le =>
+        right
+        rw [←h_z_def]
+        simpa [deleteItemById, hid] using (deletePtrById_YjsLeq' r z id h_le)
+
+theorem OriginReachable_root_deleted_irrel {A : Type}
+  (o r : YjsPtr A) (id : YjsId) (c : A) (d₁ d₂ : Bool) (x : YjsPtr A) :
+  OriginReachable (YjsPtr.itemPtr (YjsItem.mk o r id c d₂)) x →
+  OriginReachable (YjsPtr.itemPtr (YjsItem.mk o r id c d₁)) x := by
+  intro h_reach
+  cases h_reach with
+  | reachable_single _ _ h_step =>
+    cases h_step with
+    | reachable _ _ _ _ _ =>
+      exact OriginReachable.reachable_single _ _ (OriginReachableStep.reachable o r id c d₁)
+    | reachable_right _ _ _ _ _ =>
+      exact OriginReachable.reachable_single _ _ (OriginReachableStep.reachable_right o r id c d₁)
+  | reachable_head _ _ _ h_step h_tail =>
+    cases h_step with
+    | reachable _ _ _ _ _ =>
+      exact OriginReachable.reachable_head _ _ _ (OriginReachableStep.reachable o r id c d₁) h_tail
+    | reachable_right _ _ _ _ _ =>
+      exact OriginReachable.reachable_head _ _ _ (OriginReachableStep.reachable_right o r id c d₁) h_tail
+
+theorem YjsItem.isValid_root_deleted_irrel {A : Type} [DecidableEq A]
+  (o r : YjsPtr A) (id : YjsId) (c : A) (d₁ d₂ : Bool) :
+  (YjsItem.mk o r id c d₁).isValid →
+  (YjsItem.mk o r id c d₂).isValid := by
+  intro h_valid
+  rcases h_valid with ⟨ h_lt, h_reach ⟩
+  constructor
+  · exact h_lt
+  · intro x h_reach₂
+    have h_reach₁ :
+        OriginReachable (YjsPtr.itemPtr (YjsItem.mk o r id c d₁)) x := by
+      exact OriginReachable_root_deleted_irrel o r id c d₁ d₂ x h_reach₂
+    exact h_reach x h_reach₁
+
+theorem IntegrateInput.toItem_deleteById_valid {A : Type} [DecidableEq A]
+  (input : IntegrateInput A) (arr : Array (YjsItem A)) (item : YjsItem A) (deletedId : YjsId) :
+  input.toItem arr = Except.ok item →
+  item.isValid →
+  ∃ item', input.toItem (deleteById arr deletedId) = Except.ok item' ∧ item'.isValid := by
+  intro h_toItem h_valid
+  refine ⟨ toItemDeleteTransform item deletedId, ?_, ?_ ⟩
+  · exact IntegrateInput.toItem_deleteById_ok input arr item deletedId h_toItem
+  · have h_del_valid : (deleteItemById item deletedId).isValid :=
+      deleteItemById_isValid item deletedId h_valid
+    obtain ⟨ o, r, iid, c, d ⟩ := item
+    by_cases hid : iid = deletedId
+    · have h_eq_del :
+        deleteItemById (YjsItem.mk o r iid c d) deletedId =
+          YjsItem.mk (deletePtrById o deletedId) (deletePtrById r deletedId) iid c true := by
+        simp [deleteItemById, hid]
+      have h_eq_target :
+        toItemDeleteTransform (YjsItem.mk o r iid c d) deletedId =
+          YjsItem.mk (deletePtrById o deletedId) (deletePtrById r deletedId) iid c false := by
+        simp [toItemDeleteTransform]
+      rw [h_eq_del] at h_del_valid
+      rw [h_eq_target]
+      exact YjsItem.isValid_root_deleted_irrel
+        (deletePtrById o deletedId) (deletePtrById r deletedId) iid c true false h_del_valid
+    · have h_item_deleted_false : d = false := by
+        unfold IntegrateInput.toItem at h_toItem
+        cases h_originId : input.originId with
+        | none =>
+          simp [h_originId] at h_toItem
+          cases h_rightOriginId : input.rightOriginId with
+          | none =>
+            simp [h_rightOriginId] at h_toItem
+            cases h_toItem
+            rfl
+          | some rid =>
+            simp [h_rightOriginId] at h_toItem
+            cases h_find : arr.find? (fun item_1 => item_1.id = rid) with
+            | none =>
+              simp [h_find] at h_toItem
+              cases h_toItem
+            | some rightItem =>
+              simp [h_find] at h_toItem
+              cases h_toItem
+              rfl
+        | some oid =>
+          simp [h_originId] at h_toItem
+          cases h_find_origin : arr.find? (fun item_1 => item_1.id = oid) with
+          | none =>
+            simp [h_find_origin] at h_toItem
+            cases h_toItem
+          | some originItem =>
+            simp [h_find_origin] at h_toItem
+            cases h_rightOriginId : input.rightOriginId with
+            | none =>
+              simp [h_rightOriginId] at h_toItem
+              cases h_toItem
+              rfl
+            | some rid =>
+              simp [h_rightOriginId] at h_toItem
+              cases h_find_right : arr.find? (fun item_1 => item_1.id = rid) with
+              | none =>
+                simp [h_find_right] at h_toItem
+                cases h_toItem
+              | some rightItem =>
+                simp [h_find_right] at h_toItem
+                cases h_toItem
+                rfl
+      have h_eq_target :
+        toItemDeleteTransform (YjsItem.mk o r iid c d) deletedId =
+          deleteItemById (YjsItem.mk o r iid c d) deletedId := by
+        simp [toItemDeleteTransform, deleteItemById, hid, h_item_deleted_false]
+      rw [h_eq_target]
+      exact h_del_valid
 
 theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network : YjsOperationNetwork A) (i : ClientId) :
   concurrent_commutative (hb := instCausalNetworkElemCausalOrder network.toCausalNetwork) (network.toCausalNetwork.toDeliverMessages i) := by
@@ -871,8 +1338,334 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
   --       simp [Operation.Error, Operation.effect, deleteValid, bind, Except.bind]
   --       apply deleteById_commutative
 
+theorem pre_broadcast_lt_insert {A : Type} [DecidableEq A]
+  {network : YjsOperationNetwork A}
+  {i : ClientId}
+  {pre post : List (Event (YjsOperation A))}
+  {x input : IntegrateInput A} :
+  network.histories i = pre ++ Event.Broadcast (YjsOperation.insert input) :: post →
+  Event.Broadcast (YjsOperation.insert x) ∈ pre →
+  (instCausalNetworkElemCausalOrder network.toCausalNetwork).lt
+    (YjsOperation.insert x) (YjsOperation.insert input) := by
+  intro h_hist h_mem
+  rw [List.mem_iff_append] at h_mem
+  obtain ⟨ l1, l2, h_pre ⟩ := h_mem
+  subst h_pre
+  have h_local : locallyOrdered network.toNodeHistories i
+      (Event.Broadcast (YjsOperation.insert x))
+      (Event.Broadcast (YjsOperation.insert input)) := by
+    refine ⟨ l1, l2, post, ?_ ⟩
+    simpa [h_hist, List.append_assoc]
+  exact HappensBefore.broadcast_broadcast_local h_local
+
+theorem pre_deliver_lt_insert {A : Type} [DecidableEq A]
+  {network : YjsOperationNetwork A}
+  {i : ClientId}
+  {pre post : List (Event (YjsOperation A))}
+  {x input : IntegrateInput A} :
+  network.histories i = pre ++ Event.Broadcast (YjsOperation.insert input) :: post →
+  Event.Deliver (YjsOperation.insert x) ∈ pre →
+  (instCausalNetworkElemCausalOrder network.toCausalNetwork).lt
+    (YjsOperation.insert x) (YjsOperation.insert input) := by
+  intro h_hist h_mem
+  rw [List.mem_iff_append] at h_mem
+  obtain ⟨ l1, l2, h_pre ⟩ := h_mem
+  subst h_pre
+  have h_local : locallyOrdered network.toNodeHistories i
+      (Event.Deliver (YjsOperation.insert x))
+      (Event.Broadcast (YjsOperation.insert input)) := by
+    refine ⟨ l1, l2, post, ?_ ⟩
+    simpa [h_hist, List.append_assoc]
+  exact HappensBefore.broadcast_deliver_local h_local
+
+theorem findLeftIdx_ok_ge_minus_one {A : Type} [DecidableEq A]
+  {originId : Option YjsId} {arr : Array (YjsItem A)} {leftIdx : Int} :
+  findLeftIdx originId arr = Except.ok leftIdx →
+  (-1 : Int) ≤ leftIdx := by
+  intro h
+  cases h_originId : originId with
+  | none =>
+    simp [findLeftIdx, h_originId] at h
+    cases h
+    simp
+  | some oid =>
+    simp [findLeftIdx, h_originId] at h
+    cases h_find : arr.findIdx? (fun item => item.id = oid) with
+    | none =>
+      simp [h_find] at h
+    | some idx =>
+      simp [h_find] at h
+      cases h
+      omega
+
+theorem findRightIdx_ok_le_size {A : Type} [DecidableEq A]
+  {rightOriginId : Option YjsId} {arr : Array (YjsItem A)} {rightIdx : Int} :
+  findRightIdx rightOriginId arr = Except.ok rightIdx →
+  rightIdx ≤ arr.size := by
+  intro h
+  cases h_rightOriginId : rightOriginId with
+  | none =>
+    simp [findRightIdx, h_rightOriginId] at h
+    cases h
+    simp
+  | some oid =>
+    simp [findRightIdx, h_rightOriginId] at h
+    cases h_find : arr.findIdx? (fun item => item.id = oid) with
+    | none =>
+      simp [h_find] at h
+    | some idx =>
+      simp [h_find] at h
+      cases h
+      rw [Array.findIdx?_eq_some_iff_getElem] at h_find
+      obtain ⟨ h_lt, _, _ ⟩ := h_find
+      omega
+
+theorem findLeftIdx_ok_lt_size {A : Type} [DecidableEq A]
+  {originId : Option YjsId} {arr : Array (YjsItem A)} {leftIdx : Int} :
+  findLeftIdx originId arr = Except.ok leftIdx →
+  leftIdx < arr.size := by
+  intro h
+  cases h_originId : originId with
+  | none =>
+    simp [findLeftIdx, h_originId] at h
+    cases h
+    omega
+  | some oid =>
+    simp [findLeftIdx, h_originId] at h
+    cases h_find : arr.findIdx? (fun item => item.id = oid) with
+    | none =>
+      simp [h_find] at h
+    | some idx =>
+      simp [h_find] at h
+      cases h
+      rw [Array.findIdx?_eq_some_iff_getElem] at h_find
+      obtain ⟨ h_lt, _, _ ⟩ := h_find
+      omega
+
+theorem integrateValid_inserts_id {A : Type} [DecidableEq A]
+  (input : IntegrateInput A) (arr arr' : Array (YjsItem A)) :
+  integrateValid input arr = Except.ok arr' →
+  ∃ item, item.id = input.id ∧ item ∈ arr' := by
+  intro h_ok
+  have h_integrate : integrate input arr = Except.ok arr' := by
+    unfold integrateValid at h_ok
+    simp [integrateSafe] at h_ok
+    split at h_ok
+    · exact h_ok
+    · simp at h_ok
+  unfold integrate at h_integrate
+  obtain ⟨ leftIdx, h_left, h1 ⟩ := Except.bind_eq_ok_exist h_integrate
+  obtain ⟨ rightIdx, h_right, h2 ⟩ := Except.bind_eq_ok_exist h1
+  obtain ⟨ destIdx, h_dest, h3 ⟩ := Except.bind_eq_ok_exist h2
+  obtain ⟨ item, h_item, h4 ⟩ := Except.bind_eq_ok_exist h3
+  have h_arr'_eq : arr' = arr.insertIdxIfInBounds destIdx item := by
+    cases h4
+    rfl
+  have h_item_id : item.id = input.id := by
+    cases hleft : getPtrExcept arr leftIdx with
+    | error err =>
+      simp [mkItemByIndex, hleft] at h_item
+      cases h_item
+    | ok leftPtr =>
+      cases hright : getPtrExcept arr rightIdx with
+      | error err =>
+        simp [mkItemByIndex, hleft, hright] at h_item
+        cases h_item
+      | ok rightPtr =>
+        have h_item_eq := h_item
+        rw [mkItemByIndex, hleft, hright] at h_item_eq
+        simp [bind, Except.bind] at h_item_eq
+        have h_item_def : item = YjsItem.mk leftPtr rightPtr input.id input.content false := by
+          cases h_item_eq
+          rfl
+        simpa [h_item_def]
+  have h_left_ge : (-1 : Int) ≤ leftIdx := findLeftIdx_ok_ge_minus_one h_left
+  have h_right_le : rightIdx ≤ arr.size := findRightIdx_ok_le_size h_right
+  have h_left_lt : leftIdx < arr.size := findLeftIdx_ok_lt_size h_left
+  have h_dest_le : destIdx ≤ arr.size := by
+    exact findIntegratedIndex_ok_le_size leftIdx rightIdx input arr destIdx
+      h_left_ge h_left_lt h_right_le h_dest
+  refine ⟨ item, h_item_id, ?_ ⟩
+  rw [h_arr'_eq]
+  simp [Array.insertIdxIfInBounds, h_dest_le]
+  exact (Array.mem_insertIdx (a := item) (b := item) (xs := arr) (h := h_dest_le)).2 (Or.inl rfl)
+
+theorem effect_preserves_id_exists {A : Type} [DecidableEq A]
+  (op : YjsOperation A) (s s' : Array (YjsItem A)) (targetId : YjsId) :
+  Operation.effect op s = Except.ok s' →
+  (∃ item, item ∈ s ∧ item.id = targetId) →
+  (∃ item', item' ∈ s' ∧ item'.id = targetId) := by
+  intro h_eff h_exists
+  cases op with
+  | delete id deletedId =>
+    simp [Operation.effect, deleteValid] at h_eff
+    subst h_eff
+    obtain ⟨ item, h_mem, h_id ⟩ := h_exists
+    refine ⟨ deleteItemById item deletedId, ?_, ?_ ⟩
+    · simpa [deleteById] using (Array.mem_map.mpr ⟨ item, h_mem, rfl ⟩)
+    · simpa [deleteItemById_id_eq] using h_id
+  | insert input =>
+    simp [Operation.effect] at h_eff
+    obtain ⟨ item0, h_mem0, h_id0 ⟩ := h_exists
+    obtain ⟨ i, newItem, h_new_id, h_s' ⟩ :=
+      integrateValid_exists_insertIdxIfBounds (init := s) (input := input) (state' := s') h_eff
+    refine ⟨ item0, ?_, h_id0 ⟩
+    rw [h_s']
+    simp [Array.insertIdxIfInBounds]
+    split
+    · exact (Array.mem_insertIdx (a := item0) (b := newItem) (xs := s) (h := by assumption)).2 (Or.inr h_mem0)
+    · simpa [*] using h_mem0
+
+theorem effect_list_preserves_id_exists {A : Type} [DecidableEq A]
+  (ops : List (YjsOperation A)) (s0 s : Array (YjsItem A)) (targetId : YjsId) :
+  effect_list ops s0 = Except.ok s →
+  (∃ item, item ∈ s0 ∧ item.id = targetId) →
+  (∃ item', item' ∈ s ∧ item'.id = targetId) := by
+  intro h_eff h_exists
+  induction ops generalizing s0 s with
+  | nil =>
+    simp at h_eff
+    subst h_eff
+    simpa using h_exists
+  | cons op ops ih =>
+    simp [effect_list] at h_eff
+    obtain ⟨ s1, h_op, h_tail ⟩ := Except.bind_eq_ok_exist h_eff
+    have h_exists1 := effect_preserves_id_exists op s0 s1 targetId h_op h_exists
+    exact ih (s0 := s1) (s := s) h_tail h_exists1
+
+theorem effect_list_insert_mem_implies_id_exists_from_state {A : Type} [DecidableEq A]
+  (ops : List (YjsOperation A)) (s0 s : Array (YjsItem A)) (input : IntegrateInput A) :
+  effect_list ops s0 = Except.ok s →
+  ((∃ item0, item0 ∈ s0 ∧ item0.id = input.id) ∨ YjsOperation.insert input ∈ ops) →
+  ∃ item, item ∈ s ∧ item.id = input.id := by
+  intro h_eff h_seed
+  induction ops generalizing s0 s with
+  | nil =>
+    simp [effect_list] at h_eff
+    have hs : s0 = s := by
+      cases h_eff
+      rfl
+    subst s
+    cases h_seed with
+    | inl h_exists =>
+      simpa using h_exists
+    | inr h_mem =>
+      cases h_mem
+  | cons op ops ih =>
+    simp [effect_list] at h_eff
+    obtain ⟨ s1, h_op, h_tail ⟩ := Except.bind_eq_ok_exist h_eff
+    cases h_seed with
+    | inl h_exists =>
+      have h_exists1 := effect_preserves_id_exists op s0 s1 input.id h_op h_exists
+      exact ih (s0 := s1) (s := s) h_tail (Or.inl h_exists1)
+    | inr h_mem =>
+      simp at h_mem
+      cases h_mem with
+      | inl h_eq =>
+        subst h_eq
+        simp [Operation.effect] at h_op
+        obtain ⟨ item1, h_item1_id, h_item1_mem ⟩ :=
+          integrateValid_inserts_id (input := input) (arr := s0) (arr' := s1) h_op
+        exact ih (s0 := s1) (s := s) h_tail (Or.inl ⟨ item1, h_item1_mem, h_item1_id ⟩)
+      | inr h_mem_tail =>
+        exact ih (s0 := s1) (s := s) h_tail (Or.inr h_mem_tail)
+
+theorem effect_list_insert_mem_implies_id_exists {A : Type} [DecidableEq A]
+  (ops : List (YjsOperation A)) (s : Array (YjsItem A)) (input : IntegrateInput A) :
+  effect_list ops Operation.init = Except.ok s →
+  YjsOperation.insert input ∈ ops →
+  ∃ item, item ∈ s ∧ item.id = input.id := by
+  intro h_eff h_mem
+  let sInit : Operation.State (YjsOperation A) := Operation.init
+  have h_eff' : effect_list ops sInit = Except.ok s := by
+    simpa [sInit] using h_eff
+  exact effect_list_insert_mem_implies_id_exists_from_state
+    (A := A) (ops := ops) (s0 := sInit) (s := s) (input := input) h_eff' (Or.inr h_mem)
+
+theorem isValidState_insert_from_source {A : Type} [DecidableEq A]
+  {network : YjsOperationNetwork A}
+  (input : IntegrateInput A)
+  (s : Operation.State (YjsOperation A))
+  (l : List (YjsOperation A)) :
+  (∃ i, Event.Broadcast (YjsOperation.insert input) ∈ network.histories i) →
+  (∀ x, (instCausalNetworkElemCausalOrder network.toCausalNetwork).lt x (YjsOperation.insert input) → x ∈ l) →
+  hb_consistent (instCausalNetworkElemCausalOrder network.toCausalNetwork) l →
+  hbClosed (instCausalNetworkElemCausalOrder network.toCausalNetwork) l →
+  effect_list l Operation.init = Except.ok s →
+  IdNoDup l →
+  ∃ item, input.toItem s = Except.ok item ∧ item.isValid := by
+  intro h_source h_lt h_consistent h_closed h_effect h_nodup
+  obtain ⟨ srcClient, h_broadcast_mem ⟩ := h_source
+  rw [List.mem_iff_append] at h_broadcast_mem
+  obtain ⟨ pre, post, h_hist_eq ⟩ := h_broadcast_mem
+  have h_valid_at_broadcast :
+      ∃ state,
+        interpHistory pre Operation.init = Except.ok state ∧
+        ValidMessage.isValidMessage state (YjsOperation.insert input) := by
+    have h_hist_eq' :
+        pre ++ [Event.Broadcast (YjsOperation.insert input)] ++ post =
+          network.histories srcClient := by
+      simpa using h_hist_eq.symm
+    simpa using
+      (network.broadcast_only_valid_messages srcClient (pre := pre) (post := post)
+        (e := YjsOperation.insert input) h_hist_eq')
+  obtain ⟨ state₀, h_state₀, h_msg_valid₀ ⟩ := h_valid_at_broadcast
+  have h_valid_msg₀ :
+      ∃ item, input.toItem state₀ = Except.ok item ∧ item.isValid := by
+    simpa [ValidMessage.isValidMessage, IsValidMessage] using h_msg_valid₀
+  obtain ⟨ item₀, h_toItem₀, h_item_valid₀ ⟩ := h_valid_msg₀
+  have h_pre_broadcast_in_l :
+      ∀ x, Event.Broadcast (YjsOperation.insert x) ∈ pre →
+        YjsOperation.insert x ∈ l := by
+    intro x h_mem_pre
+    apply h_lt
+    exact pre_broadcast_lt_insert (network := network)
+      (i := srcClient) (pre := pre) (post := post)
+      (x := x) (input := input) h_hist_eq h_mem_pre
+  have h_pre_deliver_in_l :
+      ∀ x, Event.Deliver (YjsOperation.insert x) ∈ pre →
+        YjsOperation.insert x ∈ l := by
+    intro x h_mem_pre
+    apply h_lt
+    exact pre_deliver_lt_insert (network := network)
+      (i := srcClient) (pre := pre) (post := post)
+      (x := x) (input := input) h_hist_eq h_mem_pre
+  have h_origin_pre :
+      ∀ oid originItem, state₀.find? (fun i => i.id = oid) = some originItem →
+        ∃ x, YjsOperation.insert x ∈ l ∧ x.id = oid := by
+    intro oid originItem h_find
+    obtain ⟨ x, h_deliver_mem, h_x_id ⟩ :=
+      interpHistory_find?_exists_deliver_insert (A := A)
+        (pre := pre) (state := state₀) (id := oid) (item := originItem)
+        h_state₀ h_find
+    exact ⟨ x, h_pre_deliver_in_l x h_deliver_mem, h_x_id ⟩
+  let sArr : Array (YjsItem A) := s
+  have h_origin_find_in_s :
+      ∀ oid originItem, state₀.find? (fun i => i.id = oid) = some originItem →
+        ∃ originItem', sArr.find? (fun i => i.id = oid) = some originItem' := by
+    intro oid originItem h_find₀
+    obtain ⟨ x, h_x_mem_l, h_x_id ⟩ := h_origin_pre oid originItem h_find₀
+    have h_exists_in_s : ∃ item : YjsItem A, item ∈ sArr ∧ item.id = oid := by
+      obtain ⟨ item, h_item_mem, h_item_id ⟩ :=
+        effect_list_insert_mem_implies_id_exists (ops := l) (s := sArr) (input := x) (by simpa [sArr] using h_effect) h_x_mem_l
+      exact ⟨ item, h_item_mem, by simpa [h_x_id] using h_item_id ⟩
+    exact exists_find?_eq_some_of_exists_mem_id sArr oid h_exists_in_s
+  -- Remaining core step:
+  -- transport `input.toItem state₀ = ok item₀` and `item₀.isValid` to state `s`
+  -- built by `effect_list l init = ok s`.
+  sorry
+
 instance [DecidableEq A] {network : YjsOperationNetwork A} : MonotoneOperation (YjsOperation A) (hb := instCausalNetworkElemCausalOrder network.toCausalNetwork) YjsId where
-  isValidState_mono := by sorry
+  StateSource a := ∃ i, Event.Broadcast a ∈ network.toCausalNetwork.histories i
+  isValidState_mono := by
+    intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
+    cases a with
+    | delete id deletedId =>
+      simp [Operation.isValidState, IsValidMessage]
+    | insert input =>
+      simpa [Operation.isValidState, IsValidMessage] using
+        (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
+          h_source h_lt h_consistent h_closed h_effect h_nodup)
 
 theorem YjsOperationNetwork_converge' {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : Array (YjsItem A)) :
   let hist_i := network.toDeliverMessages i
@@ -1065,6 +1858,18 @@ theorem YjsOperationNetwork_converge' {A} [DecidableEq A] (network : YjsOperatio
   have h := hb_consistent_effect_convergent (s := res₀) (hb := hb)
     (network.toCausalNetwork.toDeliverMessages i)
     (network.toCausalNetwork.toDeliverMessages j)
+    (by
+      intro x hx
+      have h_deliver_x_mem : Event.Deliver x ∈ network.toCausalNetwork.histories i := by
+        exact h_deliver_mem_of_toDeliver_mem hx
+      obtain ⟨ c, h_broadcast_x_mem ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_x_mem
+      exact ⟨ c, h_broadcast_x_mem ⟩)
+    (by
+      intro x hx
+      have h_deliver_x_mem : Event.Deliver x ∈ network.toCausalNetwork.histories j := by
+        exact h_deliver_mem_of_toDeliver_mem hx
+      obtain ⟨ c, h_broadcast_x_mem ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_x_mem
+      exact ⟨ c, h_broadcast_x_mem ⟩)
     h_consistent_i
     h_consistent_j
     h_closed_i
