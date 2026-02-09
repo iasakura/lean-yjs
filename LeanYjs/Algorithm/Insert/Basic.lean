@@ -28,7 +28,7 @@ def IntegrateInput.toItem (input : IntegrateInput A) (arr : Array (YjsItem A)) :
       | none => Except.error IntegrateError.error
     | none => Except.ok YjsPtr.last
 
-  return YjsItem.mk originPtr rightOriginPtr input.id input.content false
+  return YjsItem.mk originPtr rightOriginPtr input.id input.content
 
 def findPtrIdx (p : YjsPtr A) (arr : Array (YjsItem A)) : Except IntegrateError Int :=
   match p with
@@ -96,7 +96,7 @@ def getPtrExcept (arr : Array (YjsItem A)) (idx : ℤ) : Except IntegrateError (
     | none => Except.error IntegrateError.error
 
 def mkItemByIndex (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : Array (YjsItem A)) : Except IntegrateError (YjsItem A) := do
-  return YjsItem.mk (← getPtrExcept arr leftIdx) (← getPtrExcept arr rightIdx) input.id input.content false
+  return YjsItem.mk (← getPtrExcept arr leftIdx) (← getPtrExcept arr rightIdx) input.id input.content
 
 def integrate (newItem : IntegrateInput A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
   let leftIdx <- findLeftIdx newItem.originId arr
@@ -114,6 +114,10 @@ def integrateSafe (newItem : IntegrateInput A) (arr : Array (YjsItem A)) : Excep
     integrate newItem arr
   else
     Except.error IntegrateError.error
+
+def YjsState.insert (arr : YjsState A) (input : IntegrateInput A) : Except IntegrateError (YjsState A) := do
+  let newArr <- integrateSafe input arr.items
+  return { arr with items := newArr }
 
 open Std.Do
 

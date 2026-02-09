@@ -30,7 +30,7 @@ omit [DecidableEq A] in theorem arr_set_closed_push (arr : List (YjsItem A)) (it
   constructor
   . simp [ArrSet]
   . simp [ArrSet]
-  . intros o r id c d hor
+  . intros o r id c hor
     cases o with
     | itemPtr item' =>
       simp [ArrSet] at hor
@@ -47,7 +47,7 @@ omit [DecidableEq A] in theorem arr_set_closed_push (arr : List (YjsItem A)) (it
       simp [ArrSet]
     | last =>
       simp [ArrSet]
-  . intros o r id c d hor
+  . intros o r id c hor
     cases r with
     | itemPtr item' =>
       simp [ArrSet] at hor
@@ -99,7 +99,7 @@ omit [DecidableEq A] in theorem arr_set_closed_exists_index_for_origin :
   ArrSet arr item ->
   item.origin = YjsPtr.first ∨ item.origin = YjsPtr.last ∨ ∃ i : Fin arr.length, arr[i] = item.origin := by
   intros arr item hclosed hitem
-  obtain ⟨ o, r, id, c, d ⟩ := item
+  obtain ⟨ o, r, id, c ⟩ := item
   apply hclosed.closedLeft at hitem
   simp
   cases o with
@@ -120,7 +120,7 @@ omit [DecidableEq A] in theorem arr_set_closed_exists_index_for_right_origin :
   ArrSet arr item ->
   item.rightOrigin = YjsPtr.first ∨ item.rightOrigin = YjsPtr.last ∨ ∃ i : Fin arr.length, arr[i] = item.rightOrigin := by
   intros arr item hclosed hitem
-  obtain ⟨ o, r, id, c, d ⟩ := item
+  obtain ⟨ o, r, id, c ⟩ := item
   apply hclosed.closedRight at hitem
   simp
   cases r with
@@ -253,7 +253,7 @@ omit [DecidableEq A] in theorem item_set_invariant_push (arr : List (YjsItem A))
   ItemSetInvariant (ArrSet (item :: arr)) := by
   intros hinv hclosed horigin hreach hsameid
   apply ItemSetInvariant.mk
-  . intros o r c id d hitem
+  . intros o r c id hitem
     simp [ArrSet] at hitem
     cases hitem with
     | inr hin =>
@@ -261,11 +261,12 @@ omit [DecidableEq A] in theorem item_set_invariant_push (arr : List (YjsItem A))
     | inl heq =>
       subst heq
       assumption
-  . intros o r c id d x hin
+  . intros o r c id x hin
     simp [ArrSet] at hin
     cases hin with
     | inr hin =>
-      apply hinv.origin_nearest_reachable _ _ _ _ _ _ hin
+      intro hreachable
+      exact hinv.origin_nearest_reachable _ _ _ _ _ hin hreachable
     | inl heq =>
       subst heq
       simp at *

@@ -248,7 +248,7 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
     rw [h_other_ok, ok_bind]
 
     have ArrSet_other_origin : ArrSet arr.toList other.origin := by
-      obtain ⟨ o, r, id, c, d ⟩ := other
+      obtain ⟨ o, r, id, c ⟩ := other
       apply harrinv.closed.closedLeft o r id c
       simp [ArrSet]
       rw [getElem?_eq_some_iff] at h_other_eq
@@ -257,7 +257,7 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
       simp
 
     have ArrSet_other_rightOrigin : ArrSet arr.toList other.rightOrigin := by
-      obtain ⟨ o, r, id, c, d ⟩ := other
+      obtain ⟨ o, r, id, c ⟩ := other
       apply harrinv.closed.closedRight o r id c
       simp [ArrSet]
       rw [getElem?_eq_some_iff] at h_other_eq
@@ -726,3 +726,23 @@ theorem integrate_commutative (a b : IntegrateInput A) (aItem bItem : YjsItem A)
         apply integrate_integrate_eq_some harrinv h_aItem h_bItem hcid_neq_bid h_a_valid h_b_valid h_eq_a h_eq_b
       rw [h_integrate_comm, h_integrate_comm']
       rw [integrate_ok_commutative a b arr1 arr2 arr3 arr2' arr3' harrinv h_aItem h_bItem hcid_neq_bid h_a_valid h_b_valid h_eq_a h_integrate_comm' h_eq_b h_integrate_comm]
+
+theorem insert_commutative (a b : IntegrateInput A) (aItem bItem : YjsItem A) (arr res: YjsState A) :
+  YjsStateInvariant arr
+  → a.toItem arr.items = Except.ok aItem
+  → b.toItem arr.items = Except.ok bItem
+  → a.id.clientId ≠ b.id.clientId
+  → ¬OriginReachable aItem (YjsPtr.itemPtr bItem)
+  → ¬OriginReachable bItem (YjsPtr.itemPtr aItem)
+  → aItem.isValid
+  → bItem.isValid
+  → (do
+    let arr2 <- arr.insert a;
+    arr2.insert b) = Except.ok res
+  → (do
+    let arr2' <- arr.insert b;
+    arr2'.insert a) = Except.ok res := by
+  intros harrinv h_aItem_def h_bItem_def hcid_neq_bid h_not_a_origin_b h_not_b_origin_a h_a_valid h_b_valid h_eq
+  generalize heq1 : arr.insert a = arr2 at h_eq
+  generalize heq2 : arr.insert b = arr2'
+  

@@ -23,6 +23,8 @@ structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
   sorted : List.Pairwise (fun (x y : YjsItem A) => YjsLt' (A := A) x y) arr
   unique : uniqueId arr
 
+def YjsStateInvariant (state : YjsState A) : Prop := YjsArrInvariant (state.items.toList)
+
 theorem same_yjs_set_unique_aux (xs_all ys_all xs ys : List (YjsItem A)) :
   YjsArrInvariant xs_all ->
   YjsArrInvariant ys_all ->
@@ -303,10 +305,10 @@ theorem findPtrIdx_lt_YjsLt' (arr : Array (YjsItem A)) (x y : YjsPtr A) :
       apply findPtrIdx_item_exists arr y at hfindy
       obtain ⟨ k, heq, hfindy ⟩ := hfindy
       rw [Array.getElem?_eq_some_iff] at hfindy
-      obtain ⟨ _, hfindy ⟩ := hfindy
+      obtain ⟨ hsize, hfindy ⟩ := hfindy
       unfold Int.toNat? at heq
       cases j <;> cases heq
-      simp at hlt
+      simp at hsize hlt
       omega
   | itemPtr x =>
     cases y with
@@ -518,14 +520,14 @@ theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other ne
   intros hsubset hnewItem_in_ls hother_in_ls hclosed harrsetinv harrinv hinv hfindLeft hfindRight hfindOLeft hfindORight h_newItem_origin_lt_other h_origin_lt_newItem_rightOrigin heq_oleft heq_oleft_eq hlt_oleft_newItem
   have hor : YjsLeq' other.rightOrigin newItem ∨ YjsLt' newItem other.rightOrigin := by
     apply yjs_lt_total (P := ArrSet $ ls) <;> try assumption
-    . obtain ⟨ o, r, id, c, d ⟩ := other
+    . obtain ⟨ o, r, id, c ⟩ := other
       apply hclosed.closedRight o r id c
       simp [ArrSet]
       assumption
   cases hor with
   | inl hle =>
     obtain ⟨ _, hle ⟩ := hle
-    obtain ⟨ o, r, id, c, d ⟩ := other
+    obtain ⟨ o, r, id, c ⟩ := other
     constructor
     apply YjsLt.ltRightOrigin
     assumption
@@ -536,8 +538,8 @@ theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other ne
     | inl hlt_left =>
       have heq_origin : YjsLt' newItem.origin other.origin := by
         apply findPtrIdx_lt_YjsLt' <;> assumption
-      obtain ⟨ o, r, id, c, d ⟩ := other
-      obtain ⟨ no, nr, nid, nc, nd ⟩ := newItem
+      obtain ⟨ o, r, id, c ⟩ := other
+      obtain ⟨ no, nr, nid, nc ⟩ := newItem
       simp at heq_origin hlt
       apply YjsLt'.ltConflict
       apply ConflictLt'.ltOriginDiff <;> try assumption
@@ -545,8 +547,8 @@ theorem findPtrIdx_origin_leq_newItem_YjsLt' {arr : Array (YjsItem A)} {other ne
       subst oLeftIdx
       have heq_origin : newItem.origin = other.origin := by
         apply findPtrIdx_eq_ok_inj _ _ hfindLeft hfindOLeft
-      obtain ⟨ o, r, id, c, d ⟩ := other
-      obtain ⟨ no, nr, nid, nc, nd ⟩ := newItem
+      obtain ⟨ o, r, id, c ⟩ := other
+      obtain ⟨ no, nr, nid, nc ⟩ := newItem
       simp at heq_origin heq_oleft_eq hlt
       subst no
       apply YjsLt'.ltConflict
@@ -626,7 +628,7 @@ theorem IntegrateInput.toItem_ok_iff {A : Type} (input : IntegrateInput A) (arr 
   uniqueId arr.toList →
   (input.toItem arr = Except.ok newItem ↔
   ∃origin rightOrigin id content,
-    newItem = YjsItem.mk origin rightOrigin id content false ∧
+    newItem = YjsItem.mk origin rightOrigin id content ∧
     isLeftIdPtr arr input.originId origin ∧
     isRightIdPtr arr input.rightOriginId rightOrigin ∧
     id = input.id ∧
