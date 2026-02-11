@@ -1,6 +1,7 @@
 import Mathlib.Tactic.WLOG
 import Mathlib.Tactic.ExtractGoal
 
+import LeanYjs.Algorithm.Invariant.Lemmas
 import LeanYjs.ListLemmas
 import LeanYjs.Item
 import LeanYjs.ItemSet
@@ -95,6 +96,65 @@ theorem insertIdxIfInBounds_UniqueId (arr : Array (YjsItem A)) (a x : YjsItem A)
       contradiction
   . assumption
 
+theorem IntegrateInput.toItem_insertIfInBounds {arr : Array (YjsItem A)} (input : IntegrateInput A) (a : YjsItem A) :
+  input.toItem arr = Except.ok item →
+  uniqueId (arr.insertIdxIfInBounds idx a).toList →
+  input.toItem (arr.insertIdxIfInBounds idx a) = Except.ok item := by
+  intros h_input_def h_uniqueId
+  have h_uniqueId_arr : uniqueId arr.toList := by
+    simp [uniqueId] at *
+    simp [Array.insertIdxIfInBounds] at *
+    rw [List.pairwise_iff_getElem] at *
+    intros i j hi hj hij
+    by_cases hi_idx : idx ≤ arr.size
+    . simp [hi_idx, List.length_insertIdx] at *
+      specialize h_uniqueId (if i < idx then i else i + 1) (if j < idx then j else j + 1)
+      grind
+    . simp at *
+      specialize h_uniqueId i j
+      grind
+  rw [IntegrateInput.toItem_ok_iff _ _ _ h_uniqueId_arr] at h_input_def
+  obtain ⟨ o, r, id, c, h_item_eq, h_origin, h_rightOrigin, h_id, h_content ⟩ := h_input_def
+  rw [IntegrateInput.toItem_ok_iff _ _ _ h_uniqueId]
+  use o, r, id, c
+  refine ⟨ h_item_eq, ?_, ?_, h_id, h_content ⟩
+  . simp [isLeftIdPtr] at *
+    cases heq : input.originId with
+    | none => simp [heq] at *; assumption
+    | some originId =>
+      simp [heq] at *
+      obtain ⟨ item, heq1, heq2 ⟩ := h_origin
+      use item
+      refine ⟨ heq1, ?_ ⟩
+      rw [Array.find?_eq_some_iff_getElem] at *
+      simp at *
+      obtain ⟨ hid, i, hilt, hgetElem, heq_idx ⟩ := heq2
+      refine ⟨ hid, if i < idx then i else i + 1, ?_, ?_, ?_ ⟩
+      . simp [Array.insertIdxIfInBounds]
+        grind [Array.size_insertIdx]
+      . simp [Array.insertIdxIfInBounds]
+        grind
+      . simp [Array.insertIdxIfInBounds]
+        grind [uniqueId_insertIdxIfInBounds_id_neq]
+  . simp [isRightIdPtr] at *
+    cases heq : input.rightOriginId with
+    | none => simp [heq] at *; assumption
+    | some rightOriginId =>
+      simp [heq] at *
+      obtain ⟨ item, heq1, heq2 ⟩ := h_rightOrigin
+      use item
+      refine ⟨ heq1, ?_ ⟩
+      rw [Array.find?_eq_some_iff_getElem] at *
+      simp at *
+      obtain ⟨ hid, i, hilt, hgetElem, heq_idx ⟩ := heq2
+      refine ⟨ hid, if i < idx then i else i + 1, ?_, ?_, ?_ ⟩
+      . simp [Array.insertIdxIfInBounds]
+        grind [Array.size_insertIdx]
+      . simp [Array.insertIdxIfInBounds]
+        grind
+      . simp [Array.insertIdxIfInBounds]
+        grind [uniqueId_insertIdxIfInBounds_id_neq]
+
 theorem integrate_ok_commutative (a b : IntegrateInput A) (arr1 arr2 arr3 arr2' arr3' : Array (YjsItem A)) :
   YjsArrInvariant arr1.toList
   → a.toItem arr1 = Except.ok aItem
@@ -136,11 +196,11 @@ theorem integrate_ok_commutative (a b : IntegrateInput A) (arr1 arr2 arr3 arr2' 
 
   have ⟨ idx3, h_idx3, arr3_insertIdx,  arr3_inv ⟩ : ∃ idx ≤ arr2.size, arr3 = arr2.insertIdxIfInBounds idx bItem ∧ YjsArrInvariant arr3.toList := by
     apply YjsArrInvariant_integrate b arr2 arr3 <;> try assumption
-    sorry
+    grind [IntegrateInput.toItem_insertIfInBounds, YjsArrInvariant]
 
   have ⟨ idx3', h_idx3', arr3'_insertIdx, arr3'_inv ⟩ : ∃ idx ≤ arr2'.size, arr3' = arr2'.insertIdxIfInBounds idx aItem ∧ YjsArrInvariant arr3'.toList := by
     apply YjsArrInvariant_integrate a arr2' arr3' <;> try assumption
-    sorry
+    grind [IntegrateInput.toItem_insertIfInBounds, YjsArrInvariant]
 
   subst arr2 arr2' arr3 arr3'
 
