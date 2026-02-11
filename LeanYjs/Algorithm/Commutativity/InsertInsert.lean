@@ -745,4 +745,4 @@ theorem insert_commutative (a b : IntegrateInput A) (aItem bItem : YjsItem A) (a
   intros harrinv h_aItem_def h_bItem_def hcid_neq_bid h_not_a_origin_b h_not_b_origin_a h_a_valid h_b_valid h_eq
   generalize heq1 : arr.insert a = arr2 at h_eq
   generalize heq2 : arr.insert b = arr2'
-  
+  sorry
