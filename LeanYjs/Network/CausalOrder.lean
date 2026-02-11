@@ -345,10 +345,6 @@ by
               assumption
             . apply Nodup.sublist _ no_dup₁
               simp
-            -- . intros op h_op_mem
-            --   obtain ⟨ ops', hops' ⟩ := h_compatible op (by simp [h_op_mem])
-            --   use ops' ++ [a]
-            --   sorry
             . intros x
               constructor
               . intro h_mem₀
