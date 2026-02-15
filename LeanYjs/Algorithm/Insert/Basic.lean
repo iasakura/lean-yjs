@@ -121,6 +121,16 @@ def YjsState.insert (arr : YjsState A) (input : IntegrateInput A) : Except Integ
 
 open Std.Do
 
+theorem except_bind_eq_ok_exists {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {y : β} :
+    x >>= f = Except.ok y →
+    ∃ a, x = Except.ok a ∧ f a = Except.ok y := by
+  intro h
+  cases x with
+  | error err =>
+    cases h
+  | ok a =>
+    exact ⟨ a, rfl, h ⟩
+
 @[spec] theorem findPtrIdx_spec (p : YjsPtr A) (arr : Array (YjsItem A)) :
     ⦃⌜True⌝⦄ findPtrIdx p arr ⦃post⟨fun idx => ⌜(-1 : Int) ≤ idx ∧ idx ≤ arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
   mvcgen [findPtrIdx]
@@ -155,7 +165,89 @@ open Std.Do
     simp [wp]
     simpa [Array.getElem?_eq_none_iff] using h_none
 
-theorem findIntegratedIndex_ok_le_size
+@[spec] theorem findLeftIdx_spec (originId : Option YjsId) (arr : Array (YjsItem A)) :
+    ⦃⌜True⌝⦄ findLeftIdx originId arr
+    ⦃post⟨fun leftIdx => ⌜(-1 : Int) ≤ leftIdx ∧ leftIdx < arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
+  mvcgen [findLeftIdx]
+  all_goals mleave
+  case vc1.h_1.h_1 =>
+    rename_i _ h_find
+    rw [Array.findIdx?_eq_some_iff_getElem] at h_find
+    obtain ⟨ h_lt, _, _ ⟩ := h_find
+    constructor
+    · have h_nonneg : (0 : Int) ≤ arr.size := by exact_mod_cast (Nat.zero_le arr.size)
+      omega
+    · exact_mod_cast h_lt
+  case vc3.h_2 =>
+    constructor
+    · omega
+    · have h_nonneg : (0 : Int) ≤ arr.size := by exact_mod_cast (Nat.zero_le arr.size)
+      omega
+
+@[spec] theorem findRightIdx_spec (rightOriginId : Option YjsId) (arr : Array (YjsItem A)) :
+    ⦃⌜True⌝⦄ findRightIdx rightOriginId arr
+    ⦃post⟨fun rightIdx => ⌜(-1 : Int) ≤ rightIdx ∧ rightIdx ≤ arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
+  mvcgen [findRightIdx]
+  all_goals mleave
+  case vc1.h_1.h_1 =>
+    rename_i idx h_find
+    rw [Array.findIdx?_eq_some_iff_getElem] at h_find
+    obtain ⟨ h_lt, _, _ ⟩ := h_find
+    constructor
+    · have h_nonneg : (0 : Int) ≤ (idx : Int) := by
+        exact_mod_cast (Nat.zero_le idx)
+      omega
+    · exact_mod_cast (Nat.le_of_lt h_lt)
+  case vc3.h_2 =>
+    constructor
+    · have h_nonneg : (0 : Int) ≤ arr.size := by exact_mod_cast (Nat.zero_le arr.size)
+      omega
+    · omega
+
+@[spec] theorem getPtrExcept_spec (arr : Array (YjsItem A)) (idx : Int) :
+    ⦃⌜(-1 : Int) ≤ idx ∧ idx ≤ arr.size⌝⦄ getPtrExcept arr idx
+    ⦃post⟨fun _ => ⌜True⌝, fun _ => ⌜False⌝⟩⦄ := by
+  mvcgen [getPtrExcept]
+  all_goals mleave
+  case vc4.isFalse.isFalse.h_2 =>
+    intro h_low h_high
+    have h_nonneg : (0 : Int) ≤ idx := by
+      omega
+    have h_lt : idx < arr.size := by
+      omega
+    have h_nat_lt : idx.toNat < arr.size := (Int.toNat_lt h_nonneg).2 h_lt
+    have h_some : arr[idx.toNat]? = some arr[idx.toNat] := by
+      exact (Array.getElem?_eq_some_iff).2 ⟨ h_nat_lt, rfl ⟩
+    have h_none : arr[idx.toNat]? = none := by assumption
+    simp [h_none] at h_some
+
+@[spec] theorem mkItemByIndex_spec
+  (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : Array (YjsItem A)) :
+    ⦃⌜(-1 : Int) ≤ leftIdx ∧ leftIdx ≤ arr.size ∧ (-1 : Int) ≤ rightIdx ∧ rightIdx ≤ arr.size⌝⦄
+      mkItemByIndex leftIdx rightIdx input arr
+    ⦃post⟨fun item => ⌜item.id = input.id⌝, fun _ => ⌜False⌝⟩⦄ := by
+  mvcgen [mkItemByIndex, getPtrExcept_spec]
+  all_goals mleave
+  all_goals try omega
+  all_goals try simp
+
+@[spec] theorem findIntegratedIndex_ok_le_size
+  (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : Array (YjsItem A)) :
+  ⦃⌜(-1 : Int) ≤ leftIdx ∧ leftIdx < arr.size ∧ rightIdx ≤ arr.size⌝⦄
+    findIntegratedIndex leftIdx rightIdx input arr
+  ⦃post⟨fun destIdx => ⌜destIdx ≤ arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
+  mvcgen [findIntegratedIndex, findPtrIdx_spec, getElemExcept_spec]
+  case inv1 =>
+    exact post⟨fun ⟨xs, st⟩ => ⌜st.fst ≤ arr.size⌝, fun _ => ⌜True⌝⟩
+  all_goals mleave
+  case vc1.step =>
+    omega
+  all_goals try omega
+  case vc11.step.except.handle =>
+    intro
+    trivial
+
+theorem findIntegratedIndex_ok_le_size_from_eq
   (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : Array (YjsItem A)) (destIdx : Nat) :
   (-1 : Int) ≤ leftIdx →
   leftIdx < arr.size →
@@ -163,7 +255,8 @@ theorem findIntegratedIndex_ok_le_size
   findIntegratedIndex leftIdx rightIdx input arr = Except.ok destIdx →
   destIdx ≤ arr.size := by
   intro h_left_ge h_left_lt h_right_le h_ok
-  have hP : (match findIntegratedIndex leftIdx rightIdx input arr with
+  have hP :
+      (match findIntegratedIndex leftIdx rightIdx input arr with
       | Except.ok d => d ≤ arr.size
       | Except.error _ => True) := by
     apply (Except.of_wp (prog := findIntegratedIndex leftIdx rightIdx input arr)
@@ -171,16 +264,30 @@ theorem findIntegratedIndex_ok_le_size
         | Except.ok d => d ≤ arr.size
         | Except.error _ => True))
     mvcgen [findIntegratedIndex, findPtrIdx_spec, getElemExcept_spec]
-    case inv1 =>
-      exact post⟨fun ⟨xs, st⟩ => ⌜st.fst ≤ arr.size⌝, fun _ => ⌜True⌝⟩
-    all_goals mleave
-    case vc1.step =>
-      omega
-    all_goals try omega
-    case vc11.step.except.handle =>
-      intro
-      trivial
   simpa [h_ok] using hP
+
+theorem insert_ok_exists_insertIdx
+  (s s' : YjsState A) (input : IntegrateInput A) :
+  s.insert input = Except.ok s' →
+  ∃ i, ∃ h : i ≤ s.items.size, ∃ item, s' = { s with items := s.items.insertIdx i item h } := by
+  intro h_insert
+  have hP :
+      (match s.insert input with
+      | Except.ok st => ∃ i, ∃ h : i ≤ s.items.size, ∃ item, st = { s with items := s.items.insertIdx i item h }
+      | Except.error _ => True) := by
+    apply (Except.of_wp (prog := s.insert input)
+      (P := fun r => match r with
+        | Except.ok st => ∃ i, ∃ h : i ≤ s.items.size, ∃ item, st = { s with items := s.items.insertIdx i item h }
+        | Except.error _ => True))
+    mvcgen [YjsState.insert, integrateSafe, integrate, findLeftIdx_spec, findRightIdx_spec, findIntegratedIndex_ok_le_size, mkItemByIndex_spec]
+    all_goals mleave
+    all_goals try omega
+    all_goals try grind
+    case vc3.isTrue.success.success.post.success.post.success =>
+      rename_i destIdx h_dest_le item _
+      refine ⟨ destIdx, h_dest_le, item, ?_ ⟩
+      simp [Array.insertIdxIfInBounds, h_dest_le]
+  simpa [h_insert] using hP
 
 section Test
 
