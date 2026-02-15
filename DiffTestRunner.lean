@@ -43,6 +43,19 @@ def renderIntegrateError : IntegrateError → String
 
 abbrev ClientState := Std.HashMap Nat (YString × Nat)
 
+def ptrToOriginId (p : YjsPtr Char) : Option YjsId :=
+  match p with
+  | .itemPtr item => some item.id
+  | .first => none
+  | .last => none
+
+def itemToIntegrateInput (item : Item) : IntegrateInput Char := {
+  originId := ptrToOriginId item.origin
+  rightOriginId := ptrToOriginId item.rightOrigin
+  content := item.content
+  id := item.id
+}
+
 def applyInsert (state : ClientState) (clientId index : Nat) (char : Char) : Except String ClientState :=
   let ⟨ current, clock ⟩ := state.getD clientId (YString.new, 0)
   let id := YjsId.mk clientId (clock + 1)
@@ -71,7 +84,7 @@ def applySync (state : ClientState) (src dst : Nat) : Except String ClientState 
           if d.any (fun existing => decide (existing = item)) then
             pure (d, remaining, progressed)
           else
-            match integrate item d with
+            match integrate (itemToIntegrateInput item) d with
             | Except.ok newDest => pure (newDest, remaining, true)
             | Except.error IntegrateError.error => pure (d, item :: remaining, progressed)
 
