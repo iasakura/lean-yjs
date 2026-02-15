@@ -7,8 +7,12 @@ variable {A I : Type}  [DecidableEq A] [Operation A] [DecidableEq I] [Message A 
 def interpOps (items : List A) (init : Operation.State A) : Except (Operation.Error A) (Operation.State A) :=
   effect_list items init
 
+def eventDeliver {A : Type} : Event A → Option A
+  | Event.Deliver it => some it
+  | _ => none
+
 def interpHistory (history : List (Event A)) (init : Operation.State A) : Except (Operation.Error A) (Operation.State A) :=
-  interpOps (history.filterMap (fun ev => match ev with | Event.Deliver it => some it | _ => none)) init
+  interpOps (history.filterMap eventDeliver) init
 
 class ValidMessage A [Operation A] where
   isValidMessage : Operation.State A → A → Prop
