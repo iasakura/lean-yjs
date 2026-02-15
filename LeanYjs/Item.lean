@@ -40,7 +40,6 @@ structure YjsItem : Type where
   rightOrigin : YjsPtr
   id : YjsId
   content : A
-  deleted : Bool
 deriving Repr, DecidableEq
 end
 
@@ -51,14 +50,9 @@ def YjsPtr.size {A : Type} : YjsPtr A -> Nat
   | YjsPtr.last => 0
 
 def YjsItem.size {A : Type} : YjsItem A -> Nat
-  | YjsItem.mk origin rightOrigin _ _ _ =>
+  | YjsItem.mk origin rightOrigin _ _ =>
     origin.size + rightOrigin.size + 2
 end
-
-def YjsPtr.deleted {A : Type} : YjsPtr A -> Bool
-  | YjsPtr.itemPtr item => item.deleted
-  | YjsPtr.first => false
-  | YjsPtr.last => false
 
 instance : BEq ClientId where
   beq x y := by

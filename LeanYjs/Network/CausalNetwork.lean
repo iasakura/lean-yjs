@@ -5,7 +5,7 @@ import Mathlib.Tactic.Cases
 
 import LeanYjs.ListLemmas
 import LeanYjs.ClientId
-import LeanYjs.Network.CausalOrder
+import LeanYjs.Network.StrongCausalOrder
 
 namespace NetworkModels
 
@@ -46,9 +46,6 @@ structure CausalNetwork A [DecidableEq A] [DecidableEq M] [Message A M] extends 
   histories_deliver_broadcast_ordered : forall (e1 e2 : A) i,
     locallyOrdered toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) →
     locallyOrdered toNodeHistories i (Event.Deliver e1) (Event.Broadcast e2)
-
-structure CausalNetworkElem A [DecidableEq A] [DecidableEq M] [Message A M] (network : CausalNetwork A) where
-  elem : A
 
 inductive HappensBeforeOnlyBroadcast {A} [DecidableEq A] [DecidableEq M] [Message A M] (network : NetworkBase A) : A → A → Prop
   | broadcast_broadcast_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) → HappensBeforeOnlyBroadcast network e1 e2
@@ -276,9 +273,9 @@ lemma HappensBefore_assym [DecidableEq M] [Message A M] [DecidableEq A] {network
       apply locallyOrdered_trans h_lo_broadcast_b'_deliver_b' h_lo_deliver_b_deliver_a
     apply locallyOrdered_asymm h_lo_broadcast_b'_deliver_a' h_local
 
-instance instCausalNetworkElemCausalOrder [DecidableEq A] [DecidableEq M] [Message A M] (network : CausalNetwork A) : CausalOrder (CausalNetworkElem A network) where
-  lt a b := HappensBefore network.toNetworkBase a.elem b.elem
-  le a b := a = b ∨ HappensBefore network.toNetworkBase a.elem b.elem
+instance instCausalNetworkElemCausalOrder [DecidableEq A] [DecidableEq M] [Message A M] (network : CausalNetwork A) : CausalOrder A where
+  lt a b := HappensBefore network.toNetworkBase a b
+  le a b := a = b ∨ HappensBefore network.toNetworkBase a b
   le_refl := fun a => Or.inl rfl
   le_trans := fun a b c h_ab h_bc => by
     cases h_ab with
@@ -294,7 +291,7 @@ instance instCausalNetworkElemCausalOrder [DecidableEq A] [DecidableEq M] [Messa
         right
         apply HappensBefore.trans h_hb_ab h_hb_bc
   le_antisymm := fun a b h_ab h_ba => by
-    suffices HappensBefore network.toNetworkBase a.elem b.elem → HappensBefore network.toNetworkBase b.elem a.elem → False by
+    suffices HappensBefore network.toNetworkBase a b → HappensBefore network.toNetworkBase b a → False by
       cases h_ab with
       | inl h_eq => assumption
       | inr h_hb_ab =>
@@ -306,7 +303,7 @@ instance instCausalNetworkElemCausalOrder [DecidableEq A] [DecidableEq M] [Messa
           exfalso
           apply this h_hb_ab h_hb_ba
     intros h_ab h_ba
-    apply HappensBefore_assym a.elem b.elem h_ab h_ba
+    apply HappensBefore_assym a b h_ab h_ba
   lt_iff_le_not_ge := by
     intros a b
     constructor
@@ -317,9 +314,9 @@ instance instCausalNetworkElemCausalOrder [DecidableEq A] [DecidableEq M] [Messa
         cases h_ge with
         | inl h_eq =>
           subst h_eq
-          apply HappensBefore_assym b.elem b.elem h_lt h_lt
+          apply HappensBefore_assym b b h_lt h_lt
         | inr h_hb =>
-          apply HappensBefore_assym a.elem b.elem h_lt h_hb
+          apply HappensBefore_assym a b h_lt h_hb
     . intros h_le_not_ge
       obtain ⟨ h_le, h_not_ge ⟩ := h_le_not_ge
       cases h_le with
@@ -334,23 +331,16 @@ instance instCausalNetworkElemCausalOrder [DecidableEq A] [DecidableEq M] [Messa
 variable [Operation A] [DecidableEq M] [Message A M] [DecidableEq A]
 variable (network : CausalNetwork A)
 
-instance [Operation A] : Operation (CausalNetworkElem A network) where
-  State := Operation.State A
-  Error := Operation.Error A
-  init := Operation.init
-  effect (a : CausalNetworkElem A network) : Operation.State A → Except (Operation.Error A) (Operation.State A) :=
-    Operation.effect a.elem
-
-def CausalNetwork.toDeliverMessages (network : CausalNetwork A) (i : ClientId) : List (CausalNetworkElem A network) :=
+def CausalNetwork.toDeliverMessages (network : CausalNetwork A) (i : ClientId) : List A :=
   network.toNodeHistories.histories i |>.filterMap (fun ev => match ev with
-    | Event.Deliver a => some (CausalNetworkElem.mk a)
+    | Event.Deliver a => some a
     | _ => none)
 
 -- don't need induction because it is sufficient to use filterMap_eq_..._iff lemma
 omit [Operation A] in theorem toDeliverMessages_histories (i : ClientId) :
   network.toDeliverMessages i = l1 ++ [m] ++ l2 ++ [m'] ++ l3 →
   ∃ l1 l2 l3,
-    network.toNodeHistories.histories i = l1 ++ [Event.Deliver m.elem] ++ l2 ++ [Event.Deliver m'.elem] ++ l3 := by
+    network.toNodeHistories.histories i = l1 ++ [Event.Deliver m] ++ l2 ++ [Event.Deliver m'] ++ l3 := by
   intro h_deliver_msgs
   simp [CausalNetwork.toDeliverMessages] at h_deliver_msgs
   generalize network.toNodeHistories.histories i = history at *
@@ -417,7 +407,7 @@ omit [Operation A] in theorem hb_consistent_local_history_aux i ms ms' :
         rw [←h_ms]
         simp
       obtain ⟨ l1, l2, l3, h_history_eq ⟩ := toDeliverMessages_histories network i h_ms
-      have h_locally_ordered : locallyOrdered network.toNodeHistories i (Event.Deliver h.elem) (Event.Deliver m.elem) := by
+      have h_locally_ordered : locallyOrdered network.toNodeHistories i (Event.Deliver h) (Event.Deliver m) := by
         simp [locallyOrdered]
         use l1, l2, l3
         rw [h_history_eq]
@@ -430,11 +420,11 @@ omit [Operation A] in theorem hb_consistent_local_history_aux i ms ms' :
           simp
       | inl h_eq =>
         subst h_eq
-        have h_m_idx_eq1 : (network.histories i)[l1.length]? = Event.Deliver m.elem := by
+        have h_m_idx_eq1 : (network.histories i)[l1.length]? = Event.Deliver m := by
           rw [h_history_eq]
           simp
 
-        have h_m_idx_eq2 : (network.histories i)[l1.length + 1 + l2.length]? = Event.Deliver m.elem := by
+        have h_m_idx_eq2 : (network.histories i)[l1.length + 1 + l2.length]? = Event.Deliver m := by
           rw [h_history_eq]
           simp
           rw [List.getElem?_append_right (by omega)]
@@ -450,7 +440,7 @@ omit [Operation A] in theorem hb_consistent_local_history_aux i ms ms' :
           rw [h_history_eq] at h_nodup_history
           apply h_nodup_history l1.length (l1.length + 1 + l2.length)
           . omega
-          . suffices some (l1 ++ [Event.Deliver m.elem] ++ l2 ++ [Event.Deliver m.elem] ++ l3)[l1.length] = some (l1 ++ [Event.Deliver m.elem] ++ l2 ++ [Event.Deliver m.elem] ++ l3)[l1.length + 1 + l2.length] by
+          . suffices some (l1 ++ [Event.Deliver m] ++ l2 ++ [Event.Deliver m] ++ l3)[l1.length] = some (l1 ++ [Event.Deliver m] ++ l2 ++ [Event.Deliver m] ++ l3)[l1.length + 1 + l2.length] by
               rw [Option.some_inj] at this
               assumption
             rw [<-List.getElem?_eq_getElem]
@@ -475,9 +465,9 @@ omit [Operation A] in theorem toDeliverMessages_Nodup (network : CausalNetwork A
   rw [List.nodup_iff_pairwise_ne, List.pairwise_iff_getElem]
   intros idx1 idx2 h_idx1_lt_length h_idx2_lt_length h_idx1_lt_idx2 h_eq
   rw [List.getElem_eq_iff_getElem?_eq] at h_eq
-  let f := fun ev =>
+  let f := fun (ev : Event A) =>
     match ev with
-    | Event.Deliver a => some $ CausalNetworkElem.mk (network := network) a
+    | Event.Deliver a => some a
     | x => none
   have h_eq_f : network.toDeliverMessages i = List.filterMap f (network.histories i) := by
     simp [CausalNetwork.toDeliverMessages]

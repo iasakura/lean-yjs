@@ -8,8 +8,6 @@ import LeanYjs.ListLemmas
 
 open List
 
--- import LeanYjs.Network.Basic
-
 abbrev CausalOrder A := PartialOrder A
 
 section CausalOrder
@@ -35,6 +33,13 @@ inductive hb_consistent : List A → Prop where
       hb_consistent ops →
       (∀ b, b ∈ ops → ¬ b ≤ a) →
       hb_consistent (a :: ops)
+
+inductive hb_strong_consistent : List A → List A → Prop where
+  | nil : hb_strong_consistent ops []
+  | cons : ∀ (a : A) (ops₀ ops₁ : List A),
+      hb_strong_consistent (a :: ops₀) ops₁ →
+      (∀b, b < a → b ∈ ops₀) →
+      hb_strong_consistent ops₀ (a :: ops₁)
 
 theorem List.sublist_mem {A : Type} {l₁ l₂ : List A} (h_sublist : l₁ <+ l₂) {a : A} :
   a ∈ l₁ → a ∈ l₂ := by
@@ -74,15 +79,6 @@ omit [DecidableEq A] in theorem hb_consistent_sublist {ops₀ ops₁ : List A} :
           apply List.sublist_mem h_sublist; assumption
         apply h_consistent_h_no_lt b h_b_mem_l₂ h_b_leq_x
 
-theorem option_not_lt_same {x : Option ℕ} :
-  ¬ x < x := by
-  intro h
-  cases x with
-  | none =>
-    simp at h
-  | some n =>
-    simp at h
-
 omit [DecidableEq A] in lemma hb_consistent_tail (a : A) (ops : List A) :
   (h_consistent : hb_consistent hb (a :: ops)) →
   hb_consistent hb ops := by
@@ -108,9 +104,16 @@ omit [DecidableEq A] in theorem effect_comp_assoc (op1 op2 op3 : Effect (A := A)
   unfold effect_comp
   simp
 
+def compatibleOp [DecidableEq A] (s : Operation.State A) (op : A) : Prop :=
+  ∃ops, hb_consistent hb ops ∧
+    (∀ a, a < op → a ∈ ops) ∧
+    (∀ a ∈ ops, ¬op ≤ a) ∧
+    (ops.map (fun a => effect a) |> List.foldr effect_comp Except.pure) Operation.init = Except.ok s
+
 def concurrent_commutative (list : List A) : Prop :=
   ∀ a b, a ∈ list → b ∈ list → hb_concurrent hb a b →
-    effect_comp (effect a) (effect b) = effect_comp (effect b) (effect a)
+    ∀ s : Operation.State A, compatibleOp hb s a → compatibleOp hb s b →
+      effect_comp (effect a) (effect b) s = effect_comp (effect b) (effect a) s
 
 omit [DecidableEq A] [Operation A] in theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
   hb_consistent hb (ops₀ ++ a :: ops₁) →
@@ -132,20 +135,38 @@ omit [DecidableEq A] [Operation A] in theorem hb_consistent_concurrent (a : A) (
       | inr h_mem_tail =>
         apply ih h_consistent_tail h_mem_tail
 
-omit [DecidableEq A] in theorem hb_concurrent_foldr {ops₀ ops₁ : List A} :
+inductive compatibleOps [DecidableEq A] (hb : CausalOrder A) : Operation.State A → List A → Prop where
+  | nil : compatibleOps hb s []
+  | cons :
+      compatibleOp hb s a →
+      effect a s = Except.ok s' →
+      compatibleOps hb s' ops' →
+      compatibleOps hb s (a :: ops')
+
+theorem hb_concurrent_foldr {ops₀ ops₁ : List A} {s : Operation.State A} :
   concurrent_commutative hb (ops₀ ++ a :: ops₁) →
   (∀ x ∈ ops₀, hb_concurrent hb x a) →
-  List.foldr (effect_comp (A := A)) (effect a ▷ init) (List.map (fun a => effect a) ops₀) =
-  effect a ▷ List.foldr (effect_comp (A := A)) init (List.map (fun a => effect a) ops₀) := by
+  compatibleOps hb s (ops₀ ++ a :: ops₁) →
+  List.foldr (effect_comp (A := A)) (effect a ▷ init) (List.map (fun a => effect a) ops₀) s =
+  (effect a ▷ List.foldr (effect_comp (A := A)) init (List.map (fun a => effect a) ops₀)) s := by
   induction ops₀ with
   | nil =>
     simp
   | cons b bs ih =>
-    intro h_comm h_concurrent
+    intro h_comm h_concurrent hcompatible
     simp
+    symm
+    calc
+      _ = ((effect a ▷ effect b) ▷ (foldr effect_comp init (map (fun a => effect a) bs))) s := by rw [effect_comp_assoc]
+      _ = ((effect a ▷ effect b) s >>= (foldr effect_comp init (map (fun a => effect a) bs))) := by rfl
+      _ = ((effect b ▷ effect a) s >>= (foldr effect_comp init (map (fun a => effect a) bs))) := by
+        rw [h_comm a b] <;> try grind [hb_concurrent]
+        simp [hb_concurrent] at *
+        grind
     rw [ih]
     . rw [←effect_comp_assoc]
       have h_effect_b_effect_a_comm : effect b ▷ effect a = effect a ▷ effect b := by
+        ext s
         apply h_comm
         . simp
         . simp
@@ -160,16 +181,22 @@ omit [DecidableEq A] in theorem hb_concurrent_foldr {ops₀ ops₁ : List A} :
         right; assumption
     . intros; apply h_concurrent; simp; right; assumption
 
-omit [DecidableEq A] in theorem hb_consistent_effect_convergent (ops₀ ops₁ : List A) (init : Effect)
+theorem effect_comp_apply {op1 op2 : Effect (A := A)} {s : Operation.State A} :
+  effect_comp op1 op2 s = op1 s >>= op2 := by
+  rfl
+
+theorem hb_consistent_effect_convergent (ops₀ ops₁ : List A) (init : Effect) s
   (h_consistent₀ : hb_consistent hb ops₀)
   (h_consistent₁ : hb_consistent hb ops₁)
+  (hcompatible₀ : compatibleOps hb s ops₀)
+  (hcompatible₁ : compatibleOps hb s ops₁)
   (h_commutative : concurrent_commutative hb ops₀)
   (no_dup₀ : ops₀.Nodup) (no_dup₁ : ops₁.Nodup) :
   (∀ a, a ∈ ops₀ ↔ a ∈ ops₁) →
-  (ops₀.map (fun a => effect a) |> List.foldr effect_comp init) =
-  (ops₁.map (fun a => effect a) |> List.foldr effect_comp init) :=
+  (ops₀.map (fun a => effect a) |> List.foldr effect_comp init) s =
+  (ops₁.map (fun a => effect a) |> List.foldr effect_comp init) s :=
 by
-  induction ops₀ generalizing ops₁ init with
+  induction ops₀ generalizing ops₁ s with
   | nil =>
     intros h_mem
     have ops₁_eq_nil : ops₁ = [] := by
@@ -188,26 +215,31 @@ by
     | cons b ops₁ =>
       by_cases h_eq : a = b
       . -- Case a = b
-        simp
+        simp [effect_comp]
         rw [h_eq]
-        ext s
-        congr 1
-        apply ih
-        . apply hb_consistent_tail hb a ops₀ h_consistent₀
-        . apply hb_consistent_tail hb b ops₁ h_consistent₁
-        . intros a b h_a_mem h_b_mem h_concurrent
-          apply h_commutative
-          . simp; right; assumption
-          . simp; right; assumption
-          . assumption
-        . simp at no_dup₀
-          obtain ⟨ h_no_dup₀ ⟩ := no_dup₀
-          assumption
-        . simp at no_dup₁
-          obtain ⟨ h_no_dup₁ ⟩ := no_dup₁
-          assumption
-        . subst h_eq
-          apply List.no_dup_cons_eq _ h_mem no_dup₀ no_dup₁
+        have (eq := hx) x := effect b s; rw [<-hx]
+        cases x with
+        | error e => rfl
+        | ok x =>
+          simp [bind, Except.bind.eq_2]
+          apply ih
+          . apply hb_consistent_tail hb a ops₀ h_consistent₀
+          . apply hb_consistent_tail hb b ops₁ h_consistent₁
+          . cases hcompatible₀; grind
+          . cases hcompatible₁; grind
+          . intros a b h_a_mem h_b_mem h_concurrent
+            apply h_commutative
+            . simp; right; assumption
+            . simp; right; assumption
+            . assumption
+          . simp at no_dup₀
+            obtain ⟨ h_no_dup₀ ⟩ := no_dup₀
+            assumption
+          . simp at no_dup₁
+            obtain ⟨ h_no_dup₁ ⟩ := no_dup₁
+            assumption
+          . subst h_eq
+            apply List.no_dup_cons_eq _ h_mem no_dup₀ no_dup₁
       . -- Case a ≠ b
         have ⟨ ops₁_first, ops₁_last, h_ops₁_eq ⟩ : ∃ ops₁_first ops₁_last, ops₁ = ops₁_first ++ a :: ops₁_last := by
           have h_a_mem_ops₁ : a ∈ ops₁ := by
@@ -273,47 +305,67 @@ by
           intros; apply h_a_concurrent_op₁_first; simp; right; assumption
         rw [hb_concurrent_foldr hb h_concurrent h_a_concurrent_op₁_first]
         rw [<-effect_comp_assoc]
-        rw [h_commutative b a]
-        rw [effect_comp_assoc]
-        congr!
-        rw [ih (b :: ops₁_first ++ ops₁_last) init]
-        simp
-        . cases h_consistent₀
-          assumption
-        . apply hb_consistent_sublist _ h_consistent₁
-          simp
-        . intros x y h_x_mem h_ey_mem h_concurrent
-          apply h_commutative
-          simp; right; assumption
-          simp; right; assumption
-          assumption
-        . simp at no_dup₀
-          obtain ⟨ ⟩ := no_dup₀
-          assumption
-        . apply Nodup.sublist _ no_dup₁
-          simp
-        . intros x
-          constructor
-          . intro h_mem₀
-            have h_mem₀_cons : x ∈ a :: ops₀ := by
+        have heq :
+          ((effect b ▷ effect a) ▷ foldr effect_comp (foldr effect_comp init (map (fun a => effect a) ops₁_last))
+            (map (fun a => effect a) ops₁_first)) s =
+          ((effect b ▷ effect a) s) >>= foldr effect_comp (foldr effect_comp init (map (fun a => effect a) ops₁_last))
+            (map (fun a => effect a) ops₁_first) := by
+          simp [effect_comp]
+        rw [heq, h_commutative b a]
+        . have heq :
+            (effect a ▷ effect b) s >>=
+              foldr effect_comp (foldr effect_comp init (map (fun a => effect a) ops₁_last)) (map (fun a => effect a) ops₁_first) =
+            ((effect a ▷ effect b) ▷ foldr effect_comp (foldr effect_comp init (map (fun a => effect a) ops₁_last))
+              (map (fun a => effect a) ops₁_first)) s := by
+            simp [effect_comp]
+          rw [heq]
+          rw [effect_comp_assoc]
+          rw [effect_comp_apply]
+          rw [effect_comp_apply]
+          cases heq : effect a s with
+          | error e => rfl
+          | ok s' =>
+            simp [bind, Except.bind.eq_2]
+            rw [ih (b :: ops₁_first ++ ops₁_last)]
+            . simp
+            . cases h_consistent₀
+              assumption
+            . apply hb_consistent_sublist _ h_consistent₁
+              simp
+            . cases hcompatible₀; grind
+            . cases hcompatible₁
+
+            . intros x y h_x_mem h_ey_mem h_concurrent
+              apply h_commutative
               simp; right; assumption
-            rw [h_mem] at h_mem₀_cons
-            simp at *
-            rcases h_mem₀_cons with h_eq' | ⟨ h | ⟨ h | h ⟩ ⟩
-            . left; assumption
-            . right; left; assumption
-            . subst h; obtain ⟨ h_eq'', _ ⟩ := no_dup₀
-              contradiction
-            . right; right; assumption
-          . grind only [=_ cons_append, = pairwise_append, eq_or_mem_of_mem_cons, = cons_append, →
-            Pairwise.of_cons, = nodup_cons, = nodup_append, = nodup_iff_pairwise_ne,
-            mem_cons_of_mem, mem_cons_self, → eq_nil_of_append_eq_nil, → eq_nil_of_map_eq_nil,
-            mem_append, = pairwise_iff_forall_sublist, = pairwise_middle, cases Or]
+              simp; right; assumption
+              assumption
+            . simp at no_dup₀
+              obtain ⟨ ⟩ := no_dup₀
+              assumption
+            . apply Nodup.sublist _ no_dup₁
+              simp
+            . intros x
+              constructor
+              . intro h_mem₀
+                have h_mem₀_cons : x ∈ a :: ops₀ := by
+                  simp; right; assumption
+                rw [h_mem] at h_mem₀_cons
+                simp at *
+                rcases h_mem₀_cons with h_eq' | ⟨ h | ⟨ h | h ⟩ ⟩
+                . left; assumption
+                . right; left; assumption
+                . subst h; obtain ⟨ h_eq'', _ ⟩ := no_dup₀
+                  contradiction
+                . right; right; assumption
+              . grind
         . rw [h_mem]
           simp
         . simp
         . simp [hb_concurrent] at *
           obtain ⟨ h_not_le_ab, h_not_le_ba ⟩ := h_a_b_concurrent
           constructor <;> assumption
+        . cases hcompatible₁; grind
+        . cases hcompatible₀; grind
 
 end CausalOrder
