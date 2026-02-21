@@ -1,24 +1,36 @@
 # LeanYjs Technical Documentation
 
-This document describes the current LeanYjs formalization and points to the
-actual implementation and proof files in this repository.
+## Goal Theorem (First)
 
-## Table of Contents
+The project goal is the convergence theorem in
+`LeanYjs/Network/Yjs/YjsNetwork.lean`:
 
-1. [Core Data Model](#core-data-model)
-2. [Insert Algorithm](#insert-algorithm)
-3. [Ordering Relations](#ordering-relations)
-4. [Array and State Invariants](#array-and-state-invariants)
-5. [Preservation Proofs](#preservation-proofs)
-6. [Commutativity Proofs](#commutativity-proofs)
-7. [Network Model and Convergence](#network-model-and-convergence)
-8. [Executable Differential Testing](#executable-differential-testing)
+```lean
+theorem YjsOperationNetwork_converge' {A} [DecidableEq A]
+  (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsState A) :
+  let hist_i := network.toDeliverMessages i
+  let hist_j := network.toDeliverMessages j
+  interpOps hist_i Operation.init = Except.ok res₀ →
+  interpOps hist_j Operation.init = Except.ok res₁ →
+  (∀ item, item ∈ hist_i ↔ item ∈ hist_j) →
+  res₀ = res₁
+```
 
-## Core Data Model
+Everything below exists to make this theorem provable in a compositional way.
 
-### Items and pointers
+## Development Flow
 
-Defined in `LeanYjs/Item.lean`:
+1. Data types (`YjsItem`, `YjsPtr`)
+2. Total-order prerequisites (`ItemSet`, `ItemSetInvariant`)
+3. Total-order theorems
+4. Algorithm invariants (`YjsArrInvariant`, `YjsStateInvariant`)
+5. Preservation proofs (algorithm keeps invariants)
+6. Commutativity proofs
+7. Network stack (`CausalNetwork`, `StrongCausalOrder`, `OperationNetwork`, `YjsNetwork`)
+
+## 1. Data Types: `YjsItem`, `YjsPtr`
+
+File: `LeanYjs/Item.lean`
 
 ```lean
 structure YjsId where
@@ -39,17 +51,12 @@ structure YjsItem : Type where
 end
 ```
 
-`YjsId` comparison (`LT YjsId`) is:
+The development assumes that `YjsId` is globally unique per item
+(no two distinct `YjsItem`s share the same id).
+This expectation appears later as `ItemSetInvariant.id_unique` and array-level
+`uniqueId` constraints.
 
-- primary key: `clientId` ascending
-- tie-breaker (same client): `clock` descending
-
-That matches Yjs-style client-based tie-breaking with newer local clocks treated
-as smaller in the local chain.
-
-### State
-
-Defined in `LeanYjs/Algorithm/Basic.lean`:
+The algorithm state is:
 
 ```lean
 structure YjsState (A : Type) where
@@ -57,112 +64,79 @@ structure YjsState (A : Type) where
   deletedIds : DeletedIdSet
 ```
 
-`deletedIds` stores tombstones for delete operations (`ExtTreeSet` keyed by `YjsId`).
+## 2. Total-Order Preconditions: `ItemSet`, `ItemSetInvariant`
 
-## Insert Algorithm
+- `LeanYjs/ItemSet.lean`
+- `LeanYjs/Order/ItemSetInvariant.lean`
 
-Main executable logic is in `LeanYjs/Algorithm/Insert/Basic.lean`.
+Core assumptions:
 
-### Input form
+- closure of origins/right-origins in the item set
+- no pathological origin/right-origin shape (`origin_not_leq`)
+- id uniqueness (`id_unique`)
 
-```lean
-structure IntegrateInput (A : Type) where
-  originId : Option YjsId
-  rightOriginId : Option YjsId
-  content : A
-  id : YjsId
-```
+These assumptions are what let the recursive ordering relations behave as a
+strict total order over valid items.
 
-`IntegrateInput.toItem` resolves optional origin ids against the current array
-and builds a concrete `YjsItem`.
+## 3. Total Order
 
-### Key functions
+Files:
 
-- `findLeftIdx`
-- `findRightIdx`
-- `findIntegratedIndex`
-- `mkItemByIndex`
-- `integrate`
-- `isClockSafe`
-- `integrateSafe`
-- `YjsState.insert`
+- `LeanYjs/Order/ItemOrder.lean`
+- `LeanYjs/Order/Totality.lean`
+- `LeanYjs/Order/Transitivity.lean`
+- `LeanYjs/Order/Asymmetry.lean`
 
-Core definitions:
+This project’s order is defined as an inductive relation tuned to the Yjs
+integration behavior (not a direct copy of the YATA paper relation).
 
-```lean
-def integrate (newItem : IntegrateInput A) (arr : Array (YjsItem A)) :
-  Except IntegrateError (Array (YjsItem A))
+Core inductive relations are:
 
-def integrateSafe (newItem : IntegrateInput A) (arr : Array (YjsItem A)) :
-  Except IntegrateError (Array (YjsItem A))
-```
+- `YjsLt`, `YjsLeq`, `ConflictLt`
+- shorthand predicates `YjsLt'`, `YjsLeq'`
 
-`integrateSafe` gates integration with `isClockSafe`, enforcing per-client
-clock monotonicity.
+Constructors used by this relation:
 
-### Delete side
+- `OriginLt`: sentinel/base order (`first < item < last`)
 
-Defined in `LeanYjs/Algorithm/Delete/Basic.lean`:
+- `YjsLt.ltOrigin`: if `x ≤ item.origin` then `x < item`
+- `YjsLt.ltRightOrigin`: if `item.rightOrigin ≤ x` then `item < x`
+- `ConflictLt.ltOriginDiff`: overlap case with different origins and four
+  side-conditions
+- `ConflictLt.ltOriginSame`: overlap case with same origin; `id1 < id2` is used
+  under its side-conditions
 
-```lean
-def deleteById (state : YjsState A) (id : YjsId) : YjsState A
-```
+`yjs_lt_total` is proved mainly by exhaustive case analysis following these
+constructors (implemented with strong induction on `x.size + y.size`).
+`yjs_lt_trans` and `yjs_lt_asymm` are proved by strong induction on pointer/item
+size measures.
 
-This updates only `deletedIds`.
-
-## Ordering Relations
-
-The order theory is in `LeanYjs/Order/*.lean`, centered on
-`LeanYjs/Order/ItemOrder.lean`.
-
-### Primitive relation
+Main theorem statements:
 
 ```lean
-inductive OriginLt : YjsPtr A -> YjsPtr A -> Prop
+theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
+  IsClosedItemSet P ->
+  ∀ (x y : YjsPtr A), P x -> P y ->
+    (∃ h, @YjsLeq A h x y) ∨ (∃ h, @YjsLt A h y x)
 ```
-
-With constructors for sentinel ordering (`first < item < last`).
-
-### Main mutually-recursive relations
 
 ```lean
-mutual
-  inductive YjsLt : Nat -> YjsPtr A -> YjsPtr A -> Prop
-  inductive YjsLeq : Nat -> YjsPtr A -> YjsPtr A -> Prop
-  inductive ConflictLt : Nat -> YjsPtr A -> YjsPtr A -> Prop
-end
+theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
+  IsClosedItemSet P ->
+  ∀ (x y z : YjsPtr A), P x -> P y -> P z ->
+  YjsLt' x y -> YjsLt' y z -> YjsLt' x z
 ```
-
-Abbreviations:
 
 ```lean
-def YjsLt'  (x y : YjsPtr A) : Prop := ∃ h, YjsLt h x y
-def YjsLeq' (x y : YjsPtr A) : Prop := ∃ h, YjsLeq h x y
+theorem yjs_lt_asymm {A} [DecidableEq A] {P : ItemSet A} :
+  IsClosedItemSet P ->
+  ItemSetInvariant P ->
+  ∀ (x y : YjsPtr A), P x -> P y -> YjsLt' x y -> YjsLt' y x -> False
 ```
 
-### Item-set assumptions
+## 4. Algorithm Invariants
 
-`LeanYjs/Order/ItemSetInvariant.lean`:
-
-```lean
-structure ItemSetInvariant (P : ItemSet A) where
-  origin_not_leq : ...
-  origin_nearest_reachable : ...
-  id_unique : ...
-```
-
-These constraints rule out pathological graphs and are required for total-order
-results.
-
-### Total-order results
-
-- `yjs_lt_total` (`LeanYjs/Order/Totality.lean`)
-- `yjs_lt_trans` (`LeanYjs/Order/Transitivity.lean`)
-- `yjs_lt_asymm` (`LeanYjs/Order/Asymmetry.lean`)
-
-## Array and State Invariants
-
-`LeanYjs/Algorithm/Invariant/YjsArray.lean` defines:
+File: `LeanYjs/Algorithm/Invariant/YjsArray.lean`
 
 ```lean
 structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
@@ -171,44 +145,36 @@ structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
   sorted : List.Pairwise (fun x y => YjsLt' x y) arr
   unique : uniqueId arr
 
-def YjsStateInvariant (state : YjsState A) : Prop := YjsArrInvariant state.items.toList
+def YjsStateInvariant (state : YjsState A) : Prop :=
+  YjsArrInvariant state.items.toList
 ```
 
-Insert proof-side validity helpers in `LeanYjs/Algorithm/Insert/Spec.lean`:
+Field meanings:
 
-```lean
-structure IsItemValid (item : YjsItem A) where
-  origin_lt_rightOrigin : YjsLt' item.origin item.rightOrigin
-  reachable_YjsLeq' : ...
+- `closed`: every item's `origin`/`rightOrigin` stays inside the same array-set
+  (plus sentinels).
+- `item_set_inv`: order-side structural conditions on the same set
+  (`origin_not_leq`, `id_unique`, etc.).
+- `sorted`: array order is pairwise consistent with `YjsLt'`.
+- `unique`: no duplicate `YjsId` in the array.
 
-abbrev YjsItem.isValid : YjsItem A → Prop := IsItemValid
+`YjsStateInvariant` simply lifts the same condition to `YjsState.items`.
+These invariants are what insert/delete proofs preserve at the algorithm level.
 
-def maximalId (newItem : YjsItem A) (arr : Array (YjsItem A)) := ...
-```
+## 5. Preservation Proofs
 
-## Preservation Proofs
+Insert implementation and proofs:
 
-Main file: `LeanYjs/Algorithm/Insert/Spec.lean`.
+- implementation: `LeanYjs/Algorithm/Insert/Basic.lean`
+- proofs: `LeanYjs/Algorithm/Insert/Spec.lean`
 
-### Integration preserves array invariant
+Main preservation theorems:
 
-```lean
-theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array (YjsItem A)) :
-  YjsArrInvariant arr.toList
-  → input.toItem arr = Except.ok newItem
-  → newItem.isValid
-  → maximalId newItem arr
-  → integrate input arr = Except.ok newArr
-  → ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList
-```
+- `YjsArrInvariant_integrate`
+- `YjsArrInvariant_integrateSafe`
+- `YjsStateInvariant_insert`
 
-### Safe integration preserves invariant
-
-```lean
-theorem YjsArrInvariant_integrateSafe ...
-```
-
-### State-level preservation
+`YjsStateInvariant_insert` statement:
 
 ```lean
 theorem YjsStateInvariant_insert (arr newArr : YjsState A) (input : IntegrateInput A) :
@@ -219,91 +185,127 @@ theorem YjsStateInvariant_insert (arr newArr : YjsState A) (input : IntegrateInp
   → YjsStateInvariant newArr
 ```
 
-Delete preservation is in `LeanYjs/Algorithm/Delete/Spec.lean`:
+This theorem captures preservation of `YjsStateInvariant` across an insert
+step. More concretely, it assumes that the pre-state `arr` already satisfies
+`YjsStateInvariant`, that resolving `input` against `arr.items` succeeds and
+produces a concrete `newItem`, and that this item satisfies
+`newItem.isValid`. Under these assumptions, if the executable insert step
+`arr.insert input` returns `newArr`, then `newArr` also satisfies
+`YjsStateInvariant`.
+
+The predicate `newItem.isValid` is defined in
+`LeanYjs/Algorithm/Insert/Spec.lean` as:
 
 ```lean
-theorem YjsStateInvariant_deleteById ...
+structure IsItemValid (item : YjsItem A) where
+  origin_lt_rightOrigin : YjsLt' item.origin item.rightOrigin
+  reachable_YjsLeq' : (∀ (x : YjsPtr A),
+      OriginReachable (YjsPtr.itemPtr item) x →
+      YjsLeq' x item.origin ∨ YjsLeq' item.rightOrigin x)
+
+abbrev YjsItem.isValid : YjsItem A → Prop := IsItemValid
 ```
 
-## Commutativity Proofs
+Delete side:
 
-### Insert/Insert
+- implementation: `LeanYjs/Algorithm/Delete/Basic.lean`
+- proof: `LeanYjs/Algorithm/Delete/Spec.lean`
+- theorem: `YjsStateInvariant_deleteById`
 
-`LeanYjs/Algorithm/Commutativity/InsertInsert.lean`:
+`YjsStateInvariant_deleteById` statement:
 
-- `integrate_commutative`
+```lean
+theorem YjsStateInvariant_deleteById (state : YjsState A) (id : YjsId) :
+  YjsStateInvariant state →
+  YjsStateInvariant (deleteById state id)
+```
+
+## 6. Commutativity Proofs
+
+Files:
+
+- `LeanYjs/Algorithm/Commutativity/InsertInsert.lean`
+- `LeanYjs/Algorithm/Commutativity/InsertDelete.lean`
+- `LeanYjs/Algorithm/Commutativity/DeleteDelete.lean`
+
+Main results:
+
 - `insert_commutative`
+- `insert_deleteById_commutative` (insert-delete)
+- `deleteById_commutative`
 
-These establish equivalence of the two integration orders for concurrent
-inserts under the theorem preconditions (distinct client ids, no origin
-reachability cycles, validity assumptions).
+`insert_commutative` is the main insert-insert commutativity theorem at
+`YjsState.insert` level. It is the form used directly from the network proof
+when both concurrent operations are insert messages.
 
-### Insert/Delete
+`insert_deleteById_commutative` states that inserting and then applying
+`deleteById` is equal to applying `deleteById` first and then inserting.
+In this model, `deleteById` updates only the tombstone set, so it commutes with
+insert in the stated sense.
 
-`LeanYjs/Algorithm/Commutativity/InsertDelete.lean`:
+`deleteById_commutative` states that two delete operations commute with each
+other. Since deletes are set inserts into `deletedIds`, the result is set-level
+commutativity.
 
-```lean
-theorem integrateSafe_deleteById_commutative ...
-```
+Together, these three theorems provide the local permutation steps required by
+`YjsOperationNetwork_concurrentCommutative`, which is then used in the final
+convergence proof.
 
-### Delete/Delete
+## 7. Network Layering to `YjsNetwork`
 
-`LeanYjs/Algorithm/Commutativity/DeleteDelete.lean`:
+The stack is built in this order:
 
-```lean
-theorem deleteById_commutative ...
-```
+1. `CausalNetwork` (`LeanYjs/Network/CausalNetwork.lean`)
+2. `StrongCausalOrder` (`LeanYjs/Network/StrongCausalOrder.lean`)
+3. `OperationNetwork` (`LeanYjs/Network/OperationNetwork.lean`)
+4. `YjsOperationNetwork` (`LeanYjs/Network/Yjs/YjsNetwork.lean`)
 
-## Network Model and Convergence
+Role of each layer:
 
-### Generic model
+1. `CausalNetwork` provides concrete event histories (`Broadcast`/`Deliver`) and
+   assumptions that connect local histories to happens-before.
+2. `StrongCausalOrder` provides the hb-consistency/concurrency framework used by
+   the final convergence pipeline (including `hb_consistent_effect_convergent`).
+3. `OperationNetwork` connects network events to an executable operation model
+   (`Operation.effect`, `isValidState`, invariant preservation).
+4. `YjsOperationNetwork` is the Yjs-specific instantiation with insert/delete
+   messages, Yjs state invariants, and Yjs-specific validity assumptions.
 
-- `LeanYjs/Network/CausalNetwork.lean`
-- `LeanYjs/Network/OperationNetwork.lean`
-- `LeanYjs/Network/StrongCausalOrder.lean`
+Why the strong framework is needed:
 
-The framework defines histories of broadcast/deliver events, happens-before
-consistency, and operation interpretation over local histories.
+`LeanYjs/Algorithm/Insert/Basic.lean` (section `InconsistencyExample`) records a
+counterexample showing why an unconditional commutativity law is too strong for
+Yjs insert. Intuitively, if a state violates the nearest-reachable side
+condition (for example the `a/b/o/n` scenario in that section), different
+integration orders can produce different outcomes.
 
-### Yjs instantiation
+Therefore this project uses `StrongCausalOrder`, where commutativity is stated
+with explicit premises: state invariant, per-operation validity in that state,
+and successful execution. In that sense, the framework is "stronger" in
+assumptions but the commutativity claim itself is logically weaker than an
+unconditional one, which is exactly what Yjs needs.
 
-`LeanYjs/Network/Yjs/YjsNetwork.lean` defines:
+From these layers, `YjsNetwork` proves:
 
-- `YjsOperation` (`insert` / `delete`)
-- `YjsOperationNetwork` (extends generic `OperationNetwork`)
-- validity and invariant preservation for Yjs operations
+- local concurrent commutativity:
+  `YjsOperationNetwork_concurrentCommutative`
+- final convergence goal:
+  `YjsOperationNetwork_converge'`
 
-Key results:
+How the final step works:
 
-- `YjsOperationNetwork_concurrentCommutative`
-- `YjsOperationNetwork_converge'`
+- `YjsOperationNetwork_concurrentCommutative` is proved by case analysis on
+  concurrent operation pairs (insert/insert, insert/delete, delete/delete),
+  using the commutativity theorems from Section 6.
+- `YjsOperationNetwork_converge'` then applies the generic convergence machinery
+  for hb-consistent executions (from the network/order layer) together with the
+  Yjs commutativity and validity/invariant lemmas, yielding equal final states
+  when delivered operation sets are equal.
 
-`YjsOperationNetwork_converge'` is the convergence theorem used here: if two
-clients deliver the same set of operations (possibly in different
-happens-before-consistent orders), they reach equal final states.
+## Appendix: Executable Differential Testing
 
-## Executable Differential Testing
-
-### Lean runner
-
-`DiffTestRunner.lean` provides an executable (`diff-test-runner`) that:
-
-- accepts NDJSON commands from stdin
-- applies `insert` and `sync` transitions to per-client `YString` states
-- outputs final per-client strings as JSON
-
-Command forms:
-
-- `{"type":"insert","clientId":...,"index":...,"char":"..."}`
-- `{"type":"sync","from":...,"to":...}`
-
-### JS differential harness
-
-`diff-test/` compares Lean output with upstream `yjs`:
-
-- deterministic scenario test: `diff-test/src/insert.test.ts`
-- property-based test (`fast-check`): `diff-test/src/pbt.test.ts`
-- helper bridge for building/running Lean binary: `diff-test/src/testUtils.ts`
+- Lean runner: `DiffTestRunner.lean`
+- JS harness: `diff-test/src/*.ts`
 
 Run:
 
