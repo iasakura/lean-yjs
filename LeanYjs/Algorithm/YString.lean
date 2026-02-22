@@ -10,19 +10,6 @@ structure YString : Type where
 
 def YString.new : YString := { contents := #[] }
 
-def extGetElemExcept (arr : Array (YjsItem A)) (idx : Int) : Except IntegrateError (YjsPtr A) :=
-  if idx = -1 then
-    Except.ok YjsPtr.first
-  else if idx = arr.size then
-    Except.ok YjsPtr.last
-  else
-    if idx < 0 || idx >= arr.size then
-      Except.error IntegrateError.error
-    else
-      match arr[idx.toNat]? with
-      | some item => return item
-      | none => Except.error IntegrateError.error
-
 def nextId (currentId : YjsId) : YjsId :=
   YjsId.mk currentId.clientId (currentId.clock + 1)
 
@@ -36,8 +23,8 @@ def YString.insert (s : YString) (i : Nat) (c : Char) : StateT YjsId (Except Int
   if i > s.contents.size then
     throw $ IntegrateError.error
   let arr : Array Item := s.contents
-  let origin <- extGetElemExcept arr (Int.ofNat i - 1)
-  let rightOrigin <- extGetElemExcept arr (Int.ofNat i)
+  let origin <- getPtrExcept arr (Int.ofNat i - 1)
+  let rightOrigin <- getPtrExcept arr (Int.ofNat i)
   let currentId <- StateT.get
   let id := nextId currentId
   StateT.set id

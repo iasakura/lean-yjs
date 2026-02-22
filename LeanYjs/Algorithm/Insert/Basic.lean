@@ -312,3 +312,60 @@ def test21 := do
 | Except.error _err => IO.println s!"Error"
 
 end Test
+
+section InconsistencyExample
+
+/--
+This example shows that the insert algorithm can produce different results depending on the order of integration, which can lead to inconsistency if not handled properly. In this example, we have two items "o" and "n" that are both inserted after "a" and "b". Depending on the order of integration, "o" can end up before "n" or vice versa, which is inconsistent with the intention of the operations.
+This is because o doesn't satisfy the condition origin_nearest_reachable in ItemSetInvariant.lean:
+∀ (o r : YjsPtr A) c id x,
+    P (YjsItem.mk o r id c) ->
+    OriginReachable (A := A) (YjsItem.mk o r id c) x ->
+    (YjsLeq' x o) ∨ (YjsLeq' r x)
+This condition means that for any item, if there is another item that is reachable from it through the origin or right origin pointers, then that item must be either less than or equal to the original item or greater than or equal to the right origin. In this example, "a" is reachable from "o" through the origin pointer, but "o"'s origin and rightOrigin are none (= YjsPtr.first) and "b" respectively. Because YjsPtr.first < "a" < "b", origin_nearest_reachable is not satisfied for "o".
+For this reason, the Yjs insert algorithm cannot satisfy the "concurrent commutativity" property, because it requires that insert is commutative beginning from any state, but origin_nearest_reachable is not hold for any state (the state after inserting "a" and "b" doesn't satisfy origin_nearest_reachable for "o"). To fix this issue, we give an stronger version of concurrent commutativity. See Network/StrongCausalOrder.lean .
+-/
+
+def a := IntegrateInput.mk none none "a" (YjsId.mk 0 0)
+def b := IntegrateInput.mk (YjsId.mk 0 0) none "b" (YjsId.mk 1 0)
+def o := IntegrateInput.mk none (YjsId.mk 1 0) "o" (YjsId.mk 2 0)
+def n := IntegrateInput.mk (YjsId.mk 0 0) none "n" (YjsId.mk 3 0)
+
+def inconsistent1 := do
+  let mut arr := YjsState.empty
+  arr ← arr.insert a
+  arr ← arr.insert b
+  arr ← arr.insert o
+  arr ← arr.insert n
+  return arr
+
+def inconsistent2 := do
+  let mut arr := YjsState.empty
+  arr ← arr.insert a
+  arr ← arr.insert b
+  arr ← arr.insert n
+  arr ← arr.insert o
+  return arr
+
+def YjsState.toString (arr : YjsState String) : String :=
+  arr.items.toList.map (fun item => YjsItem.content item) |> String.join
+
+#eval do
+  match inconsistent1.map (fun arr => YjsState.toString arr) with
+  | Except.ok str => IO.println str
+  | Except.error _err => IO.println s!"Error"
+
+#eval match inconsistent2.map (fun arr => YjsState.toString arr) with
+| Except.ok str => IO.println str
+| Except.error _err => IO.println s!"Error"
+
+theorem inconsistent1_inconsistent2 : inconsistent1 ≠ inconsistent2 := by
+  have h : inconsistent1.map (fun arr => YjsState.toString arr) = Except.ok "anob" := by
+    simp [inconsistent1, a, b, o, n, YjsState.insert, integrateSafe, integrate, findLeftIdx, findRightIdx, findIntegratedIndex, mkItemByIndex, bind, isClockSafe, YjsState.empty, Except.bind, pure, Except.pure, getPtrExcept, getElemExcept, ClientId, List.findIdx?_cons, findPtrIdx]
+    eq_refl
+  have h : inconsistent2.map (fun arr => YjsState.toString arr) = Except.ok "aobn" := by
+    simp [inconsistent2, a, b, o, n, YjsState.insert, integrateSafe, integrate, findLeftIdx, findRightIdx, findIntegratedIndex, mkItemByIndex, bind, isClockSafe, YjsState.empty, Except.bind, pure, Except.pure, getPtrExcept, getElemExcept, ClientId, List.findIdx?_cons, findPtrIdx]
+    eq_refl
+  grind
+
+end InconsistencyExample

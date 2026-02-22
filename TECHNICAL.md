@@ -1,20 +1,27 @@
 # LeanYjs Technical Documentation
 
-This document provides an in-depth technical explanation of the LeanYjs formalization, complementing the high-level overview in the README.
+## Goal Theorem
 
-## Table of Contents
+The project goal is the convergence theorem in `LeanYjs/Network/Yjs/YjsNetwork.lean`:
 
-1. [Data Structures](#data-structures)
-2. [Integrate Implementation](#integrate-implementation)
-3. [Ordering Relations](#ordering-relations)
-4. [ItemSet Invariants](#itemset-invariants)
-5. [Total Order Proofs](#total-order-proofs)
-6. [Integrate Correctness](#integrate-correctness)
-7. [Network Model and Convergence](#network-model-and-convergence)
+```lean
+theorem YjsOperationNetwork_converge' {A} [DecidableEq A]
+  (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsState A) :
+  let hist_i := network.toDeliverMessages i
+  let hist_j := network.toDeliverMessages j
+  interpOps hist_i Operation.init = Except.ok res₀ →
+  interpOps hist_j Operation.init = Except.ok res₁ →
+  (∀ item, item ∈ hist_i ↔ item ∈ hist_j) →
+  res₀ = res₁
+```
 
-## Data Structures
+This theorem is the SEC-style endpoint of the project. It compares two clients `i` and `j`, takes their delivered-operation histories `hist_i` and `hist_j`, and assumes both histories execute successfully from `Operation.init`, producing `res₀` and `res₁`. The key premise is set equality of delivered operations (`∀ item, item ∈ hist_i ↔ item ∈ hist_j`), not equality of list order. Under the causal and validity assumptions packaged in `YjsOperationNetwork`, the theorem concludes `res₀ = res₁`: delivery order may vary, but equal delivered operation sets yield the same final Yjs state.
 
-The core data structures in LeanYjs are defined in `LeanYjs/Item.lean`.
+## 1. Basic Data Structure
+
+Yjs state is an ordered list of items. Each item (`YjsItem`) stores the `origin` and `rightOrigin` chosen when that item was generated (the insertion operation metadata), plus its `id`. The list is sorted by item order, and that order is determined by `origin`, `rightOrigin`, and `id`. Deletion is represented by tombstones: deleted item ids are recorded in `deletedIds` rather than physically removing items from `items`.
+
+File: `LeanYjs/Item.lean`
 
 ```lean
 structure YjsId where
@@ -27,301 +34,220 @@ inductive YjsPtr : Type where
   | first : YjsPtr
   | last : YjsPtr
 
-inductive YjsItem : Type where
-| item (origin : YjsPtr) (rightOrigin : YjsPtr) : YjsId -> A -> YjsItem
+structure YjsItem : Type where
+  origin : YjsPtr
+  rightOrigin : YjsPtr
+  id : YjsId
+  content : A
 end
 ```
 
-`YjsId` orders events primarily by `clientId` and secondarily by a descending `clock` (local Lamport clock), matching the Yjs tie-breaking rule. `YjsPtr.first/last` are sentinels that bound the editable sequence.
+The development assumes that `YjsId` is globally unique per item (no two distinct `YjsItem`s share the same id). This expectation appears later as `ItemSetInvariant.id_unique` and array-level `uniqueId` constraints.
 
-Helper accessors:
-
-```lean
-def YjsItem.origin {A} : YjsItem A -> YjsPtr A
-def YjsItem.rightOrigin {A} : YjsItem A -> YjsPtr A
-def YjsItem.id {A} : YjsItem A -> YjsId
-```
-
-## Integrate Implementation
-
-The executable algorithm lives in `LeanYjs/Algorithm/Integrate.lean` and follows the reference CRDT implementation.
+The algorithm state stores this sequence as an array:
 
 ```lean
-def findIntegratedIndex (leftIdx rightIdx : Int) (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError Nat := do
-  let mut scanning := false
-  let mut destIdx := leftIdx + 1
-  for offset in [1:(rightIdx-leftIdx).toNat] do
-    let i := (leftIdx + offset).toNat
-    let other <- getElemExcept arr i
-    let oLeftIdx <- findPtrIdx other.origin arr
-    let oRightIdx <- findPtrIdx other.rightOrigin arr
-    if oLeftIdx < leftIdx then
-      break
-    else if oLeftIdx == leftIdx then
-      if newItem.id.clientId > other.id.clientId then
-        scanning := false
-      else if oRightIdx == rightIdx then
-        break
-      else
-        scanning := true
-    if !scanning then destIdx := i + 1
-  return (Int.toNat destIdx)
-
-def integrate (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
-  let leftIdx <- findPtrIdx (YjsItem.origin newItem) arr
-  let rightIdx <- findPtrIdx (YjsItem.rightOrigin newItem) arr
-  let destIdx <- findIntegratedIndex leftIdx rightIdx newItem arr
-  return (arr.insertIdxIfInBounds (Int.toNat destIdx) newItem)
-
-def integrateSafe (newItem : YjsItem A) (arr : Array (YjsItem A)) : Except IntegrateError (Array (YjsItem A)) := do
-  if isClockSafe newItem arr then integrate newItem arr else Except.error IntegrateError.error
+structure YjsState (A : Type) where
+  items : Array (YjsItem A)
+  deletedIds : DeletedIdSet
 ```
 
-### Algorithm Logic
+## 2. YjsItem Validity Preconditions: `ItemSet`, `ItemSetInvariant`
 
-1. **Find boundaries**: Locate the indices of `origin` and `rightOrigin` in the array
-2. **Scan between boundaries**: Examine each item between the insertion boundaries
-3. **Conflict resolution**:
-   - If `oLeftIdx < leftIdx`: Current item should come before newItem (break)
-   - If `oLeftIdx == leftIdx`: Items share an origin; prefer smaller `clientId`, breaking ties with `rightOrigin`
-   - If `oRightIdx == rightIdx`: Items have same rightOrigin, determines final position
-4. **Position tracking**: `destIdx` tracks where to insert, `scanning` controls when to advance it
-5. **Clock safety**: `integrateSafe` enforces per-client clock monotonicity to rule out duplicate IDs
+- `LeanYjs/ItemSet.lean`
+- `LeanYjs/Order/ItemSetInvariant.lean`
 
-The algorithm ensures that the resulting array maintains the total order defined by the ordering relations.
+Core assumptions:
 
-## Ordering Relations
+- closure of origins/right-origins in the item set
+- no pathological origin/right-origin shape (`origin_not_leq`)
+- nearest-reachable side condition (`origin_nearest_reachable`)
+- id uniqueness (`id_unique`)
 
-The ordering relations are defined in `LeanYjs/Order/ItemOrder.lean`. They establish a total order over `YjsPtr` elements once paired with the invariants below.
+These conditions capture the structural validity expected of `YjsItem`s in this model, and they are used by later order and algorithm proofs.
 
-### OriginLt
+## 3. Total Order
 
-```lean
-inductive OriginLt {A} : YjsPtr A -> YjsPtr A -> Prop where
-  | lt_first : forall item, OriginLt YjsPtr.first (YjsPtr.itemPtr item)
-  | lt_last : forall item, OriginLt (YjsPtr.itemPtr item) YjsPtr.last
-  | lt_first_last : OriginLt YjsPtr.first YjsPtr.last
-```
+Files:
 
-This defines the basic ordering between boundary elements and items. Intuitively:
+- `LeanYjs/Order/ItemOrder.lean`
+- `LeanYjs/Order/Totality.lean`
+- `LeanYjs/Order/Transitivity.lean`
+- `LeanYjs/Order/Asymmetry.lean`
 
-- `first` comes before any item
-- Any item comes before `last`
-- `first` comes before `last`
-- Transitivity/comparability for arbitrary items is supplied by the mutually defined relations below.
+This project’s order is defined as an inductive relation tuned to the Yjs integration behavior (not a direct copy of the YATA paper relation).
 
-### YjsLt, ConflictLt, and YjsLeq
+Core inductive relations are:
 
-The core ordering relations are mutually defined and no longer carry an explicit `ItemSet` parameter (the invariants supply well-formedness separately):
+- `YjsLt`, `YjsLeq`, `ConflictLt`
+- shorthand predicates `YjsLt'`, `YjsLeq'`
 
-```lean
-mutual
-  inductive YjsLt {A : Type} : Nat -> YjsPtr A -> YjsPtr A -> Prop where
-    | ltConflict h i1 i2 : ConflictLt h i1 i2 -> YjsLt (h + 1) i1 i2
-    | ltOriginOrder i1 i2 : OriginLt i1 i2 -> YjsLt 0 i1 i2
-    | ltOrigin h x o r id c : YjsLeq h x o -> YjsLt (h + 1) x (YjsItem.mk o r id c)
-    | ltRightOrigin h o r id c x : YjsLeq h r x -> YjsLt (h + 1) (YjsItem.mk o r id c) x
+Constructors used by this relation:
 
-  inductive YjsLeq {A : Type} : Nat -> YjsPtr A -> YjsPtr A -> Prop where
-    | leqSame x : YjsLeq h x x
-    | leqLt h x y : YjsLt h x y -> YjsLeq (h + 1) x y
+- `OriginLt`: sentinel/base order (`first < item < last`)
 
-  inductive ConflictLt {A : Type} : Nat -> YjsPtr A -> YjsPtr A -> Prop where
-    | ltOriginDiff h1 h2 h3 h4 l1 l2 r1 r2 id1 id2 c1 c2 :
-      YjsLt h1 l2 l1
-      -> YjsLt h2 (YjsItem.mk l1 r1 id1 c1) r2
-      -> YjsLt h3 l1 (YjsItem.mk l2 r2 id2 c2)
-      -> YjsLt h4 (YjsItem.mk l2 r2 id2 c2) r1
-      -> ConflictLt (max4 h1 h2 h3 h4 + 1) (YjsItem.mk l1 r1 id1 c1) (YjsItem.mk l2 r2 id2 c2)
-    | ltOriginSame h1 h2 l r1 r2 id1 id2 (c1 c2 : A) :
-      YjsLt h1 (YjsItem.mk l r1 id1 c1) r2
-      -> YjsLt h2 (YjsItem.mk l r2 id2 c2) r1
-      -> id1 < id2
-      -> ConflictLt (max h1 h2 + 1) (YjsItem.mk l r1 id1 c1) (YjsItem.mk l r2 id2 c2)
-end
-```
+- `YjsLt.ltOrigin`: if `x ≤ item.origin` then `x < item`
+- `YjsLt.ltRightOrigin`: if `item.rightOrigin ≤ x` then `item < x`
+- `ConflictLt.ltOriginDiff`: overlap case with different origins and four side-conditions
+- `ConflictLt.ltOriginSame`: overlap case with same origin; `id1 < id2` is used under its side-conditions
 
-These definitions capture the intuitive ordering rules:
+`yjs_lt_total` is proved mainly by exhaustive case analysis following these constructors (implemented with strong induction on `x.size + y.size`). `yjs_lt_trans` and `yjs_lt_asymm` are proved by strong induction on pointer/item size measures.
 
-1. **ltOriginOrder**: Direct ordering from `OriginLt` for boundary cases
-2. **ltOrigin**: `x < item` if `x ≤ item.origin`
-3. **ltRightOrigin**: `item < x` if `item.rightOrigin ≤ x`
-4. **ltConflict**: Handle conflicts between items with complex positioning rules
-
-The conflict resolution rules ensure that when two items have overlapping insertion positions, they are ordered deterministically based on their origins and actor IDs.
-
-`YjsLt'`/`YjsLeq'` abbreviations existentially quantify the height parameter, hiding proof bookkeeping when reasoning in tactics.
-
-## ItemSet Invariants
-
-`ItemSet` is a predicate over `YjsPtr` (`LeanYjs/ItemSet.lean`). `LeanYjs/Order/ItemSetInvariant.lean` packages the structural requirements used to rule out pathological graphs.
-
-### ItemSet Definition
-
-```lean
-def ItemSet := Set (YjsPtr A)
-
-structure IsClosedItemSet {A} (P : YjsPtr A -> Prop) : Prop where
-  baseFirst : P YjsPtr.first
-  baseLast : P YjsPtr.last
-  closedLeft : (∀ (o : YjsPtr A) r id c, P (YjsItem.mk o r id c) -> P o)
-  closedRight : (∀ o (r : YjsPtr A) id c, P (YjsItem.mk o r id c) -> P r)
-```
-
-### ItemSetInvariant
-
-```lean
-structure ItemSetInvariant where
-  origin_not_leq : ∀ (o r : YjsPtr A) c id, P (YjsItem.mk o r id c) ->
-    YjsLt' o r
-  origin_nearest_reachable : ∀ (o r : YjsPtr A) c id x,
-    P (YjsItem.mk o r id c) ->
-    OriginReachable (A := A) (YjsItem.mk o r id c) x ->
-    (YjsLeq' x o) ∨ (YjsLeq' r x)
-  id_unique : ∀ (x y : YjsItem A), x.id = y.id -> P x -> P y -> x = y
-```
-
-These invariants are crucial because **without them, the ordering would not be a total order**. For example:
-
-- Without `origin_not_leq`: An item could have `origin = rightOrigin`, violating asymmetry
-- Without `origin_nearest_reachable`: Reachability along origins could skip over nearer elements, breaking comparability
-- Without `id_unique`: Two equal IDs could form incomparable duplicates
-
-The invariants eliminate pathological cases that would break the mathematical properties needed for a total order.
-
-## Total Order Proofs
-
-The proofs that the ordering relations form a total order are split across three files under `LeanYjs/Order/`.
-
-### Totality (`LeanYjs/Order/Totality.lean`)
+Main theorem statements:
 
 ```lean
 theorem yjs_lt_total {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y : YjsPtr A), P x -> P y ->
-    (∃ h, @YjsLeq A P h x y) ∨ (∃ h, @YjsLt A P h y x)
+    (∃ h, @YjsLeq A h x y) ∨ (∃ h, @YjsLt A h y x)
 ```
-
-Proves that for any two elements `x` and `y` in a valid ItemSet, either `x ≤ y` or `y < x`.
-
-### Transitivity (`LeanYjs/Order/Transitivity.lean`)
 
 ```lean
 theorem yjs_lt_trans {A : Type} [DecidableEq A] {P : ItemSet A} {inv : ItemSetInvariant P} :
   IsClosedItemSet P ->
   ∀ (x y z : YjsPtr A), P x -> P y -> P z ->
-  YjsLt' P x y -> YjsLt' P y z -> YjsLt' P x z
+  YjsLt' x y -> YjsLt' y z -> YjsLt' x z
 ```
-
-Proves that if `x < y` and `y < z`, then `x < z`.
-
-### Asymmetry (`LeanYjs/Order/Asymmetry.lean`)
 
 ```lean
 theorem yjs_lt_asymm {A} [DecidableEq A] {P : ItemSet A} :
   IsClosedItemSet P ->
   ItemSetInvariant P ->
-  ∀ (x y : YjsPtr A), YjsLt' P x y -> YjsLt' P y x -> False
+  ∀ (x y : YjsPtr A), P x -> P y -> YjsLt' x y -> YjsLt' y x -> False
 ```
 
-Proves that if `x < y`, then `¬(y < x)`, establishing asymmetry.
+## 4. Algorithm Invariants
 
-These three properties together establish that the ordering is a strict total order.
-
-## Integrate Correctness
-
-The main correctness results are in `LeanYjs/Algorithm/IntegrateSpec.lean` and `LeanYjs/Algorithm/IntegrateCommutative.lean`.
-
-### Main Theorem
+File: `LeanYjs/Algorithm/Invariant/YjsArray.lean`
 
 ```lean
-theorem YjsArrInvariant_integrate (newItem : YjsItem A) (arr newArr : Array (YjsItem A)) :
-  YjsArrInvariant arr.toList
+structure YjsArrInvariant (arr : List (YjsItem A)) : Prop where
+  closed : IsClosedItemSet (ArrSet arr)
+  item_set_inv : ItemSetInvariant (ArrSet arr)
+  sorted : List.Pairwise (fun x y => YjsLt' x y) arr
+  unique : uniqueId arr
+
+def YjsStateInvariant (state : YjsState A) : Prop :=
+  YjsArrInvariant state.items.toList
+```
+
+Field meanings:
+
+- `closed`: every item's `origin`/`rightOrigin` stays inside the same array-set (plus sentinels).
+- `item_set_inv`: order-side structural conditions on the same set (`origin_not_leq`, `id_unique`, etc.).
+- `sorted`: array order is pairwise consistent with `YjsLt'`.
+- `unique`: no duplicate `YjsId` in the array.
+
+`YjsStateInvariant` simply lifts the same condition to `YjsState.items`. These invariants are what insert/delete proofs preserve at the algorithm level.
+
+## 5. Preservation Proofs
+
+Insert implementation and proofs:
+
+- implementation: `LeanYjs/Algorithm/Insert/Basic.lean`
+- proofs: `LeanYjs/Algorithm/Insert/Spec.lean`
+
+Main preservation theorems:
+
+- `YjsArrInvariant_integrate`
+- `YjsArrInvariant_integrateSafe`
+- `YjsStateInvariant_insert`
+
+`YjsStateInvariant_insert` statement:
+
+```lean
+theorem YjsStateInvariant_insert (arr newArr : YjsState A) (input : IntegrateInput A) :
+  YjsStateInvariant arr
+  → input.toItem arr.items = Except.ok newItem
   → newItem.isValid
-  -> UniqueId newItem arr
-  -> integrate newItem arr = Except.ok newArr
-  -> ∃ i ≤ arr.size, newArr = arr.insertIdxIfInBounds i newItem ∧ YjsArrInvariant newArr.toList
+  → arr.insert input = Except.ok newArr
+  → YjsStateInvariant newArr
 ```
 
-This theorem states that if:
+This theorem captures preservation of `YjsStateInvariant` across an insert step. More concretely, it assumes that the pre-state `arr` already satisfies `YjsStateInvariant`, that resolving `input` against `arr.items` succeeds and produces a concrete `newItem`, and that this item satisfies `newItem.isValid`. Under these assumptions, if the executable insert step `arr.insert input` returns `newArr`, then `newArr` also satisfies `YjsStateInvariant`.
 
-1. The input array satisfies the Yjs array invariants
-2. The new item satisfies the insertion preconditions (`isValid` plus `UniqueId`, which encapsulates `InsertOk`)
-3. The integrate function succeeds
-
-Then the result is equivalent to inserting the item at some valid position that preserves all invariants.
-
-### Loop Invariant
-
-The proof uses a complex loop invariant (`loopInv`) in `IntegrateSpec.lean` that tracks:
+The predicate `newItem.isValid` is defined in `LeanYjs/Algorithm/Insert/Spec.lean` as:
 
 ```lean
-def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rightIdx : ℤ) (x : Option ℕ) (state : ForInStep (MProd ℤ Bool)) :=
-  let current := offsetToIndex leftIdx rightIdx x (isBreak state)
-  let ⟨ dest, scanning ⟩ := state.value
-  let done := isDone state x
-  -- Properties that must hold at each iteration:
-  (match x with
-    | none => True
-    | some x => 0 < x ∧ x < rightIdx - leftIdx) ∧
-  (dest ≤ current) ∧
-  (!scanning → !done -> dest = current) ∧
-  let dest := dest.toNat;
-  (∀ i : ℕ, i < dest -> (h_i_lt : i < arr.size)-> YjsLt' (ArrSet $ newItem :: arr.toList) arr[i] newItem) ∧
-  (∀ i, (h_dest_i : dest ≤ i) -> (h_i_c : i < current) ->
-    ∃ (i_lt_size : i < arr.size) (h_dest_lt : dest < arr.size),
-      (arr[i].origin = newItem.origin ∧ newItem.id < arr[i].id ∨
-        YjsLeq' (ArrSet $ newItem :: arr.toList) arr[dest] arr[i].origin)) ∧
-  (scanning -> ∃ h_dest_lt : dest < arr.size, arr[dest].origin = newItem.origin) ∧
-  (done -> ∀item : YjsPtr A, extGetElemExcept arr current = Except.ok item -> YjsLt' (ArrSet $ newItem :: arr.toList) newItem item)
+structure IsItemValid (item : YjsItem A) where
+  origin_lt_rightOrigin : YjsLt' item.origin item.rightOrigin
+  reachable_YjsLeq' : (∀ (x : YjsPtr A),
+      OriginReachable (YjsPtr.itemPtr item) x →
+      YjsLeq' x item.origin ∨ YjsLeq' item.rightOrigin x)
+
+abbrev YjsItem.isValid : YjsItem A → Prop := IsItemValid
 ```
 
-This invariant ensures that:
+Delete side:
 
-1. All items before `dest` are ordered before `newItem`
-2. All items in the "to be determined" region have specific ordering properties
-3. When scanning mode is active, we're looking at items with the same origin
-4. When the loop is done, `newItem` should be ordered before the item at the current position
+- implementation: `LeanYjs/Algorithm/Delete/Basic.lean`
+- proof: `LeanYjs/Algorithm/Delete/Spec.lean`
+- theorem: `YjsStateInvariant_deleteById`
 
-### Commutativity
-
-`LeanYjs/Algorithm/IntegrateCommutative.lean` proves that integration is commutative when items are unique and not in each other's origin chain:
+`YjsStateInvariant_deleteById` statement:
 
 ```lean
-theorem integrate_commutative (a b : YjsItem A) (arr1 : Array (YjsItem A)) :
-  YjsArrInvariant arr1.toList
-  -> a.id.clientId ≠ b.id.clientId
-  → ¬OriginReachable a (YjsPtr.itemPtr b)
-  → ¬OriginReachable b (YjsPtr.itemPtr a)
-  → a.isValid
-  → b.isValid
-  -> (do
-    let arr2 <- integrateSafe a arr1;
-    integrateSafe b arr2) =
-  (do
-    let arr2' <- integrateSafe b arr1;
-    integrateSafe a arr2')
+theorem YjsStateInvariant_deleteById (state : YjsState A) (id : YjsId) :
+  YjsStateInvariant state →
+  YjsStateInvariant (deleteById state id)
 ```
 
-This shows that the order in which operations are integrated doesn't affect the final result, which is crucial for CRDTs.
+## 6. Commutativity Proofs
 
-## Network Model and Convergence
+Files:
 
-`LeanYjs/Network` provides a causal delivery model and an instantiation for Yjs operations.
+- `LeanYjs/Algorithm/Commutativity/InsertInsert.lean`
+- `LeanYjs/Algorithm/Commutativity/InsertDelete.lean`
+- `LeanYjs/Algorithm/Commutativity/DeleteDelete.lean`
 
-- `LeanYjs/Network/CausalNetwork.lean` defines histories of `Event.Broadcast/Deliver`, a happens-before relation, and assumes causal delivery plus per-node local ordering of broadcasts.
-- `LeanYjs/Network/OperationNetwork.lean` lifts an `Operation` (state, effect, error) into the network, requiring that nodes broadcast only valid messages.
-- `LeanYjs/Network/YjsNetwork.lean` instantiates the model with `YjsValidItem` and `YjsArray`, tying `histories` back to `UniqueId`/`isValid`.
+Main results:
 
-The central convergence statement is:
+- `insert_commutative`
+- `insert_deleteById_commutative` (insert-delete)
+- `deleteById_commutative`
 
-```lean
-theorem YjsOperationNetwork_converge' :
-  ∀ {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsArray A),
-    interpDeliveredOps (network.toDeliverMessages i) = Except.ok res₀ →
-    interpDeliveredOps (network.toDeliverMessages j) = Except.ok res₁ →
-    (∀ item, item ∈ network.toDeliverMessages i ↔ item ∈ network.toDeliverMessages j) →
-    res₀ = res₁
+## 7. Network Layering to `YjsNetwork`
+
+The stack is built in this order:
+
+1. `CausalNetwork` (`LeanYjs/Network/CausalNetwork.lean`)
+2. `StrongCausalOrder` (`LeanYjs/Network/StrongCausalOrder.lean`)
+3. `OperationNetwork` (`LeanYjs/Network/OperationNetwork.lean`)
+4. `YjsOperationNetwork` (`LeanYjs/Network/Yjs/YjsNetwork.lean`)
+
+Role of each layer:
+
+1. `CausalNetwork` provides concrete event histories (`Broadcast`/`Deliver`) and assumptions that connect local histories to happens-before.
+2. `StrongCausalOrder` provides the hb-consistency/concurrency framework used by the final convergence pipeline (including `hb_consistent_effect_convergent`).
+3. `OperationNetwork` connects network events to an executable operation model (`Operation.effect`, `isValidState`, invariant preservation).
+4. `YjsOperationNetwork` is the Yjs-specific instantiation with insert/delete messages, Yjs state invariants, and Yjs-specific validity assumptions.
+
+Why the strong framework is needed:
+
+`LeanYjs/Algorithm/Insert/Basic.lean` (section `InconsistencyExample`) records a counterexample showing why an unconditional commutativity law is too strong for Yjs insert. Intuitively, if a state violates the nearest-reachable side condition (for example the `a/b/o/n` scenario in that section), different integration orders can produce different outcomes.
+
+Therefore this project uses `StrongCausalOrder`, where commutativity is stated with explicit premises: state invariant, per-operation validity in that state, and successful execution. In that sense, the framework is "stronger" in assumptions but the commutativity claim itself is logically weaker than an unconditional one, which is exactly what Yjs needs.
+
+From these layers, `YjsNetwork` proves:
+
+- local concurrent commutativity: `YjsOperationNetwork_concurrentCommutative`
+- final convergence goal: `YjsOperationNetwork_converge'`
+
+How the final step works:
+
+- `YjsOperationNetwork_concurrentCommutative` is proved by case analysis on concurrent operation pairs (insert/insert, insert/delete, delete/delete), using the commutativity theorems from Section 6.
+- `YjsOperationNetwork_converge'` then applies the generic convergence machinery for hb-consistent executions (from the network/order layer) together with the Yjs commutativity and validity/invariant lemmas, yielding equal final states when delivered operation sets are equal.
+
+## Appendix: Executable Differential Testing
+
+- Lean runner: `DiffTestRunner.lean`
+- JS harness: `diff-test/src/*.ts`
+
+Run:
+
+```bash
+lake build diff-test-runner
+cd diff-test
+pnpm install
+pnpm test
 ```
-
-Under the causal network assumptions and the commutativity proof above, any two replicas that deliver the same set of operations compute identical array states—establishing convergence (strong eventual consistency) for `integrate` on this network model.

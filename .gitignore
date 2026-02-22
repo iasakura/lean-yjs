@@ -2,3 +2,4 @@
 **/node_modules
 **/texmf-var
 **/acmart-primary
+.agents/skills/lean4*

@@ -983,12 +983,12 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
         h_ab
     | delete _ deletedId =>
       simp [Operation.effect, deleteValid] at *
-      rw [integrateSafe_deleteById_commutative] at h_ab; assumption
+      rw [insert_deleteById_commutative] at h_ab; assumption
   | delete _ deletedId =>
     cases b with
     | insert bInput =>
       simp [Operation.effect, deleteValid] at *
-      rw [integrateSafe_deleteById_commutative]; assumption
+      rw [insert_deleteById_commutative]; assumption
     | delete _ deletedId' =>
       simp [Operation.effect, deleteValid, bind, Except.bind] at h_ab ⊢
       rw [deleteById_commutative] at h_ab

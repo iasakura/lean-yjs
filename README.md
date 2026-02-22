@@ -1,34 +1,42 @@
 # Lean-Yjs: Formal Verification of Yjs Integration Algorithm
 
-This project provides a formal verification of the Yjs integration algorithm using the Lean 4 theorem prover. Yjs is a high-performance CRDT (Conflict-free Replicated Data Type) library for building collaborative applications.
+Lean-Yjs is a Lean 4 formalization of the Yjs sequence-integration algorithm. The project models how replicated clients apply insert and delete operations, and proves that replicas converge when they process the same operations under causal delivery.
 
-## Overview
+## Motivation
 
-This work focuses on the formal verification of Yjs's `integrate` operation, which is the core algorithm responsible for maintaining consistency when integrating new operations into a shared document state. The Lean sources are organized under:
+The Yjs integration algorithm was proposed in the YATA line of work, where proofs were given only for selected lemmas and not for full algorithmic correctness. Correctness of CRDT algorithms is subtle in practice, and the algorithm as presented in the YATA paper was later found to contain a mistake (see <https://discuss.yjs.dev/t/lean-yjs-formally-proving-the-yjs-conflict-resolution-algorithms/3875>). This project uses Lean 4 to provide a rigorous proof for the Yjs algorithm, including properties that were not proved in the YATA paper such as commutativity and convergence, while also formalizing side conditions that are easy to miss in prose descriptions.
 
-- `LeanYjs/Algorithm`: the executable algorithm and its specifications
-- `LeanYjs/Order`: ordering relations and invariants
-- `LeanYjs/Network`: a causal network model used to reason about convergence
+## Main Theorem and Structure
 
-## Goal
+The central result is `YjsOperationNetwork_converge'` in `LeanYjs/Network/Yjs/YjsNetwork.lean`. Intuitively, it says that if two replicas deliver the same set of Yjs operations under causal delivery, then they end in the same state even when delivery order differs.
 
-While Yjs is closely related to the YATA (Yet Another Transformation Approach) algorithm, it employs a sophisticated tie-breaking mechanism that cleverly uses `rightOrigin`. To verify this algorithm, we need to establish an ordering relationship that differs from the one presented in the YATA paper.
+The formalization is organized in three layers. `LeanYjs/Order` proves that the item ordering forms a total order (totality, asymmetry, transitivity). `LeanYjs/Algorithm` formalizes the executable insert/delete procedures and proves their correctness properties. `LeanYjs/Network` formalizes a Yjs network model on top of causal delivery (`CausalNetwork`) and proves convergence in that model. In addition to the proofs, `diff-test` runs randomized differential tests against Yjs to check implementation-level agreement.
 
-Although the YATA paper presents the algorithm in a simplified manner, the correctness of Yjs's `integrate` operation is not trivial and requires dedicated loop invariants for verification. Additionally, while not explicitly clarified in the YATA paper, newly inserted items must satisfy certain conditions (guaranteed by the fact that insert operations use two adjacent elements as origins).
+More detailed definitions and proof flow are documented in [TECHNICAL.md](TECHNICAL.md).
 
-This work aims to clarify these aspects and formally verify the correctness of the Yjs integration algorithm. Specifically, we prove:
+## Build
 
-- **Preservation**: The integration maintains the invariants of the data structure (see `LeanYjs/Algorithm/IntegrateSpec.lean`)
-- **Commutativity**: Operations can be integrated in any order and produce the same result (see `LeanYjs/Algorithm/IntegrateCommutative.lean`)
-- **Convergence (aka Strong Eventual Consistency)**: On the causal delivery model in `LeanYjs/Network`, replicas that deliver the same set of operations reach the same state (`YjsOperationNetwork_converge'` in `LeanYjs/Network/YjsNetwork.lean`)
+```bash
+lake build
+lake env lean LeanYjs.lean
+```
 
-## Documentation
+## Differential Tests (Lean vs yjs)
 
-For detailed technical information about the formalization, see [TECHNICAL.md](TECHNICAL.md).
+Build the Lean executable and run JS-based differential tests:
+
+```bash
+lake build diff-test-runner
+cd diff-test
+pnpm install
+pnpm test
+```
+
+## Acknowledgments
+
+The algorithm formalization was informed by `integrateYjs` in `reference-crdts`.
 
 ## References
 
-- [Yjs Documentation](https://docs.yjs.dev/)
-- [YATA Algorithm Paper](https://www.researchgate.net/publication/310212186_Near_Real-Time_Peer-to-Peer_Shared_Editing_on_Extensible_Data_Types)
-- [Reference CRDT Implementations](https://github.com/josephg/reference-crdts)
-- [Lean 4 Manual](https://leanprover.github.io/lean4/doc/)
+- [YATA Paper](https://www.researchgate.net/publication/310212186_Near_Real-Time_Peer-to-Peer_Shared_Editing_on_Extensible_Data_Types)
+- [reference-crdts](https://github.com/josephg/reference-crdts)
