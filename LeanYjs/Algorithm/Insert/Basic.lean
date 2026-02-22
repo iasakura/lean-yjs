@@ -347,12 +347,25 @@ def inconsistent2 := do
   arr ← arr.insert o
   return arr
 
-#eval match inconsistent1 with
-| Except.ok arr => IO.println $ arr.items.map (fun item => YjsItem.content item)
+def YjsState.toString (arr : YjsState String) : String :=
+  arr.items.toList.map (fun item => YjsItem.content item) |> String.join
+
+#eval do
+  match inconsistent1.map (fun arr => YjsState.toString arr) with
+  | Except.ok str => IO.println str
+  | Except.error _err => IO.println s!"Error"
+
+#eval match inconsistent2.map (fun arr => YjsState.toString arr) with
+| Except.ok str => IO.println str
 | Except.error _err => IO.println s!"Error"
 
-#eval match inconsistent2 with
-| Except.ok arr => IO.println $ arr.items.map (fun item => YjsItem.content item)
-| Except.error _err => IO.println s!"Error"
+theorem inconsistent1_inconsistent2 : inconsistent1 ≠ inconsistent2 := by
+  have h : inconsistent1.map (fun arr => YjsState.toString arr) = Except.ok "anob" := by
+    simp [inconsistent1, a, b, o, n, YjsState.insert, integrateSafe, integrate, findLeftIdx, findRightIdx, findIntegratedIndex, mkItemByIndex, bind, isClockSafe, YjsState.empty, Except.bind, pure, Except.pure, getPtrExcept, getElemExcept, ClientId, List.findIdx?_cons, findPtrIdx]
+    eq_refl
+  have h : inconsistent2.map (fun arr => YjsState.toString arr) = Except.ok "aobn" := by
+    simp [inconsistent2, a, b, o, n, YjsState.insert, integrateSafe, integrate, findLeftIdx, findRightIdx, findIntegratedIndex, mkItemByIndex, bind, isClockSafe, YjsState.empty, Except.bind, pure, Except.pure, getPtrExcept, getElemExcept, ClientId, List.findIdx?_cons, findPtrIdx]
+    eq_refl
+  grind
 
 end InconsistencyExample

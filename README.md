@@ -36,7 +36,6 @@ pnpm test
 
 The algorithm formalization was informed by `integrateYjs` in `reference-crdts`.
 
-
 ## References
 
 - [YATA Paper](https://www.researchgate.net/publication/310212186_Near_Real-Time_Peer-to-Peer_Shared_Editing_on_Extensible_Data_Types)
