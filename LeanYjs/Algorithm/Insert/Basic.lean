@@ -313,7 +313,7 @@ def test21 := do
 
 end Test
 
-section InconsistencyExample
+namespace InconsistencyExample
 
 /--
 This example shows that the insert algorithm can produce different results depending on the order of integration, which can lead to inconsistency if not handled properly. In this example, we have two items "o" and "n" that are both inserted after "a" and "b". Depending on the order of integration, "o" can end up before "n" or vice versa, which is inconsistent with the intention of the operations.
