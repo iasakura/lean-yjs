@@ -2892,18 +2892,6 @@ theorem isValidState_insert_from_source {A : Type} [DecidableEq A]
     (input := input) (state₀ := state₀) (s := sArr) (item₀ := item₀)
     h_toItem₀ h_item_valid₀ h_unique_s h_origin_find_in_s
 
-instance [DecidableEq A] {network : YjsOperationNetwork A} : MonotoneOperation (YjsOperation A) (hb := instCausalNetworkElemCausalOrder network.toCausalNetwork) YjsId where
-  StateSource a := ∃ i, Event.Broadcast a ∈ network.toCausalNetwork.histories i
-  isValidState_mono := by
-    intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
-    cases a with
-    | delete id deletedId =>
-      simp [Operation.isValidState, IsValidMessage]
-    | insert input =>
-      simpa [Operation.isValidState, IsValidMessage] using
-        (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
-          h_source h_lt h_consistent h_closed h_effect h_nodup)
-
 theorem YjsOperationNetwork_converge' {A} [DecidableEq A] (network : YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsState A) :
   let hist_i := network.toDeliverMessages i
   let hist_j := network.toDeliverMessages j
@@ -3092,7 +3080,20 @@ theorem YjsOperationNetwork_converge' {A} [DecidableEq A] (network : YjsOperatio
   have h_concurrent_commutative : concurrent_commutative (hb := hb) (network.toCausalNetwork.toDeliverMessages i) := by
     apply YjsOperationNetwork_concurrentCommutative network i
 
+  let StateSource : YjsOperation A → Prop := fun a => ∃ i, Event.Broadcast a ∈ network.toCausalNetwork.histories i
+  have h_valid_mono : IsValidStateMonotone (A := YjsOperation A) (S := YjsId) (hb := hb) StateSource := by
+    intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
+    cases a with
+    | delete _ _ =>
+      simp [Operation.isValidState, IsValidMessage]
+    | insert input =>
+      simpa [Operation.isValidState, IsValidMessage] using
+        (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
+          h_source h_lt h_consistent h_closed h_effect h_nodup)
+
   have h := hb_consistent_effect_convergent (s := res₀) (hb := hb)
+    StateSource
+    h_valid_mono
     (network.toCausalNetwork.toDeliverMessages i)
     (network.toCausalNetwork.toDeliverMessages j)
     (by

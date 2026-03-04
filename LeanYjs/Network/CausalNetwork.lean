@@ -41,11 +41,6 @@ inductive HappensBefore {A} [DecidableEq A] [DecidableEq M] [Message A M] (netwo
 
 structure CausalNetwork A [DecidableEq A] [DecidableEq M] [Message A M] extends NetworkBase A where
   causal_delivery : forall {i e1 e2}, Event.Deliver e2 ∈ histories i → HappensBefore toNetworkBase e1 e2 → locallyOrdered toNodeHistories i (Event.Deliver e1) (Event.Deliver e2)
-  -- This assumption is not assumed in the paper, but it is necessary for the ensuring total order of Yjs items and for my proof.
-  -- It is also a reasonable assumption because in a real Yjs implementation, a client would apply item same time at the time of creation of the item by library API (e.g., insert).
-  histories_deliver_broadcast_ordered : forall (e1 e2 : A) i,
-    locallyOrdered toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) →
-    locallyOrdered toNodeHistories i (Event.Deliver e1) (Event.Broadcast e2)
 
 inductive HappensBeforeOnlyBroadcast {A} [DecidableEq A] [DecidableEq M] [Message A M] (network : NetworkBase A) : A → A → Prop
   | broadcast_broadcast_local : locallyOrdered network.toNodeHistories i (Event.Broadcast e1) (Event.Broadcast e2) → HappensBeforeOnlyBroadcast network e1 e2
