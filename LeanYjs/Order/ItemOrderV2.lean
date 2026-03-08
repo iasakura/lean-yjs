@@ -2,6 +2,19 @@ import LeanYjs.ItemSetV2
 
 variable {A : Type}
 
+def max4V2 (x y z w : Nat) : Nat :=
+  max (max x y) (max z w)
+
+inductive OriginLtV2 (S : ItemSetV2 A) : ItemRef -> ItemRef -> Prop where
+  | lt_first {id : YjsId} :
+      S.IdIn id ->
+      OriginLtV2 S .first (.idRef id)
+  | lt_last {id : YjsId} :
+      S.IdIn id ->
+      OriginLtV2 S (.idRef id) .last
+  | lt_first_last :
+      OriginLtV2 S .first .last
+
 inductive OriginReachableStepV2 (S : ItemSetV2 A) : ItemRef -> ItemRef -> Prop where
   | left {item : YjsItemV2 A} :
       S.ItemIn item ->
@@ -18,6 +31,57 @@ inductive OriginReachableV2 (S : ItemSetV2 A) : ItemRef -> ItemRef -> Prop where
       OriginReachableStepV2 S x y ->
       OriginReachableV2 S y z ->
       OriginReachableV2 S x z
+
+mutual
+  inductive YjsLtV2 (S : ItemSetV2 A) : Nat -> ItemRef -> ItemRef -> Prop where
+    | ltConflict h {item1 item2 : YjsItemV2 A} :
+        ConflictLtV2 S h item1 item2 ->
+        YjsLtV2 S (h + 1) item1.toRef item2.toRef
+    | ltOriginOrder {x y : ItemRef} :
+        OriginLtV2 S x y ->
+        YjsLtV2 S 0 x y
+    | ltOrigin h {x : ItemRef} {item : YjsItemV2 A} :
+        S.ItemIn item ->
+        YjsLeqV2 S h x item.origin ->
+        YjsLtV2 S (h + 1) x item.toRef
+    | ltRightOrigin h {item : YjsItemV2 A} {x : ItemRef} :
+        S.ItemIn item ->
+        YjsLeqV2 S h item.rightOrigin x ->
+        YjsLtV2 S (h + 1) item.toRef x
+
+  inductive YjsLeqV2 (S : ItemSetV2 A) : Nat -> ItemRef -> ItemRef -> Prop where
+    | leqSame (x : ItemRef) : YjsLeqV2 S h x x
+    | leqLt h {x y : ItemRef} :
+        YjsLtV2 S h x y ->
+        YjsLeqV2 S (h + 1) x y
+
+  inductive ConflictLtV2 (S : ItemSetV2 A) : Nat -> YjsItemV2 A -> YjsItemV2 A -> Prop where
+    | ltOriginDiff h1 h2 h3 h4 {item1 item2 : YjsItemV2 A} :
+        S.ItemIn item1 ->
+        S.ItemIn item2 ->
+        YjsLtV2 S h1 item2.origin item1.origin ->
+        YjsLtV2 S h2 item1.toRef item2.rightOrigin ->
+        YjsLtV2 S h3 item1.origin item2.toRef ->
+        YjsLtV2 S h4 item2.toRef item1.rightOrigin ->
+        ConflictLtV2 S (max4V2 h1 h2 h3 h4 + 1) item1 item2
+    | ltOriginSame h1 h2 {item1 item2 : YjsItemV2 A} :
+        S.ItemIn item1 ->
+        S.ItemIn item2 ->
+        item1.origin = item2.origin ->
+        YjsLtV2 S h1 item1.toRef item2.rightOrigin ->
+        YjsLtV2 S h2 item2.toRef item1.rightOrigin ->
+        item1.id < item2.id ->
+        ConflictLtV2 S (max h1 h2 + 1) item1 item2
+end
+
+def ConflictLtV2' (S : ItemSetV2 A) (item1 item2 : YjsItemV2 A) : Prop :=
+  ∃ h, ConflictLtV2 S h item1 item2
+
+def YjsLtV2' (S : ItemSetV2 A) (x y : ItemRef) : Prop :=
+  ∃ h, YjsLtV2 S h x y
+
+def YjsLeqV2' (S : ItemSetV2 A) (x y : ItemRef) : Prop :=
+  ∃ h, YjsLeqV2 S h x y
 
 namespace OriginReachableV2
 
@@ -52,3 +116,85 @@ theorem target_refIn {S : ItemSetV2 A} (hClosed : ItemSetV2.IsClosedItemSetV2 S)
       exact ih
 
 end OriginReachableV2
+
+namespace ConflictLtV2'
+
+theorem ltOriginDiff {S : ItemSetV2 A} {item1 item2 : YjsItemV2 A} :
+    S.ItemIn item1 ->
+    S.ItemIn item2 ->
+    YjsLtV2' S item2.origin item1.origin ->
+    YjsLtV2' S item1.toRef item2.rightOrigin ->
+    YjsLtV2' S item1.origin item2.toRef ->
+    YjsLtV2' S item2.toRef item1.rightOrigin ->
+    ConflictLtV2' S item1 item2 := by
+  intro hItem1 hItem2 hlt1 hlt2 hlt3 hlt4
+  rcases hlt1 with ⟨ h1', hlt1' ⟩
+  rcases hlt2 with ⟨ h2', hlt2' ⟩
+  rcases hlt3 with ⟨ h3', hlt3' ⟩
+  rcases hlt4 with ⟨ h4', hlt4' ⟩
+  exact ⟨ _, ConflictLtV2.ltOriginDiff (h1 := h1') (h2 := h2') (h3 := h3') (h4 := h4')
+    hItem1 hItem2 hlt1' hlt2' hlt3' hlt4' ⟩
+
+theorem ltOriginSame {S : ItemSetV2 A} {item1 item2 : YjsItemV2 A} :
+    S.ItemIn item1 ->
+    S.ItemIn item2 ->
+    item1.origin = item2.origin ->
+    YjsLtV2' S item1.toRef item2.rightOrigin ->
+    YjsLtV2' S item2.toRef item1.rightOrigin ->
+    item1.id < item2.id ->
+    ConflictLtV2' S item1 item2 := by
+  intro hItem1 hItem2 hOrigin hlt1 hlt2 hId
+  rcases hlt1 with ⟨ h1', hlt1' ⟩
+  rcases hlt2 with ⟨ h2', hlt2' ⟩
+  exact ⟨ _, ConflictLtV2.ltOriginSame (h1 := h1') (h2 := h2')
+    hItem1 hItem2 hOrigin hlt1' hlt2' hId ⟩
+
+end ConflictLtV2'
+
+namespace YjsLtV2'
+
+theorem ltConflict {S : ItemSetV2 A} {item1 item2 : YjsItemV2 A} :
+    ConflictLtV2' S item1 item2 ->
+    YjsLtV2' S item1.toRef item2.toRef := by
+  intro hConflict
+  rcases hConflict with ⟨ h, hConflict ⟩
+  exact ⟨ _, YjsLtV2.ltConflict (h := h) hConflict ⟩
+
+theorem ltOriginOrder {S : ItemSetV2 A} {x y : ItemRef} :
+    OriginLtV2 S x y ->
+    YjsLtV2' S x y := by
+  intro hOrigin
+  exact ⟨ 0, YjsLtV2.ltOriginOrder hOrigin ⟩
+
+theorem ltOrigin {S : ItemSetV2 A} {x : ItemRef} {item : YjsItemV2 A} :
+    S.ItemIn item ->
+    YjsLeqV2' S x item.origin ->
+    YjsLtV2' S x item.toRef := by
+  intro hItem hLeq
+  rcases hLeq with ⟨ h, hLeq ⟩
+  exact ⟨ _, YjsLtV2.ltOrigin (h := h) hItem hLeq ⟩
+
+theorem ltRightOrigin {S : ItemSetV2 A} {item : YjsItemV2 A} {x : ItemRef} :
+    S.ItemIn item ->
+    YjsLeqV2' S item.rightOrigin x ->
+    YjsLtV2' S item.toRef x := by
+  intro hItem hLeq
+  rcases hLeq with ⟨ h, hLeq ⟩
+  exact ⟨ _, YjsLtV2.ltRightOrigin (h := h) hItem hLeq ⟩
+
+end YjsLtV2'
+
+namespace YjsLeqV2'
+
+theorem leqSame {S : ItemSetV2 A} (x : ItemRef) :
+    YjsLeqV2' S x x := by
+  exact ⟨ 0, YjsLeqV2.leqSame x ⟩
+
+theorem leqLt {S : ItemSetV2 A} {x y : ItemRef} :
+    YjsLtV2' S x y ->
+    YjsLeqV2' S x y := by
+  intro hLt
+  rcases hLt with ⟨ h, hLt ⟩
+  exact ⟨ h + 1, YjsLeqV2.leqLt (h := h) hLt ⟩
+
+end YjsLeqV2'

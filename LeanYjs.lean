@@ -9,6 +9,7 @@ import LeanYjs.ClientId
 import LeanYjs.Order.ItemOrder
 import LeanYjs.Order.ItemOrderV2
 import LeanYjs.Order.ItemSetInvariant
+import LeanYjs.Order.ItemSetInvariantV2
 import LeanYjs.Order.Totality
 import LeanYjs.Order.Transitivity
 import LeanYjs.Order.Asymmetry

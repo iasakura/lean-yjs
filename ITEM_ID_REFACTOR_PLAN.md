@@ -41,11 +41,16 @@
 - `LeanYjs/Order/ItemOrderV2.lean`
   - `OriginReachableStepV2`
   - `OriginReachableV2`
+- `LeanYjs/Order/ItemSetInvariantV2.lean`
+  - `origin_lt_rightOrigin`
+  - `origin_nearest_reachable`
+  - structural invariant からの補題
 
 この進捗により、次の方針修正が確定した。
 
 - `ItemSet` は `mem` を別に持つより、`lookup` を primitive にした方がよい
 - reachability は `YjsItem -> ItemRef` より `ItemRef -> ItemRef` の transitive closure として持つ方が order に繋げやすい
+- `id_unique` は invariant field に持つより、lookup から導出する方が自然
 
 ## Current State
 
@@ -214,6 +219,9 @@ closed_right : item ∈ P -> ref_mem P item.rightOrigin
 ```lean
 id_unique : x.id = y.id -> x ∈ P -> y ∈ P -> x = y
 ```
+
+現時点の見立てでは、これは `ItemSet` の `lookup` を primitive にした時点で theorem として導出できる。
+したがって v2 側では structural invariant の field ではなく helper theorem に落とす方がよい。
 
 ### 3. Well-founded dependency
 
