@@ -47,6 +47,17 @@ theorem idIn_of_itemIn {S : ItemSetV2 A} {item : YjsItemV2 A} :
   intro hItem
   exact ⟨ item, hItem ⟩
 
+theorem itemIn_of_idIn {S : ItemSetV2 A} {id : YjsId} :
+    S.IdIn id -> Exists fun item => S.ItemIn item ∧ item.id = id := by
+  intro hId
+  rcases hId with ⟨ item, hLookup ⟩
+  refine ⟨ item, ?_, S.lookup_sound hLookup ⟩
+  simpa [S.lookup_sound hLookup] using hLookup
+
+theorem itemIn_of_refIn_idRef {S : ItemSetV2 A} {id : YjsId} :
+    S.RefIn (.idRef id) -> Exists fun item => S.ItemIn item ∧ item.id = id := by
+  exact itemIn_of_idIn
+
 theorem refIn_of_itemIn {S : ItemSetV2 A} {item : YjsItemV2 A} :
     S.ItemIn item -> S.RefIn item.toRef := by
   intro hItem

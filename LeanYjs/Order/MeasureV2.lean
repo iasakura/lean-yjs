@@ -166,6 +166,14 @@ theorem pairDepth_lt_of_right_lt {S : ItemSetV2 A} (inv : YjsItemSetInvariantV2 
   intro hLt
   exact Nat.add_lt_add_left hLt _
 
+theorem pairDepth_lt_of_both_lt {S : ItemSetV2 A} (inv : YjsItemSetInvariantV2 S)
+    {x1 x2 y1 y2 : ItemRef} :
+    inv.refDepth x1 < inv.refDepth x2 ->
+    inv.refDepth y1 < inv.refDepth y2 ->
+    inv.pairDepth x1 y1 < inv.pairDepth x2 y2 := by
+  intro hLeft hRight
+  exact Nat.add_lt_add hLeft hRight
+
 theorem tripleDepth_lt_of_left_lt {S : ItemSetV2 A} (inv : YjsItemSetInvariantV2 S)
     {w x y z : ItemRef} :
     inv.refDepth w < inv.refDepth x ->

@@ -54,6 +54,7 @@
   - `YjsId_lt_total`
   - `first` / `last` の base ordering
   - pair / triple measure induction combinator
+  - `yjsLeq_or_yjsLt`
 
 この進捗により、次の方針修正が確定した。
 
@@ -62,6 +63,7 @@
 - `id_unique` は invariant field に持つより、lookup から導出する方が自然
 - order の endpoints は `ItemRef` で十分で、conflict の証拠だけ item を持つ形にすると constructor が素直
 - `DependsOnId` は各 item につき高々 2 本の outgoing edge しかないので、`wfDependsOnId.fix` で `depth : YjsId -> Nat` を直接定義できる
+- totality そのものは `origin_nearest_reachable` や `origin_lt_rightOrigin` にはまだ依存せず、structural `wf` と lookup uniqueness だけでかなり進められる
 
 ## Current State
 
