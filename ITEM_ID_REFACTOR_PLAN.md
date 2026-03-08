@@ -46,6 +46,10 @@
   - `origin_lt_rightOrigin`
   - `origin_nearest_reachable`
   - structural invariant からの補題
+- `LeanYjs/Order/MeasureV2.lean`
+  - `idDepth` / `refDepth`
+  - dependency / reachability が depth を strictly 下げる補題
+  - pair / triple recursion 用の measure helper
 
 この進捗により、次の方針修正が確定した。
 
@@ -53,6 +57,7 @@
 - reachability は `YjsItem -> ItemRef` より `ItemRef -> ItemRef` の transitive closure として持つ方が order に繋げやすい
 - `id_unique` は invariant field に持つより、lookup から導出する方が自然
 - order の endpoints は `ItemRef` で十分で、conflict の証拠だけ item を持つ形にすると constructor が素直
+- `DependsOnId` は各 item につき高々 2 本の outgoing edge しかないので、`wfDependsOnId.fix` で `depth : YjsId -> Nat` を直接定義できる
 
 ## Current State
 
