@@ -83,6 +83,69 @@ def YjsLtV2' (S : ItemSetV2 A) (x y : ItemRef) : Prop :=
 def YjsLeqV2' (S : ItemSetV2 A) (x y : ItemRef) : Prop :=
   ∃ h, YjsLeqV2 S h x y
 
+def yjsLeqV2_imp_eq_or_yjsLtV2 {S : ItemSetV2 A} {x y : ItemRef} :
+    YjsLeqV2' S x y -> x = y ∨ YjsLtV2' S x y := by
+  intro hLeq
+  rcases hLeq with ⟨ h, hLeq ⟩
+  cases hLeq with
+  | leqSame _ =>
+      exact Or.inl rfl
+  | leqLt _ hLt =>
+      exact Or.inr ⟨ _, hLt ⟩
+
+theorem yjsLtV2_cases (S : ItemSetV2 A) (h : Nat) (x y : ItemRef) :
+    YjsLtV2 S h x y ->
+      (x = .first ∧ (y = .last ∨ ∃ id, y = .idRef id ∧ S.IdIn id)) ∨
+      (y = .last ∧ (x = .first ∨ ∃ id, x = .idRef id ∧ S.IdIn id)) ∨
+      (∃ item, x = item.toRef ∧ S.ItemIn item ∧ YjsLeqV2' S item.rightOrigin y) ∨
+      (∃ item, y = item.toRef ∧ S.ItemIn item ∧ YjsLeqV2' S x item.origin) ∨
+      (∃ item1 item2, x = item1.toRef ∧ y = item2.toRef ∧ ConflictLtV2' S item1 item2) := by
+  intro hLt
+  cases hLt with
+  | ltConflict _ hConflict =>
+      right
+      right
+      right
+      right
+      refine ⟨ _, _, rfl, rfl, ?_ ⟩
+      exact ⟨ _, hConflict ⟩
+  | ltOriginOrder hOrigin =>
+      cases hOrigin with
+      | lt_first hIdIn =>
+          left
+          exact ⟨ rfl, Or.inr ⟨ _, rfl, hIdIn ⟩ ⟩
+      | lt_last hIdIn =>
+          right
+          left
+          exact ⟨ rfl, Or.inr ⟨ _, rfl, hIdIn ⟩ ⟩
+      | lt_first_last =>
+          left
+          exact ⟨ rfl, Or.inl rfl ⟩
+  | ltOrigin _ hItem hLeq =>
+      right
+      right
+      right
+      left
+      refine ⟨ _, rfl, hItem, ?_ ⟩
+      exact ⟨ _, hLeq ⟩
+  | ltRightOrigin _ hItem hLeq =>
+      right
+      right
+      left
+      refine ⟨ _, rfl, hItem, ?_ ⟩
+      exact ⟨ _, hLeq ⟩
+
+theorem yjsLtV2'_cases (S : ItemSetV2 A) (x y : ItemRef) :
+    YjsLtV2' S x y ->
+      (x = .first ∧ (y = .last ∨ ∃ id, y = .idRef id ∧ S.IdIn id)) ∨
+      (y = .last ∧ (x = .first ∨ ∃ id, x = .idRef id ∧ S.IdIn id)) ∨
+      (∃ item, x = item.toRef ∧ S.ItemIn item ∧ YjsLeqV2' S item.rightOrigin y) ∨
+      (∃ item, y = item.toRef ∧ S.ItemIn item ∧ YjsLeqV2' S x item.origin) ∨
+      (∃ item1 item2, x = item1.toRef ∧ y = item2.toRef ∧ ConflictLtV2' S item1 item2) := by
+  intro hLt
+  rcases hLt with ⟨ h, hLt ⟩
+  exact yjsLtV2_cases S h x y hLt
+
 namespace OriginReachableV2
 
 theorem of_origin {S : ItemSetV2 A} {item : YjsItemV2 A} :

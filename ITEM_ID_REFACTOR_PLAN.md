@@ -41,6 +41,7 @@
 - `LeanYjs/Order/ItemOrderV2.lean`
   - `OriginReachableStepV2`
   - `OriginReachableV2`
+  - `YjsLtV2` / `YjsLeqV2` / `ConflictLtV2` の skeleton
 - `LeanYjs/Order/ItemSetInvariantV2.lean`
   - `origin_lt_rightOrigin`
   - `origin_nearest_reachable`
@@ -51,6 +52,7 @@
 - `ItemSet` は `mem` を別に持つより、`lookup` を primitive にした方がよい
 - reachability は `YjsItem -> ItemRef` より `ItemRef -> ItemRef` の transitive closure として持つ方が order に繋げやすい
 - `id_unique` は invariant field に持つより、lookup から導出する方が自然
+- order の endpoints は `ItemRef` で十分で、conflict の証拠だけ item を持つ形にすると constructor が素直
 
 ## Current State
 
