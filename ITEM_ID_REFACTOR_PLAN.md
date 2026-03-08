@@ -58,6 +58,13 @@
 - `LeanYjs/Order/AsymmetryV2.lean`
   - `YjsId_lt_asymm`
   - sentinel の trivial impossible cases
+- `LeanYjs/Order/BoundaryV2.lean`
+  - `not_ref_lt_first`
+  - `not_last_lt_ref`
+  - sentinel impossibility を `TransitivityV2` / `AsymmetryV2` の共通土台に分離
+- `LeanYjs/Order/TransitivityV2.lean`
+  - `YjsId_lt_trans`
+  - conflict helper 群 (`conflict_lt_x_origin_lt_y` など)
 
 この進捗により、次の方針修正が確定した。
 
@@ -67,6 +74,8 @@
 - order の endpoints は `ItemRef` で十分で、conflict の証拠だけ item を持つ形にすると constructor が素直
 - `DependsOnId` は各 item につき高々 2 本の outgoing edge しかないので、`wfDependsOnId.fix` で `depth : YjsId -> Nat` を直接定義できる
 - totality そのものは `origin_nearest_reachable` や `origin_lt_rightOrigin` にはまだ依存せず、structural `wf` と lookup uniqueness だけでかなり進められる
+- 旧実装と同様に、full `Asymmetry` は `Transitivity` に依存する形が自然で、v2 でもその依存は残る
+- そのため `first/last` 境界補題は `AsymmetryV2` に置かず、`BoundaryV2` として前段に分離する方が import graph が安定する
 
 ## Current State
 
