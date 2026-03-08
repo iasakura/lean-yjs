@@ -2,9 +2,12 @@
 -- Import modules here that should be built as part of the library.
 import LeanYjs.ListLemmas
 import LeanYjs.Item
+import LeanYjs.ItemV2
 import LeanYjs.ItemSet
+import LeanYjs.ItemSetV2
 import LeanYjs.ClientId
 import LeanYjs.Order.ItemOrder
+import LeanYjs.Order.ItemOrderV2
 import LeanYjs.Order.ItemSetInvariant
 import LeanYjs.Order.Totality
 import LeanYjs.Order.Transitivity
