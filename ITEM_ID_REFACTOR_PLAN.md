@@ -55,6 +55,9 @@
   - `first` / `last` の base ordering
   - pair / triple measure induction combinator
   - `yjsLeq_or_yjsLt`
+- `LeanYjs/Order/AsymmetryV2.lean`
+  - `YjsId_lt_asymm`
+  - sentinel の trivial impossible cases
 
 この進捗により、次の方針修正が確定した。
 

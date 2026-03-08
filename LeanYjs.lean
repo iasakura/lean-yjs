@@ -12,6 +12,7 @@ import LeanYjs.Order.ItemSetInvariant
 import LeanYjs.Order.ItemSetInvariantV2
 import LeanYjs.Order.MeasureV2
 import LeanYjs.Order.TotalityV2
+import LeanYjs.Order.AsymmetryV2
 import LeanYjs.Order.Totality
 import LeanYjs.Order.Transitivity
 import LeanYjs.Order.Asymmetry
