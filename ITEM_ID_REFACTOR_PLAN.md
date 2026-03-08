@@ -50,6 +50,10 @@
   - `idDepth` / `refDepth`
   - dependency / reachability が depth を strictly 下げる補題
   - pair / triple recursion 用の measure helper
+- `LeanYjs/Order/TotalityV2.lean`
+  - `YjsId_lt_total`
+  - `first` / `last` の base ordering
+  - pair / triple measure induction combinator
 
 この進捗により、次の方針修正が確定した。
 
