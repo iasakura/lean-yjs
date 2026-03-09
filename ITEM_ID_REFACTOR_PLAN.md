@@ -123,6 +123,11 @@
   - `same_yjs_set_ofOldItems_eq`
 - これで `Insert/Spec` や network proof は old `ItemSetInvariant` を直接剥がさなくても、`YjsArrInvariant` / `YjsStateInvariant` から v2 totality を引ける
 - さらに `same_yjs_set_unique` が必要だった箇所では、old list equality を経由して `ItemSetV2.ofOldItems` の equality まで rewrite できる
+- `LeanYjs/Algorithm/Insert/SpecBridgeV2.lean` で insert spec 境界の thin wrapper も追加済み
+  - `YjsArrInvariant_integrate_itemSetInvariantV2`
+  - `YjsArrInvariant_integrateSafe_itemSetInvariantV2`
+  - `YjsStateInvariant_insert_itemSetInvariantV2`
+- これで integration correctness を使う consumer は、既存 theorem を壊さずに `newArr` 側の v2 invariant を直接受け取れる
 - 新しく分かった実務上のポイントは次の 2 つ
   - reverse reachability bridge は abstract `ItemSetV2` では難しいが、concrete `ItemSetV2.ofOldItems arr` では `lookup` の具体性と old unique-id から復元できる
   - したがって移行順序は「generic v2 order を先に完成」してから「concrete old-array bridge を作る」のが正しかった
