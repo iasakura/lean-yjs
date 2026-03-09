@@ -32,3 +32,13 @@ theorem YjsStateInvariant.yjsLeq_or_yjsLtV2 {state : YjsState A} (hState : YjsSt
       YjsLeqV2' (ItemSetV2.ofOldItems state.items.toList) x y ∨
       YjsLtV2' (ItemSetV2.ofOldItems state.items.toList) y x := by
   exact hState.itemSetInvariantV2.yjsLeq_or_yjsLt
+
+theorem same_yjs_set_ofOldItems_eq {xs ys : List (YjsItem A)} :
+    YjsArrInvariant xs ->
+    YjsArrInvariant ys ->
+    (∀ a, ArrSet xs a ↔ ArrSet ys a) ->
+    ItemSetV2.ofOldItems xs = ItemSetV2.ofOldItems ys := by
+  intro hxs hys hseteq
+  have hEq : xs = ys := same_yjs_set_unique xs ys hxs hys hseteq
+  subst hEq
+  rfl
