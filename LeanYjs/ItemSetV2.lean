@@ -227,4 +227,92 @@ theorem isClosed_withItem {S : ItemSetV2 A} (hClosed : IsClosedItemSetV2 S)
         rwa [hLookup] at hItem
       exact refIn_withItem_of_refIn (S := S) (item := newItem) (hClosed.closedRight hOld)
 
+theorem dependsOnId_withItem_of_ne {S : ItemSetV2 A} {newItem : YjsItemV2 A}
+    {dep current : YjsId} (hNe : current ≠ newItem.id) :
+    (S.withItem newItem).DependsOnId dep current ↔ S.DependsOnId dep current := by
+  unfold DependsOnId
+  constructor
+  · intro hDep
+    rcases hDep with ⟨ item, hLookup, hRef ⟩
+    rw [lookup_withItem_of_ne (S := S) (item := newItem) (id := current) hNe] at hLookup
+    exact ⟨ item, hLookup, hRef ⟩
+  · intro hDep
+    rcases hDep with ⟨ item, hLookup, hRef ⟩
+    rw [lookup_withItem_of_ne (S := S) (item := newItem) (id := current) hNe]
+    exact ⟨ item, hLookup, hRef ⟩
+
+private theorem acc_withItem_of_ne {S : ItemSetV2 A} (hWf : WellFoundedItemSetV2 S)
+    {newItem : YjsItemV2 A} (hLookupNone : S.lookup newItem.id = none)
+    {id : YjsId} (hNe : id ≠ newItem.id) :
+    Acc (S.withItem newItem).DependsOnId id := by
+  have hAcc : Acc S.DependsOnId id := hWf.wfDependsOnId.apply id
+  induction hAcc with
+  | intro current hPred ih =>
+      refine Acc.intro current ?_
+      intro dep hDep
+      have hDep' : S.DependsOnId dep current := by
+        exact (dependsOnId_withItem_of_ne (S := S) (newItem := newItem)
+          (dep := dep) (current := current) hNe).1 hDep
+      have hDepNe : dep ≠ newItem.id := by
+        intro hDepEq
+        subst hDepEq
+        rcases hDep' with ⟨ item, hItem, hRef ⟩
+        have hItemIn : S.ItemIn item := by
+          simpa [S.lookup_sound hItem] using hItem
+        cases hRef with
+        | inl hOriginEq =>
+            have hIn : S.RefIn (.idRef newItem.id) := by
+              simpa [hOriginEq] using hWf.closed.closedLeft hItemIn
+            rcases hIn with ⟨ oldItem, hOldLookup ⟩
+            rw [hLookupNone] at hOldLookup
+            cases hOldLookup
+        | inr hRightEq =>
+            have hIn : S.RefIn (.idRef newItem.id) := by
+              simpa [hRightEq] using hWf.closed.closedRight hItemIn
+            rcases hIn with ⟨ oldItem, hOldLookup ⟩
+            rw [hLookupNone] at hOldLookup
+            cases hOldLookup
+      exact ih dep hDep' hDepNe
+
+theorem wellFounded_withItem {S : ItemSetV2 A} (hWf : WellFoundedItemSetV2 S)
+    {newItem : YjsItemV2 A} :
+    S.lookup newItem.id = none ->
+    S.RefIn newItem.origin ->
+    S.RefIn newItem.rightOrigin ->
+    WellFoundedItemSetV2 (S.withItem newItem) := by
+  intro hLookupNone hOrigin hRight
+  refine ⟨ isClosed_withItem hWf.closed hOrigin hRight, ?_ ⟩
+  refine ⟨ ?_ ⟩
+  intro id
+  by_cases hEq : id = newItem.id
+  · subst hEq
+    refine Acc.intro newItem.id ?_
+    intro dep hDep
+    rcases hDep with ⟨ item, hLookup, hRef ⟩
+    have hLookup' := hLookup
+    rw [lookup_withItem_self (S := S) (item := newItem)] at hLookup'
+    cases hLookup'
+    cases hRef with
+    | inl hOriginEq =>
+        have hDepIn : S.RefIn (.idRef dep) := by
+          simpa [hOriginEq] using hOrigin
+        have hDepNe : dep ≠ newItem.id := by
+          intro hDepEq
+          subst hDepEq
+          rcases hDepIn with ⟨ oldItem, hOldLookup ⟩
+          rw [hLookupNone] at hOldLookup
+          cases hOldLookup
+        exact acc_withItem_of_ne (S := S) hWf hLookupNone (newItem := newItem) hDepNe
+    | inr hRightEq =>
+        have hDepIn : S.RefIn (.idRef dep) := by
+          simpa [hRightEq] using hRight
+        have hDepNe : dep ≠ newItem.id := by
+          intro hDepEq
+          subst hDepEq
+          rcases hDepIn with ⟨ oldItem, hOldLookup ⟩
+          rw [hLookupNone] at hOldLookup
+          cases hOldLookup
+        exact acc_withItem_of_ne (S := S) hWf hLookupNone (newItem := newItem) hDepNe
+  · exact acc_withItem_of_ne (S := S) hWf hLookupNone (newItem := newItem) (by simpa using hEq)
+
 end ItemSetV2
