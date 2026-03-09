@@ -138,12 +138,25 @@
   - `IntegrateInput.toItemV2`
   - `getRefExcept`
   - `mkItemV2ByIndex`
+  - `findRefIdx`
+  - `findIntegratedIndexV2`
+  - `integrateV2Item`
   - old algorithm との対応補題
     - `IntegrateInput.toItem_toItemV2`
     - `getPtrExcept_toRefExcept`
     - `mkItemByIndex_toV2`
+  - bounds / id preservation の spec
+    - `findRefIdx_spec`
+    - `getRefExcept_spec`
+    - `mkItemV2ByIndex_spec`
+    - `findIntegratedIndexV2_ok_le_size`
 - これにより、まだ storage 自体は old recursive item のままでも、
   algorithm 境界では `YjsItemV2` / `ItemRef` を直接返す補助 API を使い始められる
+- 特に insert scan の本体は `YjsPtr` の構造ではなく
+  「ref を index に戻す」「other item の origin/rightOrigin を id-ref として読む」
+  だけで動くことが確認できた
+- したがって `Insert.Basic` の本体移行は、
+  order 証明の全面移植を待たずに段階的に進められる
 - さらに `ItemSetV2.withItem` を追加したので、candidate item を old item-set に一時的に載せた reachability の表現基盤もできた
 - 現時点では `withItem` の basic lookup / membership / closedness までで、wf/order invariant まではまだ載せていない
 - `withItem` を本格利用する前に、より筋の良い中間案として「candidate item から current item-set を辿る reachability」を別述語に切り出した

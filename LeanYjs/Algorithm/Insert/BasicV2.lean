@@ -35,6 +35,49 @@ def mkItemV2ByIndex (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : A
     Except IntegrateError (YjsItemV2 A) := do
   return YjsItemV2.mk (← getRefExcept arr leftIdx) (← getRefExcept arr rightIdx) input.id input.content
 
+def findRefIdx (ref : ItemRef) (arr : Array (YjsItem A)) : Except IntegrateError Int :=
+  match ref with
+  | .idRef id =>
+    match arr.findIdx? (fun item => item.id = id) with
+    | some idx => return idx
+    | none => Except.error IntegrateError.error
+  | .first => return -1
+  | .last => return arr.size
+
+def findIntegratedIndexV2 (leftIdx rightIdx : Int) (newItem : IntegrateInput A)
+    (arr : Array (YjsItem A)) : Except IntegrateError Nat := do
+  let mut scanning := false
+  let mut destIdx := leftIdx + 1
+  for offset in [1:(rightIdx-leftIdx).toNat] do
+    let i := (leftIdx + offset).toNat
+    let other <- getElemExcept arr i
+
+    let oLeftIdx <- findRefIdx other.toV2.origin arr
+    let oRightIdx <- findRefIdx other.toV2.rightOrigin arr
+
+    if oLeftIdx < leftIdx then
+      break
+    else if oLeftIdx == leftIdx then
+      if newItem.id.clientId > other.id.clientId then
+        scanning := false
+      else if oRightIdx == rightIdx then
+        break
+      else
+        scanning := true
+
+    if !scanning then
+      destIdx := i + 1
+
+  return Int.toNat destIdx
+
+def integrateV2Item (newItem : IntegrateInput A) (arr : Array (YjsItem A)) :
+    Except IntegrateError (Nat × YjsItemV2 A) := do
+  let leftIdx <- findLeftIdx newItem.originId arr
+  let rightIdx <- findRightIdx newItem.rightOriginId arr
+  let destIdx <- findIntegratedIndexV2 leftIdx rightIdx newItem arr
+  let item <- mkItemV2ByIndex leftIdx rightIdx newItem arr
+  return (destIdx, item)
+
 omit [DecidableEq A] in private theorem find_item_id_eq
     {arr : Array (YjsItem A)} {targetId : YjsId} {item : YjsItem A} :
     arr.find? (fun cand => cand.id = targetId) = some item ->
@@ -151,3 +194,75 @@ theorem mkItemByIndex_toV2
               getRefExcept arr rightIdx = Except.ok rightPtr.toRefV2 :=
             getPtrExcept_toRefExcept hRight
           simp [mkItemV2ByIndex, bind, Except.bind, pure, Except.pure, hLeftV2, hRightV2, YjsItem.toV2]
+
+open Std.Do
+
+@[spec] theorem findRefIdx_spec (ref : ItemRef) (arr : Array (YjsItem A)) :
+    ⦃⌜True⌝⦄ findRefIdx ref arr
+    ⦃post⟨fun idx => ⌜(-1 : Int) ≤ idx ∧ idx ≤ arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
+  mvcgen [findRefIdx]
+  all_goals mleave
+  case vc1.h_1.h_1 =>
+    rename_i idx h_find
+    rw [Array.findIdx?_eq_some_iff_getElem] at h_find
+    obtain ⟨ h_lt, _, _ ⟩ := h_find
+    constructor
+    · have h_nonneg : (0 : Int) ≤ (idx : Int) := by
+        exact_mod_cast (Nat.zero_le idx)
+      omega
+    · exact_mod_cast (Nat.le_of_lt h_lt)
+  case vc3.h_2 =>
+    constructor
+    · omega
+    · have h_nonneg : (0 : Int) ≤ arr.size := by
+        exact_mod_cast (Nat.zero_le arr.size)
+      omega
+  case vc4.h_3 =>
+    constructor
+    · have h_nonneg : (0 : Int) ≤ arr.size := by
+        exact_mod_cast (Nat.zero_le arr.size)
+      omega
+    · omega
+
+@[spec] theorem getRefExcept_spec (arr : Array (YjsItem A)) (idx : Int) :
+    ⦃⌜(-1 : Int) ≤ idx ∧ idx ≤ arr.size⌝⦄ getRefExcept arr idx
+    ⦃post⟨fun _ => ⌜True⌝, fun _ => ⌜False⌝⟩⦄ := by
+  mvcgen [getRefExcept]
+  all_goals mleave
+  case vc4.isFalse.isFalse.h_2 =>
+    intro h_low h_high
+    have h_nonneg : (0 : Int) ≤ idx := by
+      omega
+    have h_lt : idx < arr.size := by
+      omega
+    have h_nat_lt : idx.toNat < arr.size := (Int.toNat_lt h_nonneg).2 h_lt
+    have h_some : arr[idx.toNat]? = some arr[idx.toNat] := by
+      exact (Array.getElem?_eq_some_iff).2 ⟨ h_nat_lt, rfl ⟩
+    have h_none : arr[idx.toNat]? = none := by assumption
+    simp [h_none] at h_some
+
+@[spec] theorem mkItemV2ByIndex_spec
+    (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : Array (YjsItem A)) :
+    ⦃⌜(-1 : Int) ≤ leftIdx ∧ leftIdx ≤ arr.size ∧ (-1 : Int) ≤ rightIdx ∧ rightIdx ≤ arr.size⌝⦄
+      mkItemV2ByIndex leftIdx rightIdx input arr
+    ⦃post⟨fun item => ⌜item.id = input.id⌝, fun _ => ⌜False⌝⟩⦄ := by
+  mvcgen [mkItemV2ByIndex, getRefExcept_spec]
+  all_goals mleave
+  all_goals try omega
+  all_goals try simp
+
+@[spec] theorem findIntegratedIndexV2_ok_le_size
+    (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : Array (YjsItem A)) :
+    ⦃⌜(-1 : Int) ≤ leftIdx ∧ leftIdx < arr.size ∧ rightIdx ≤ arr.size⌝⦄
+      findIntegratedIndexV2 leftIdx rightIdx input arr
+    ⦃post⟨fun destIdx => ⌜destIdx ≤ arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
+  mvcgen [findIntegratedIndexV2, findRefIdx_spec, getElemExcept_spec]
+  case inv1 =>
+    exact post⟨fun ⟨xs, st⟩ => ⌜st.fst ≤ arr.size⌝, fun _ => ⌜True⌝⟩
+  all_goals mleave
+  case vc1.step =>
+    omega
+  all_goals try omega
+  case vc11.step.except.handle =>
+    intro
+    trivial
