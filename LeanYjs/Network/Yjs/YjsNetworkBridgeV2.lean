@@ -14,3 +14,20 @@ theorem IsValidMessage_insert_itemSetInvariantV2
   simp [IsValidMessage] at hValid
   obtain ⟨ item, hToItem, hItemValid ⟩ := hValid
   exact YjsStateInvariant_insert_itemSetInvariantV2 state newState input hState hToItem hItemValid hInsert
+
+theorem effect_list_itemSetInvariantV2 {hb : CausalOrder (YjsOperation A)}
+    (StateSource : YjsOperation A → Prop)
+    (h_valid_mono : IsValidStateMonotone (A := YjsOperation A) (S := YjsId) (hb := hb) StateSource)
+    {ops : List (YjsOperation A)} {s : YjsState A} :
+    (∀ op, op ∈ ops → StateSource op) ->
+    hb_consistent hb ops ->
+    hbClosed hb ops ->
+    IdNoDup ops ->
+    effect_list ops Operation.init = Except.ok s ->
+    YjsItemSetInvariantV2 (ItemSetV2.ofOldItems s.items.toList) := by
+  intro hSource hConsistent hClosed hNoDup hEffect
+  have hStateInv : YjsStateInvariant s := by
+    simpa [Operation.StateInv] using
+      (effect_list_stateInv (A := YjsOperation A) (S := YjsId) (hb := hb)
+        (StateSource := StateSource) h_valid_mono hSource hConsistent hClosed hNoDup hEffect)
+  exact hStateInv.itemSetInvariantV2
