@@ -211,6 +211,10 @@
   - id-based input decode (`toItemV2`)
   - index-based local builder (`mkItemV2ByIndex`)
   の両方から proof-local active set の closedness を取り出せる
+- さらに scan arithmetic の最初の移植として
+  - `offsetToIndexV2_range'_getElem`
+  を追加した
+  - これは old `Spec` の `List.range'` ベースの loop body 補題を v2 側へ移すときの共通下敷きになる
 - ここで `withItem` を再導入した理由は commutativity と違って、`Spec` では candidate item 自身を order の比較対象に含める必要があるため
   - scan invariant の内部では `newItem.toRef` に対する `YjsLtV2'` / `YjsLeqV2'` を直接述べたい
   - そのため proof-local な active set として `old items + candidate` を持つのが自然

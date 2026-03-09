@@ -48,6 +48,29 @@ def loopInvV2 (arr : Array (YjsItem A)) (newItem : YjsItemV2 A)
   (scanning -> ∃ h_dest_lt : dest < arr.size, arr[dest].toV2.origin = newItem.origin) ∧
   (done -> ∀ item : ItemRef, extGetElemExceptV2 arr current = Except.ok item -> YjsLtV2' S newItem.toRef item)
 
+omit [DecidableEq A] in theorem offsetToIndexV2_range'_getElem {leftIdx rightIdx : Int} {offset : Nat} :
+    -1 ≤ leftIdx ->
+    0 ≤ rightIdx ->
+    offset ≤ rightIdx - leftIdx - 1 ->
+    offsetToIndexV2 leftIdx rightIdx (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[offset]?
+        (isBreakV2 state) =
+      (leftIdx + offset + 1).toNat - (if isBreakV2 state then 1 else 0) := by
+  intro hLeftIdx hRightIdx hLe
+  generalize hGet : (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[offset]? = i at *
+  cases i with
+  | none =>
+      simp [offsetToIndexV2]
+      rw [List.getElem?_eq_none_iff] at hGet
+      rw [List.length_range'] at hGet
+      omega
+  | some o =>
+      simp [offsetToIndexV2]
+      rw [List.getElem?_eq_some_iff] at hGet
+      obtain ⟨ hLength, hEq ⟩ := hGet
+      rw [List.getElem_range'] at hEq
+      rw [List.length_range'] at hLength
+      omega
+
 omit [DecidableEq A] in theorem activeSetV2_itemIn_newItem
     {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
     (activeSetV2 arr newItem).ItemIn newItem := by
