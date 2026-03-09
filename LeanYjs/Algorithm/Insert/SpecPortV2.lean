@@ -153,6 +153,58 @@ omit [DecidableEq A] in theorem activeSetV2_refIn_of_oldRefIn
   exact ItemSetV2.refIn_withItem_of_refIn (S := ItemSetV2.ofOldItems arr.toList)
     (item := newItem) hRef
 
+omit [DecidableEq A] in theorem activeSetV2_yjsLt_of_old
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {x y : ItemRef} :
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    YjsLtV2' (ItemSetV2.ofOldItems arr.toList) x y ->
+    YjsLtV2' (activeSetV2 arr newItem) x y := by
+  intro hFresh hLt
+  simpa [activeSetV2] using
+    (yjsLtV2'_withItem (S := ItemSetV2.ofOldItems arr.toList) (newItem := newItem) hFresh hLt)
+
+omit [DecidableEq A] in theorem activeSetV2_yjsLeq_of_old
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {x y : ItemRef} :
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    YjsLeqV2' (ItemSetV2.ofOldItems arr.toList) x y ->
+    YjsLeqV2' (activeSetV2 arr newItem) x y := by
+  intro hFresh hLeq
+  simpa [activeSetV2] using
+    (yjsLeqV2'_withItem (S := ItemSetV2.ofOldItems arr.toList) (newItem := newItem) hFresh hLeq)
+
+theorem activeSetV2_yjsLeq_or_yjsLt_of_oldRefIn
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {x y : ItemRef} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn x ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn y ->
+    YjsLeqV2' (activeSetV2 arr newItem) x y ∨
+    YjsLtV2' (activeSetV2 arr newItem) y x := by
+  intro hArr hFresh hx hy
+  have hOrder := hArr.yjsLeq_or_yjsLtV2 x y hx hy
+  cases hOrder with
+  | inl hLeq =>
+      exact Or.inl (activeSetV2_yjsLeq_of_old hFresh hLeq)
+  | inr hLt =>
+      exact Or.inr (activeSetV2_yjsLt_of_old hFresh hLt)
+
+theorem activeSetV2_yjsLeq_or_yjsLt_of_oldRefIn_of_toItemV2_isClockSafe
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {x y : ItemRef} :
+    YjsArrInvariant arr.toList ->
+    isClockSafe input.id arr = true ->
+    input.toItemV2 arr = Except.ok newItem ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn x ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn y ->
+    YjsLeqV2' (activeSetV2 arr newItem) x y ∨
+    YjsLtV2' (activeSetV2 arr newItem) y x := by
+  intro hArr hSafe hToItem hx hy
+  apply activeSetV2_yjsLeq_or_yjsLt_of_oldRefIn hArr
+  · have hFresh : (ItemSetV2.ofOldItems arr.toList).lookup input.id = none := by
+      exact ofOldItems_lookup_none_of_isClockSafe hSafe
+    have hId : newItem.id = input.id := IntegrateInput.toItemV2_id_eq hToItem
+    simpa [hId] using hFresh
+  · exact hx
+  · exact hy
+
 omit [DecidableEq A] in private theorem find_item_id_eq_v2
     {arr : Array (YjsItem A)} {targetId : YjsId} {item : YjsItem A} :
     arr.find? (fun cand => cand.id = targetId) = some item ->
