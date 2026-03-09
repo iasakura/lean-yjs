@@ -32,6 +32,18 @@ inductive OriginReachableV2 (S : ItemSetV2 A) : ItemRef -> ItemRef -> Prop where
       OriginReachableV2 S y z ->
       OriginReachableV2 S x z
 
+inductive OriginReachableFromV2 (S : ItemSetV2 A) (item : YjsItemV2 A) : ItemRef -> Prop where
+  | origin :
+      OriginReachableFromV2 S item item.origin
+  | rightOrigin :
+      OriginReachableFromV2 S item item.rightOrigin
+  | tail_origin {x : ItemRef} :
+      OriginReachableV2 S item.origin x ->
+      OriginReachableFromV2 S item x
+  | tail_rightOrigin {x : ItemRef} :
+      OriginReachableV2 S item.rightOrigin x ->
+      OriginReachableFromV2 S item x
+
 mutual
   inductive YjsLtV2 (S : ItemSetV2 A) : Nat -> ItemRef -> ItemRef -> Prop where
     | ltConflict h {item1 item2 : YjsItemV2 A} :
@@ -179,6 +191,26 @@ theorem target_refIn {S : ItemSetV2 A} (hClosed : ItemSetV2.IsClosedItemSetV2 S)
       exact ih
 
 end OriginReachableV2
+
+namespace OriginReachableFromV2
+
+theorem target_refIn {S : ItemSetV2 A} (hClosed : ItemSetV2.IsClosedItemSetV2 S)
+    {item : YjsItemV2 A} :
+    S.RefIn item.origin ->
+    S.RefIn item.rightOrigin ->
+    ∀ {x : ItemRef}, OriginReachableFromV2 S item x -> S.RefIn x := by
+  intro hOrigin hRight x hReach
+  cases hReach with
+  | origin =>
+      exact hOrigin
+  | rightOrigin =>
+      exact hRight
+  | tail_origin hReach =>
+      exact OriginReachableV2.target_refIn hClosed hReach
+  | tail_rightOrigin hReach =>
+      exact OriginReachableV2.target_refIn hClosed hReach
+
+end OriginReachableFromV2
 
 namespace ConflictLtV2'
 

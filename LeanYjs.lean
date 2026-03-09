@@ -31,6 +31,7 @@ import LeanYjs.Algorithm.Insert.SpecBridgeV2
 import LeanYjs.Algorithm.Delete.Basic
 import LeanYjs.Algorithm.Delete.Spec
 import LeanYjs.Algorithm.Commutativity.InsertInsert
+import LeanYjs.Algorithm.Commutativity.InsertInsertBridgeV2
 import LeanYjs.Algorithm.Commutativity.InsertDelete
 import LeanYjs.Algorithm.Commutativity.DeleteDelete
 import LeanYjs.Network.CausalNetwork

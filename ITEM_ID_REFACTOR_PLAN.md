@@ -136,6 +136,11 @@
 - reverse bridge も入ったので、必要なら v2 validity から old `item.isValid` へ戻して既存 theorem に渡せる
 - さらに `ItemSetV2.withItem` を追加したので、candidate item を old item-set に一時的に載せた reachability の表現基盤もできた
 - 現時点では `withItem` の basic lookup / membership / closedness までで、wf/order invariant まではまだ載せていない
+- `withItem` を本格利用する前に、より筋の良い中間案として「candidate item から current item-set を辿る reachability」を別述語に切り出した
+  - `OriginReachableFromV2`
+  - old `OriginReachable item x` からの forward bridge
+  - `InsertInsertBridgeV2` の thin wrapper
+- この形なら current state の item-set を汚さずに、commutativity の前提だけを v2 化できる
 - `LeanYjs/Network/Yjs/YjsNetworkBridgeV2.lean` で network valid-message 境界の thin wrapper も追加済み
   - `IsValidMessage_insert_itemSetInvariantV2`
   - `IsValidMessage_insert_itemValidV2Against`

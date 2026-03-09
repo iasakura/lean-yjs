@@ -258,6 +258,31 @@ omit [DecidableEq A] in theorem originReachable_from_v2 {arr : List (YjsItem A)}
       subst x2
       exact ⟨ x1, z2, hx1, hz2, hxEq, hzEq, .reachable_head _ _ _ hStepOld hTailOld ⟩
 
+theorem originReachableFrom_to_v2 {arr : List (YjsItem A)} :
+    ArrSetClosed arr ->
+    UniqueIdOld arr ->
+    ∀ {item : YjsItem A} {x : YjsPtr A},
+      ArrSet arr item.origin ->
+      ArrSet arr item.rightOrigin ->
+      OriginReachable item x ->
+      OriginReachableFromV2 (ItemSetV2.ofOldItems arr) item.toV2 x.toRefV2 := by
+  intro hClosed hUnique item x hOriginIn hRightIn hReach
+  cases hReach with
+  | reachable_single _ _ hStep =>
+      cases hStep with
+      | reachable _ _ _ _ =>
+          exact .origin
+      | reachable_right _ _ _ _ =>
+          exact .rightOrigin
+  | reachable_head _ mid _ hStep hTail =>
+      cases hStep with
+      | reachable _ _ _ _ =>
+          exact .tail_origin <|
+            originReachable_to_v2 (arr := arr) hClosed hUnique hTail hOriginIn
+      | reachable_right _ _ _ _ =>
+          exact .tail_rightOrigin <|
+            originReachable_to_v2 (arr := arr) hClosed hUnique hTail hRightIn
+
 theorem ofOldItems_invariant_v2 {arr : List (YjsItem A)} :
     ArrSetClosed arr ->
     UniqueIdOld arr ->

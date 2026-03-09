@@ -130,6 +130,35 @@ theorem YjsItem.isValid_toV2AgainstOldItems
         exact Or.inr <|
           OldToV2.yjsLeq_to_v2 (arr := arr.toList) hArr.closed hArr.uniqueIdOld hLeq hRightIn hXIn
 
+theorem originReachable_to_fromV2AgainstOldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} {x : YjsPtr A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    OriginReachable newItem x ->
+    OriginReachableFromV2 (ItemSetV2.ofOldItems arr.toList) newItem.toV2 x.toRefV2 := by
+  intro hArr hToItem hReach
+  rcases newItem with ⟨ origin, rightOrigin, id, content ⟩
+  have hOriginIn : ArrSet arr.toList origin := by
+    exact reachable_in_old_items_of_toItem hArr hToItem
+      (x := origin)
+      (OriginReachable.reachable_single _ _ (OriginReachableStep.reachable origin rightOrigin id content))
+  have hRightIn : ArrSet arr.toList rightOrigin := by
+    exact reachable_in_old_items_of_toItem hArr hToItem
+      (x := rightOrigin)
+      (OriginReachable.reachable_single _ _ (OriginReachableStep.reachable_right origin rightOrigin id content))
+  exact OldToV2.originReachableFrom_to_v2 (arr := arr.toList)
+    hArr.closed hArr.uniqueIdOld hOriginIn hRightIn hReach
+
+theorem not_originReachable_of_not_fromV2AgainstOldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} {x : YjsPtr A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    ¬ OriginReachableFromV2 (ItemSetV2.ofOldItems arr.toList) newItem.toV2 x.toRefV2 ->
+    ¬ OriginReachable newItem x := by
+  intro hArr hToItem hNotV2 hReach
+  exact hNotV2 <|
+    originReachable_to_fromV2AgainstOldItems hArr hToItem hReach
+
 theorem YjsItem.isValid_of_v2AgainstOldItems
     {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :
     YjsArrInvariant arr.toList ->
