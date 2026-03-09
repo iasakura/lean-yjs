@@ -282,6 +282,83 @@ theorem yjsLeqV2'_withItem {S : ItemSetV2 A} {newItem : YjsItemV2 A} :
   rcases hLeq with ⟨ h, hLeq ⟩
   exact ⟨ h, yjsLeqV2_withItem hFresh hLeq ⟩
 
+private theorem not_refIn_toRef_of_lookup_none {S : ItemSetV2 A} {newItem : YjsItemV2 A} :
+    S.lookup newItem.id = none ->
+    ¬ S.RefIn newItem.toRef := by
+  intro hFresh hRef
+  rcases hRef with ⟨ item, hLookup ⟩
+  rw [hFresh] at hLookup
+  cases hLookup
+
+theorem originReachableStepV2_of_withItem_of_ne {S : ItemSetV2 A} {newItem : YjsItemV2 A}
+    :
+    OriginReachableStepV2 (S.withItem newItem) x y ->
+    x ≠ newItem.toRef ->
+    OriginReachableStepV2 S x y := by
+  intro hStep hStartNe
+  cases hStep with
+  | left hItem =>
+      rename_i item
+      have hIdNe : item.id ≠ newItem.id := by
+        intro hEq
+        apply hStartNe
+        simp [YjsItemV2.toRef, hEq]
+      have hItemOld : S.ItemIn item := by
+        rw [ItemSetV2.ItemIn] at hItem ⊢
+        rw [ItemSetV2.lookup_withItem_of_ne (S := S) (item := newItem) (id := item.id) hIdNe] at hItem
+        exact hItem
+      exact OriginReachableStepV2.left <|
+        hItemOld
+  | right hItem =>
+      rename_i item
+      have hIdNe : item.id ≠ newItem.id := by
+        intro hEq
+        apply hStartNe
+        simp [YjsItemV2.toRef, hEq]
+      have hItemOld : S.ItemIn item := by
+        rw [ItemSetV2.ItemIn] at hItem ⊢
+        rw [ItemSetV2.lookup_withItem_of_ne (S := S) (item := newItem) (id := item.id) hIdNe] at hItem
+        exact hItem
+      exact OriginReachableStepV2.right <|
+        hItemOld
+
+private theorem originReachableStepV2_target_ne_withItem
+    {S : ItemSetV2 A} (hClosed : ItemSetV2.IsClosedItemSetV2 S) {newItem : YjsItemV2 A}
+    (hFresh : S.lookup newItem.id = none) :
+    OriginReachableStepV2 (S.withItem newItem) x y ->
+    x ≠ newItem.toRef ->
+    y ≠ newItem.toRef := by
+  intro hStep hStartNe hEq
+  have hStepOld :=
+    originReachableStepV2_of_withItem_of_ne (S := S) (newItem := newItem) hStep hStartNe
+  have hRefIn : S.RefIn y := by
+    cases hStepOld with
+    | left hItem =>
+        exact hClosed.closedLeft hItem
+    | right hItem =>
+        exact hClosed.closedRight hItem
+  subst y
+  exact not_refIn_toRef_of_lookup_none (S := S) (newItem := newItem) hFresh hRefIn
+
+theorem originReachableV2_of_withItem_of_ne
+    {S : ItemSetV2 A} (hClosed : ItemSetV2.IsClosedItemSetV2 S) {newItem : YjsItemV2 A}
+    (hFresh : S.lookup newItem.id = none) :
+    OriginReachableV2 (S.withItem newItem) x y ->
+    x ≠ newItem.toRef ->
+    OriginReachableV2 S x y := by
+  intro hReach hStartNe
+  induction hReach with
+  | single hStep =>
+      exact .single <|
+        originReachableStepV2_of_withItem_of_ne (S := S) (newItem := newItem) hStep hStartNe
+  | tail hStep hTail ih =>
+      have hStepOld :=
+        originReachableStepV2_of_withItem_of_ne (S := S) (newItem := newItem) hStep hStartNe
+      have hMidNe :=
+        originReachableStepV2_target_ne_withItem
+          (S := S) hClosed (newItem := newItem) hFresh hStep hStartNe
+      exact .tail hStepOld (ih hMidNe)
+
 namespace OriginReachableV2
 
 theorem of_origin {S : ItemSetV2 A} {item : YjsItemV2 A} :

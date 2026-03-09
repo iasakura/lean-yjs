@@ -175,6 +175,15 @@ theorem itemIn_withItem_of_itemIn {S : ItemSetV2 A} {item newItem : YjsItemV2 A}
   rw [lookup_withItem_of_ne hNe]
   exact hItem
 
+theorem itemIn_of_withItem_of_ne {S : ItemSetV2 A} {item newItem : YjsItemV2 A} :
+    item.id ≠ newItem.id ->
+    (S.withItem newItem).ItemIn item ->
+    S.ItemIn item := by
+  intro hNe hItem
+  rw [ItemIn] at hItem ⊢
+  rw [lookup_withItem_of_ne (S := S) (item := newItem) (id := item.id) hNe] at hItem
+  exact hItem
+
 theorem idIn_withItem_self {S : ItemSetV2 A} {item : YjsItemV2 A} :
     (S.withItem item).IdIn item.id := by
   exact ⟨ item, lookup_withItem_self (S := S) (item := item) ⟩
