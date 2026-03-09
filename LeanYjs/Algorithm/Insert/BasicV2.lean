@@ -167,6 +167,76 @@ theorem getPtrExcept_toRefExcept
           cases hPtr
           simp [YjsItem.toV2]
 
+theorem findRefIdx_eq_ok_inj {arr : Array (YjsItem A)} (x y : ItemRef) :
+    findRefIdx x arr = Except.ok i ->
+    findRefIdx y arr = Except.ok i ->
+    x = y := by
+  intro hEqX hEqY
+  cases x with
+  | first =>
+      cases y with
+      | first =>
+          simp
+      | last =>
+          simp [findRefIdx] at hEqX hEqY
+          cases hEqX
+          cases hEqY
+      | idRef y =>
+          exfalso
+          simp [findRefIdx] at hEqX hEqY
+          generalize hFind : Array.findIdx? (fun item => decide (item.id = y)) arr = idx at *
+          cases idx <;> cases hEqY
+          cases hEqX
+  | last =>
+      cases y with
+      | first =>
+          simp [findRefIdx] at hEqX hEqY
+          cases hEqX
+          cases hEqY
+      | last =>
+          simp
+      | idRef y =>
+          exfalso
+          simp [findRefIdx] at hEqX hEqY
+          generalize hFind : Array.findIdx? (fun item => decide (item.id = y)) arr = idx at *
+          cases idx <;> cases hEqY
+          cases hEqX
+          rw [Array.findIdx?_eq_some_iff_findIdx_eq] at hFind
+          omega
+  | idRef xId =>
+      cases y with
+      | first =>
+          exfalso
+          simp [findRefIdx] at hEqX hEqY
+          generalize hFind : Array.findIdx? (fun item => decide (item.id = xId)) arr = idx at *
+          cases idx <;> cases hEqX
+          cases hEqY
+      | last =>
+          exfalso
+          simp [findRefIdx] at hEqX hEqY
+          generalize hFind : Array.findIdx? (fun item => decide (item.id = xId)) arr = idx at *
+          cases idx <;> cases hEqX
+          cases hEqY
+          rw [Array.findIdx?_eq_some_iff_findIdx_eq] at hFind
+          omega
+      | idRef yId =>
+          simp [findRefIdx] at hEqX hEqY
+          generalize hFindX : Array.findIdx? (fun item => decide (item.id = xId)) arr = idxX at *
+          generalize hFindY : Array.findIdx? (fun item => decide (item.id = yId)) arr = idxY at *
+          cases idxX <;> cases hEqX
+          cases idxY <;> cases hEqY
+          rw [Array.findIdx?_eq_some_iff_findIdx_eq] at hFindX
+          rw [Array.findIdx?_eq_some_iff_findIdx_eq] at hFindY
+          obtain ⟨ hLtX, hEqX' ⟩ := hFindX
+          obtain ⟨ hLtY, hEqY' ⟩ := hFindY
+          rw [Array.findIdx_eq hLtX] at hEqX'
+          rw [Array.findIdx_eq hLtY] at hEqY'
+          simp at hEqX' hEqY'
+          obtain ⟨ hIdX, _ ⟩ := hEqX'
+          obtain ⟨ hIdY, _ ⟩ := hEqY'
+          subst xId yId
+          simp
+
 theorem mkItemByIndex_toV2
     {leftIdx rightIdx : Int} {input : IntegrateInput A} {arr : Array (YjsItem A)} {item : YjsItem A} :
     mkItemByIndex leftIdx rightIdx input arr = Except.ok item ->
