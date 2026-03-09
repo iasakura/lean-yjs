@@ -167,6 +167,77 @@ theorem getPtrExcept_toRefExcept
           cases hPtr
           simp [YjsItem.toV2]
 
+theorem IntegrateInput.toItemV2_id_eq {input : IntegrateInput A} {arr : Array (YjsItem A)}
+    {newItem : YjsItemV2 A} :
+    input.toItemV2 arr = Except.ok newItem ->
+    newItem.id = input.id := by
+  intro hToItem
+  unfold IntegrateInput.toItemV2 at hToItem
+  cases hOriginId : input.originId with
+  | none =>
+      cases hRightId : input.rightOriginId with
+      | none =>
+          simp [hOriginId, hRightId, bind, Except.bind, pure, Except.pure] at hToItem
+          cases hToItem
+          rfl
+      | some rightId =>
+          cases hFindRight : arr.find? (fun item => item.id = rightId) with
+          | none =>
+              simp [hOriginId, hRightId, hFindRight, bind, Except.bind, pure, Except.pure] at hToItem
+          | some rightItem =>
+              simp [hOriginId, hRightId, hFindRight, bind, Except.bind, pure, Except.pure] at hToItem
+              cases hToItem
+              rfl
+  | some originId =>
+      cases hFindOrigin : arr.find? (fun item => item.id = originId) with
+      | none =>
+          simp [hOriginId, hFindOrigin, bind, Except.bind, pure, Except.pure] at hToItem
+      | some originItem =>
+          cases hRightId : input.rightOriginId with
+          | none =>
+              simp [hOriginId, hFindOrigin, hRightId, bind, Except.bind, pure, Except.pure] at hToItem
+              cases hToItem
+              rfl
+          | some rightId =>
+              cases hFindRight : arr.find? (fun item => item.id = rightId) with
+              | none =>
+                  simp [hOriginId, hFindOrigin, hRightId, hFindRight, bind, Except.bind, pure, Except.pure] at hToItem
+              | some rightItem =>
+                  simp [hOriginId, hFindOrigin, hRightId, hFindRight, bind, Except.bind, pure, Except.pure] at hToItem
+                  cases hToItem
+                  rfl
+
+omit [DecidableEq A] in theorem ofOldItems_lookup_none_of_isClockSafe
+    {arr : Array (YjsItem A)} {id : YjsId} :
+    isClockSafe id arr = true ->
+    (ItemSetV2.ofOldItems arr.toList).lookup id = none := by
+  intro hSafe
+  cases hLookup : (ItemSetV2.ofOldItems arr.toList).lookup id with
+  | none =>
+      exact rfl
+  | some item =>
+      exfalso
+      rcases ItemSetV2.exists_oldItem_of_lookup_eq_some (items := arr.toList) hLookup with
+        ⟨ oldItem, hMem, hEqV2 ⟩
+      have hMemArr : oldItem ∈ arr := by
+        simpa using hMem
+      rw [Array.mem_iff_getElem] at hMemArr
+      obtain ⟨ i, hLt, hOldEq ⟩ := hMemArr
+      have hId : oldItem.id = id := by
+        have hItemId : item.id = id := (ItemSetV2.ofOldItems arr.toList).lookup_sound hLookup
+        simpa [← hEqV2] using hItemId
+      subst hOldEq
+      simp [isClockSafe] at hSafe
+      have hClockLt : id.clock < id.clock := by
+        have hSafe' := hSafe i hLt
+        cases hSafe' with
+        | inl hNe =>
+            exfalso
+            exact hNe (by simpa [hId])
+        | inr hLtClock =>
+            simpa [hId] using hLtClock
+      omega
+
 theorem findRefIdx_eq_ok_inj {arr : Array (YjsItem A)} (x y : ItemRef) :
     findRefIdx x arr = Except.ok i ->
     findRefIdx y arr = Except.ok i ->
