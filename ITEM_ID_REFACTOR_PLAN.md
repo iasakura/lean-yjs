@@ -202,6 +202,15 @@
   - `toItemV2_rightOrigin_refIn_oldItems`
   - `activeSetV2_closed`
   - `activeSetV2_closed_of_toItemV2`
+- その次の checkpoint として index-based builder からも同じ active-set 閉包を取れるようにした
+  - `getRefExcept_refIn_oldItems`
+  - `mkItemV2ByIndex_origin_refIn_oldItems`
+  - `mkItemV2ByIndex_rightOrigin_refIn_oldItems`
+  - `activeSetV2_closed_of_mkItemV2ByIndex`
+- これで `SpecPortV2` は
+  - id-based input decode (`toItemV2`)
+  - index-based local builder (`mkItemV2ByIndex`)
+  の両方から proof-local active set の closedness を取り出せる
 - ここで `withItem` を再導入した理由は commutativity と違って、`Spec` では candidate item 自身を order の比較対象に含める必要があるため
   - scan invariant の内部では `newItem.toRef` に対する `YjsLtV2'` / `YjsLeqV2'` を直接述べたい
   - そのため proof-local な active set として `old items + candidate` を持つのが自然

@@ -225,3 +225,101 @@ theorem activeSetV2_closed_of_toItemV2
   apply activeSetV2_closed hArr
   · exact toItemV2_origin_refIn_oldItems hArr hToItem
   · exact toItemV2_rightOrigin_refIn_oldItems hArr hToItem
+
+omit [DecidableEq A] in theorem getRefExcept_refIn_oldItems
+    {arr : Array (YjsItem A)} {idx : Int} {ref : ItemRef} :
+    YjsArrInvariant arr.toList ->
+    (-1 : Int) ≤ idx ->
+    idx ≤ arr.size ->
+    getRefExcept arr idx = Except.ok ref ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn ref := by
+  intro hArr hLow hHigh hGet
+  by_cases hFirst : idx = -1
+  · simp [getRefExcept, hFirst] at hGet ⊢
+    cases hGet
+    simp
+  · by_cases hLast : idx = arr.size
+    · simp [getRefExcept, hFirst, hLast] at hGet ⊢
+      cases hGet
+      simp
+    · unfold getRefExcept at hGet
+      simp [hFirst, hLast] at hGet
+      cases hItem : arr[idx.toNat]? with
+      | none =>
+          simp [hItem] at hGet
+      | some item =>
+          simp [hItem] at hGet
+          cases hGet
+          have hNonneg : (0 : Int) ≤ idx := by
+            omega
+          have hLt : idx < arr.size := by
+            omega
+          have hNatLt : idx.toNat < arr.size := (Int.toNat_lt hNonneg).2 hLt
+          have hMem : item ∈ arr.toList := by
+            have hMemArr : item ∈ arr := by
+              rw [Array.mem_iff_getElem]
+              rw [Array.getElem?_eq_some_iff] at hItem
+              exact ⟨ idx.toNat, hNatLt, hItem.2 ⟩
+            simpa using hMemArr
+          simpa [YjsItem.toV2] using
+            ItemSetV2.refIn_toRef_of_mem_of_pairwise
+              (items := arr.toList) (item := item) hArr.unique hMem
+
+omit [DecidableEq A] in theorem mkItemV2ByIndex_origin_refIn_oldItems
+    {leftIdx rightIdx : Int} {input : IntegrateInput A}
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    (-1 : Int) ≤ leftIdx ->
+    leftIdx ≤ arr.size ->
+    mkItemV2ByIndex leftIdx rightIdx input arr = Except.ok newItem ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.origin := by
+  intro hArr hLeftLow hLeftHigh hMk
+  unfold mkItemV2ByIndex at hMk
+  cases hLeft : getRefExcept arr leftIdx with
+  | error err =>
+      simp [bind, Except.bind, hLeft] at hMk
+  | ok leftRef =>
+      cases hRight : getRefExcept arr rightIdx with
+      | error err =>
+          simp [bind, Except.bind, hLeft, hRight] at hMk
+      | ok rightRef =>
+          simp [bind, Except.bind, pure, Except.pure, hLeft, hRight] at hMk
+          cases hMk
+          simpa using getRefExcept_refIn_oldItems hArr hLeftLow hLeftHigh hLeft
+
+omit [DecidableEq A] in theorem mkItemV2ByIndex_rightOrigin_refIn_oldItems
+    {leftIdx rightIdx : Int} {input : IntegrateInput A}
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    (-1 : Int) ≤ rightIdx ->
+    rightIdx ≤ arr.size ->
+    mkItemV2ByIndex leftIdx rightIdx input arr = Except.ok newItem ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.rightOrigin := by
+  intro hArr hRightLow hRightHigh hMk
+  unfold mkItemV2ByIndex at hMk
+  cases hLeft : getRefExcept arr leftIdx with
+  | error err =>
+      simp [bind, Except.bind, hLeft] at hMk
+  | ok leftRef =>
+      cases hRight : getRefExcept arr rightIdx with
+      | error err =>
+          simp [bind, Except.bind, hLeft, hRight] at hMk
+      | ok rightRef =>
+          simp [bind, Except.bind, pure, Except.pure, hLeft, hRight] at hMk
+          cases hMk
+          simpa using getRefExcept_refIn_oldItems hArr hRightLow hRightHigh hRight
+
+theorem activeSetV2_closed_of_mkItemV2ByIndex
+    {leftIdx rightIdx : Int} {input : IntegrateInput A}
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    (-1 : Int) ≤ leftIdx ->
+    leftIdx ≤ arr.size ->
+    (-1 : Int) ≤ rightIdx ->
+    rightIdx ≤ arr.size ->
+    mkItemV2ByIndex leftIdx rightIdx input arr = Except.ok newItem ->
+    ItemSetV2.IsClosedItemSetV2 (activeSetV2 arr newItem) := by
+  intro hArr hLeftLow hLeftHigh hRightLow hRightHigh hMk
+  apply activeSetV2_closed hArr
+  · exact mkItemV2ByIndex_origin_refIn_oldItems hArr hLeftLow hLeftHigh hMk
+  · exact mkItemV2ByIndex_rightOrigin_refIn_oldItems hArr hRightLow hRightHigh hMk
