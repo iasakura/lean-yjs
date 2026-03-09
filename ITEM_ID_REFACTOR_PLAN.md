@@ -178,6 +178,21 @@
 - `integrateV2Item` も old `findIntegratedIndex` を使う形へ bridge できたので、
   次は `mkItemByIndex_toV2` と合わせて old `integrate` / `integrateSafe` の postcondition を
   v2 item へ移す段階に入れる
+- ただしここで方針を修正する:
+  - bridge 拡張はこの `scan equivalence` を checkpoint にして止める
+  - これ以上 old `integrate` / `integrateSafe` / `Spec` への還元 wrapper を厚くしない
+  - 以後の主戦場は `Spec` の v2-native 直移植に切り替える
+- 理由:
+  - `findIntegratedIndexV2_eq_findIntegratedIndex` までで v2 scan の挙動確認としては十分
+  - ここから先に old theorem への還元を増やしても、最終目標の
+    「recursive `YjsItem` / `YjsPtr` 非依存」にはほとんど近づかない
+  - 重い残課題は `loopInv` と scan 局所補題群の v2 化で、そこは bridge 完成とは独立に残る
+- pivot 後の優先順位:
+  1. `SpecV2` / `SpecPortV2` を新設する
+  2. `scanStepV2` ベースの `loopInvV2` を定義する
+  3. `loopInv_YjsLt'` など scan 局所補題を `findRefIdx` / `ItemRef` / `YjsLtV2` ベースへ移植する
+  4. `YjsArrInvariant_integrate` 相当の v2-native theorem を、old theorem 非依存で立てる
+  5. その後で storage を old recursive item から外す
 - さらに `ItemSetV2.withItem` を追加したので、candidate item を old item-set に一時的に載せた reachability の表現基盤もできた
 - 現時点では `withItem` の basic lookup / membership / closedness までで、wf/order invariant まではまだ載せていない
 - `withItem` を本格利用する前に、より筋の良い中間案として「candidate item から current item-set を辿る reachability」を別述語に切り出した
