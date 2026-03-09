@@ -21,6 +21,8 @@ import LeanYjs.Order.Totality
 import LeanYjs.Order.Transitivity
 import LeanYjs.Order.Asymmetry
 import LeanYjs.Algorithm.Basic
+import LeanYjs.Algorithm.Invariant.BridgeV2
+import LeanYjs.Algorithm.Invariant.StructuralBridgeV2
 import LeanYjs.Algorithm.YString
 import LeanYjs.Algorithm.Insert.Basic
 import LeanYjs.Algorithm.Insert.Spec

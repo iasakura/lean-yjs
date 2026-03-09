@@ -99,6 +99,18 @@
   - まず既存の recursive `YjsItem` / `YjsPtr` から `YjsItemV2` / `ItemSetV2` への変換層を置く
   - その上で既存 array/state を保ったまま v2 order を利用可能にする
   - 最後に storage / algorithm 本体を v2 表現へ置き換える
+- `LeanYjs/Algorithm/Invariant/BridgeV2.lean` で old order / reachability から v2 order への semantic bridge を追加済み
+  - `OriginReachableStep` / `OriginReachable`
+  - `YjsLt'` / `YjsLeq'`
+  - `origin_lt_rightOrigin`
+  - `origin_nearest_reachable`
+- `LeanYjs/Algorithm/Invariant/StructuralBridgeV2.lean` で old array から `ItemSetV2.ofOldItems` への structural bridge を追加済み
+  - `ofOldItems_structural`
+  - `origin_lt_rightOrigin_field_to_v2`
+- ここで新しく分かった点として、full `YjsItemSetInvariantV2` bridge の最後の難所は structural 部分ではなく reachability の向き
+  - old `OriginReachable -> OriginReachableV2` は easy に作れる
+  - しかし `origin_nearest_reachable` field を v2 invariant として立てるには、concrete `ofOldItems` 上で `OriginReachableV2 -> old OriginReachable` の逆向き bridge が必要
+  - したがって次の段は `Invariant` 全体の一括 bridge ではなく、まず reverse reachability bridge を補題として切るのがよい
 
 ## Current State
 

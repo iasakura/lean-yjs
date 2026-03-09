@@ -47,7 +47,7 @@ end YjsItem
 
 namespace ItemSetV2
 
-private def lookupOldItems : List (YjsItem A) -> YjsId -> Option (YjsItemV2 A)
+def lookupOldItems : List (YjsItem A) -> YjsId -> Option (YjsItemV2 A)
   | [], _ => none
   | item :: items, id =>
       if item.id = id then
@@ -115,5 +115,23 @@ theorem refIn_toRef_of_mem_of_pairwise
   intro hPair hMem
   exact ItemSetV2.refIn_of_itemIn <|
     itemIn_toV2_of_mem_of_pairwise (items := items) (item := item) hPair hMem
+
+theorem exists_oldItem_of_lookup_eq_some
+    {items : List (YjsItem A)} {id : YjsId} {item : YjsItemV2 A} :
+    (ItemSetV2.ofOldItems items).lookup id = some item ->
+    ∃ oldItem, oldItem ∈ items ∧ oldItem.toV2 = item := by
+  intro hLookup
+  induction items with
+  | nil =>
+      simp [ItemSetV2.ofOldItems, lookupOldItems] at hLookup
+  | cons head tail ih =>
+      simp [ItemSetV2.ofOldItems, lookupOldItems] at hLookup
+      split at hLookup
+      · rename_i hEq
+        injection hLookup with hItem
+        subst hItem
+        exact ⟨ head, by simp, rfl ⟩
+      · rcases ih hLookup with ⟨ oldItem, hMem, hEq ⟩
+        exact ⟨ oldItem, by simp [hMem], hEq ⟩
 
 end ItemSetV2
