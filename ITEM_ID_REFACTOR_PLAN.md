@@ -150,6 +150,7 @@
     - `getRefExcept_spec`
     - `mkItemV2ByIndex_spec`
     - `findIntegratedIndexV2_ok_le_size`
+    - `integrateV2Item_spec`
 - これにより、まだ storage 自体は old recursive item のままでも、
   algorithm 境界では `YjsItemV2` / `ItemRef` を直接返す補助 API を使い始められる
 - 特に insert scan の本体は `YjsPtr` の構造ではなく

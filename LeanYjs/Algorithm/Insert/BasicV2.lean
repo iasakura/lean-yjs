@@ -266,3 +266,13 @@ open Std.Do
   case vc11.step.except.handle =>
     intro
     trivial
+
+@[spec] theorem integrateV2Item_spec
+    (input : IntegrateInput A) (arr : Array (YjsItem A)) :
+    ⦃⌜True⌝⦄ integrateV2Item input arr
+    ⦃post⟨fun out => ⌜out.1 ≤ arr.size ∧ out.2.id = input.id⌝, fun _ => ⌜True⌝⟩⦄ := by
+  mvcgen [integrateV2Item, findLeftIdx_spec, findRightIdx_spec,
+    findIntegratedIndexV2_ok_le_size, mkItemV2ByIndex_spec]
+  all_goals mleave
+  all_goals try omega
+  all_goals try simp
