@@ -129,8 +129,13 @@
   - `YjsStateInvariant_insert_itemSetInvariantV2`
   - `IsItemValidV2Against`
   - `YjsItem.isValid_toV2AgainstOldItems`
+  - `YjsItem.isValid_of_v2AgainstOldItems`
+  - `YjsItem.isValid_iff_v2AgainstOldItems`
 - これで integration correctness を使う consumer は、既存 theorem を壊さずに `newArr` 側の v2 invariant を直接受け取れる
 - さらに new item がまだ old item-set に入っていない段階でも、`item.isValid` を `ItemSetV2.ofOldItems arr` に対する v2 validity へ読み替えられる
+- reverse bridge も入ったので、必要なら v2 validity から old `item.isValid` へ戻して既存 theorem に渡せる
+- さらに `ItemSetV2.withItem` を追加したので、candidate item を old item-set に一時的に載せた reachability の表現基盤もできた
+- 現時点では `withItem` の basic lookup / membership / closedness までで、wf/order invariant まではまだ載せていない
 - `LeanYjs/Network/Yjs/YjsNetworkBridgeV2.lean` で network valid-message 境界の thin wrapper も追加済み
   - `IsValidMessage_insert_itemSetInvariantV2`
   - `IsValidMessage_insert_itemValidV2Against`
@@ -144,6 +149,8 @@
   - reverse reachability bridge は abstract `ItemSetV2` では難しいが、concrete `ItemSetV2.ofOldItems arr` では `lookup` の具体性と old unique-id から復元できる
   - したがって移行順序は「generic v2 order を先に完成」してから「concrete old-array bridge を作る」のが正しかった
   - consumer 側を直接書き換える前に `YjsArrInvariant` / `YjsStateInvariant` から v2 theorem を引く薄い wrapper 層を置くと、既存 proof の assumption shape を壊さずに差し替えを進められる
+  - ただし `InsertInsert` の `¬OriginReachable aItem bItem` は start/end が「まだ old item-set に入っていない候補 item」なので、`ItemSetV2.ofOldItems arr` だけではそのまま表現できない
+  - commutativity を本当に v2 化するには、`ofOldItems arr` とは別に candidate item を一時的に含む拡張 `ItemSetV2` を導入するか、その reachability 条件だけ old 定義を当面残す必要がある
 
 ## Current State
 
@@ -577,6 +584,7 @@ order 層に次ぐ難所。
 やること:
 
 - concurrent insert の reachability 仮定を新定義に合わせる
+- ただしこれは `ofOldItems arr` への単純置換ではなく、candidate item を含む拡張 set の設計が先に必要
 - `integrate_ok_commutative`
 - `integrate_commutative`
 - `insert_commutative`

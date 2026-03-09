@@ -1,4 +1,5 @@
 import LeanYjs.Algorithm.Invariant.BridgeV2
+import LeanYjs.Order.Totality
 
 variable {A : Type}
 variable [DecidableEq A]
@@ -282,5 +283,61 @@ theorem ofOldItems_invariant_v2 {arr : List (YjsItem A)} :
     subst xOld
     simpa [hEq, hyEq] using
       origin_nearest_reachable_to_v2 (arr := arr) hClosed hUnique hInv hMem hReachOld
+
+theorem yjsLt_from_v2 {arr : List (YjsItem A)} :
+    ArrSetClosed arr ->
+    UniqueIdOld arr ->
+    ItemSetInvariant (ArrSet arr) ->
+    ∀ {x y : YjsPtr A},
+      ArrSet arr x ->
+      ArrSet arr y ->
+      YjsLtV2' (ItemSetV2.ofOldItems arr) x.toRefV2 y.toRefV2 ->
+      YjsLt' x y := by
+  intro hClosed hUnique hInv x y hx hy hLtV2
+  let invV2 : YjsItemSetInvariantV2 (ItemSetV2.ofOldItems arr) :=
+    ofOldItems_invariant_v2 hClosed hUnique hInv
+  have hxRef : (ItemSetV2.ofOldItems arr).RefIn x.toRefV2 := by
+    exact arrSet_refIn_toRefV2 (arr := arr) hUnique hx
+  have hyRef : (ItemSetV2.ofOldItems arr).RefIn y.toRefV2 := by
+    exact arrSet_refIn_toRefV2 (arr := arr) hUnique hy
+  have hOldTotal : YjsLeq' x y ∨ YjsLt' y x := by
+    exact YjsLeq'_or_YjsLt' hInv hClosed hx hy
+  cases hOldTotal with
+  | inl hLeq =>
+      cases yjs_leq'_imp_eq_or_yjs_lt' hLeq with
+      | inl hEq =>
+          have hSelf : YjsLtV2' (ItemSetV2.ofOldItems arr) x.toRefV2 x.toRefV2 := by
+            simpa [hEq] using hLtV2
+          exact False.elim <|
+            invV2.yjsLt_asymm_v2 x.toRefV2 x.toRefV2 hxRef hxRef hSelf hSelf
+      | inr hLt =>
+          exact hLt
+  | inr hLtYX =>
+      have hLtYXV2 :
+          YjsLtV2' (ItemSetV2.ofOldItems arr) y.toRefV2 x.toRefV2 := by
+        rcases hLtYX with ⟨ h, hLtYX ⟩
+        exact yjsLt_to_v2 hClosed hUnique hLtYX hy hx
+      exact False.elim <|
+        invV2.yjsLt_asymm_v2 x.toRefV2 y.toRefV2 hxRef hyRef hLtV2 hLtYXV2
+
+theorem yjsLeq_from_v2 {arr : List (YjsItem A)} :
+    ArrSetClosed arr ->
+    UniqueIdOld arr ->
+    ItemSetInvariant (ArrSet arr) ->
+    ∀ {x y : YjsPtr A},
+      ArrSet arr x ->
+      ArrSet arr y ->
+      YjsLeqV2' (ItemSetV2.ofOldItems arr) x.toRefV2 y.toRefV2 ->
+      YjsLeq' x y := by
+  intro hClosed hUnique hInv x y hx hy hLeqV2
+  cases yjsLeqV2_imp_eq_or_yjsLtV2 hLeqV2 with
+  | inl hEq =>
+      have hPtrEq : x = y := by
+        exact ptr_eq_of_toRefV2_eq (arr := arr) hUnique hx hy hEq
+      subst hPtrEq
+      exact YjsLeq'.leqSame x
+  | inr hLt =>
+      exact YjsLeq'.leqLt x y <|
+        yjsLt_from_v2 (arr := arr) hClosed hUnique hInv hx hy hLt
 
 end OldToV2

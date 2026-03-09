@@ -8,6 +8,22 @@ structure ItemSetV2 (A : Type) where
 
 namespace ItemSetV2
 
+def withItem (S : ItemSetV2 A) (item : YjsItemV2 A) : ItemSetV2 A where
+  lookup id :=
+    if h : id = item.id then
+      some item
+    else
+      S.lookup id
+  lookup_sound := by
+    intro id item' hLookup
+    dsimp at hLookup
+    by_cases hEq : id = item.id
+    · simp [hEq] at hLookup
+      cases hLookup
+      exact hEq.symm
+    · simp [hEq] at hLookup
+      exact S.lookup_sound hLookup
+
 def IdIn (S : ItemSetV2 A) (id : YjsId) : Prop :=
   ∃ item, S.lookup id = some item
 
@@ -135,5 +151,80 @@ theorem WellFoundedItemSetV2.induction
       exact hPred depItem hDepLookup
   intro item hItem
   exact hP item.id item hItem
+
+@[simp] theorem lookup_withItem_self {S : ItemSetV2 A} {item : YjsItemV2 A} :
+    (S.withItem item).lookup item.id = some item := by
+  simp [withItem]
+
+@[simp] theorem lookup_withItem_of_ne {S : ItemSetV2 A} {item : YjsItemV2 A} {id : YjsId} :
+    id ≠ item.id ->
+    (S.withItem item).lookup id = S.lookup id := by
+  intro hNe
+  simp [withItem, hNe]
+
+theorem itemIn_withItem {S : ItemSetV2 A} {item : YjsItemV2 A} :
+    (S.withItem item).ItemIn item := by
+  simp [ItemIn]
+
+theorem itemIn_withItem_of_itemIn {S : ItemSetV2 A} {item newItem : YjsItemV2 A} :
+    item.id ≠ newItem.id ->
+    S.ItemIn item ->
+    (S.withItem newItem).ItemIn item := by
+  intro hNe hItem
+  change (S.withItem newItem).lookup item.id = some item
+  rw [lookup_withItem_of_ne hNe]
+  exact hItem
+
+theorem idIn_withItem_self {S : ItemSetV2 A} {item : YjsItemV2 A} :
+    (S.withItem item).IdIn item.id := by
+  exact ⟨ item, lookup_withItem_self (S := S) (item := item) ⟩
+
+theorem refIn_withItem_of_refIn {S : ItemSetV2 A} {item : YjsItemV2 A} {ref : ItemRef} :
+    S.RefIn ref ->
+    (S.withItem item).RefIn ref := by
+  intro hRef
+  cases ref with
+  | first =>
+      trivial
+  | last =>
+      trivial
+  | idRef id =>
+      rcases hRef with ⟨ found, hFound ⟩
+      by_cases hEq : id = item.id
+      · subst hEq
+        exact idIn_withItem_self (S := S) (item := item)
+      · exact ⟨ found, by simpa [withItem, hEq] using hFound ⟩
+
+theorem isClosed_withItem {S : ItemSetV2 A} (hClosed : IsClosedItemSetV2 S)
+    {newItem : YjsItemV2 A} :
+    S.RefIn newItem.origin ->
+    S.RefIn newItem.rightOrigin ->
+    IsClosedItemSetV2 (S.withItem newItem) := by
+  intro hOrigin hRight
+  refine ⟨ ?_, ?_ ⟩
+  · intro x hItem
+    by_cases hEq : x.id = newItem.id
+    · have hx : x = newItem := by
+        apply item_eq_of_itemIn_of_id_eq (S := S.withItem newItem) hItem (itemIn_withItem (S := S) (item := newItem)) hEq
+      subst x
+      exact refIn_withItem_of_refIn (S := S) (item := newItem) hOrigin
+    · have hOld : S.ItemIn x := by
+        have hLookup : (S.withItem newItem).lookup x.id = S.lookup x.id := by
+          exact lookup_withItem_of_ne (S := S) (item := newItem) (id := x.id) hEq
+        rw [ItemIn] at hItem ⊢
+        rwa [hLookup] at hItem
+      exact refIn_withItem_of_refIn (S := S) (item := newItem) (hClosed.closedLeft hOld)
+  · intro x hItem
+    by_cases hEq : x.id = newItem.id
+    · have hx : x = newItem := by
+        apply item_eq_of_itemIn_of_id_eq (S := S.withItem newItem) hItem (itemIn_withItem (S := S) (item := newItem)) hEq
+      subst x
+      exact refIn_withItem_of_refIn (S := S) (item := newItem) hRight
+    · have hOld : S.ItemIn x := by
+        have hLookup : (S.withItem newItem).lookup x.id = S.lookup x.id := by
+          exact lookup_withItem_of_ne (S := S) (item := newItem) (id := x.id) hEq
+        rw [ItemIn] at hItem ⊢
+        rwa [hLookup] at hItem
+      exact refIn_withItem_of_refIn (S := S) (item := newItem) (hClosed.closedRight hOld)
 
 end ItemSetV2

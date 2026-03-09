@@ -129,3 +129,45 @@ theorem YjsItem.isValid_toV2AgainstOldItems
         rcases hLeq with ⟨ h, hLeq ⟩
         exact Or.inr <|
           OldToV2.yjsLeq_to_v2 (arr := arr.toList) hArr.closed hArr.uniqueIdOld hLeq hRightIn hXIn
+
+theorem YjsItem.isValid_of_v2AgainstOldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    IsItemValidV2Against (ItemSetV2.ofOldItems arr.toList) newItem ->
+    newItem.isValid := by
+  intro hArr hToItem hValidV2
+  rcases newItem with ⟨ origin, rightOrigin, id, content ⟩
+  have hOriginIn : ArrSet arr.toList origin := by
+    exact reachable_in_old_items_of_toItem hArr hToItem
+      (x := origin)
+      (OriginReachable.reachable_single _ _ (OriginReachableStep.reachable origin rightOrigin id content))
+  have hRightIn : ArrSet arr.toList rightOrigin := by
+    exact reachable_in_old_items_of_toItem hArr hToItem
+      (x := rightOrigin)
+      (OriginReachable.reachable_single _ _ (OriginReachableStep.reachable_right origin rightOrigin id content))
+  refine ⟨ ?_, ?_ ⟩
+  · exact OldToV2.yjsLt_from_v2 (arr := arr.toList)
+      hArr.closed hArr.uniqueIdOld hArr.item_set_inv hOriginIn hRightIn
+      hValidV2.origin_lt_rightOrigin
+  · intro x hReach
+    have hXIn : ArrSet arr.toList x := reachable_in_old_items_of_toItem hArr hToItem hReach
+    cases hValidV2.reachable_YjsLeq' x hReach with
+    | inl hLeq =>
+        exact Or.inl <|
+          OldToV2.yjsLeq_from_v2 (arr := arr.toList)
+            hArr.closed hArr.uniqueIdOld hArr.item_set_inv hXIn hOriginIn hLeq
+    | inr hLeq =>
+        exact Or.inr <|
+          OldToV2.yjsLeq_from_v2 (arr := arr.toList)
+            hArr.closed hArr.uniqueIdOld hArr.item_set_inv hRightIn hXIn hLeq
+
+theorem YjsItem.isValid_iff_v2AgainstOldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    (newItem.isValid ↔ IsItemValidV2Against (ItemSetV2.ofOldItems arr.toList) newItem) := by
+  intro hArr hToItem
+  constructor
+  · exact YjsItem.isValid_toV2AgainstOldItems hArr hToItem
+  · exact YjsItem.isValid_of_v2AgainstOldItems hArr hToItem
