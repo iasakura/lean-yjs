@@ -215,6 +215,17 @@
   - `offsetToIndexV2_range'_getElem`
   を追加した
   - これは old `Spec` の `List.range'` ベースの loop body 補題を v2 側へ移すときの共通下敷きになる
+- さらに `loopInvV2` の分解を直接使えるように、projection 補題を追加した
+  - `loopInvV2_offset_bounds`
+  - `loopInvV2_dest_le_current`
+  - `loopInvV2_dest_eq_current_of_not_scanning`
+  - `loopInvV2_lt_prefix`
+  - `loopInvV2_scanning_origin`
+  - `loopInvV2_done_lt`
+  - これで preservation proof 側では毎回 `loopInvV2` を手展開せずに、必要な成分だけを呼び出せる
+- 一方で `scanStepV2` の branch-shape を直接露出する補題は、この段階では保留にした
+  - do-notation 展開に引きずられて証明が brittle になりやすい
+  - 先に `loopInvV2` 側の projection と preservation を積み、必要になったら statement を絞って再導入する
 - ここで `withItem` を再導入した理由は commutativity と違って、`Spec` では candidate item 自身を order の比較対象に含める必要があるため
   - scan invariant の内部では `newItem.toRef` に対する `YjsLtV2'` / `YjsLeqV2'` を直接述べたい
   - そのため proof-local な active set として `old items + candidate` を持つのが自然

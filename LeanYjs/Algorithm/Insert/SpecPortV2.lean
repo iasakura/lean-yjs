@@ -71,6 +71,70 @@ omit [DecidableEq A] in theorem offsetToIndexV2_range'_getElem {leftIdx rightIdx
       rw [List.length_range'] at hLength
       omega
 
+omit [DecidableEq A] in theorem loopInvV2_offset_bounds
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A}
+    {leftIdx rightIdx : Int} {x : Option Nat} {state : ForInStep (MProd Int Bool)} :
+    loopInvV2 arr newItem leftIdx rightIdx x state ->
+    match x with
+    | none => True
+    | some x => 0 < x ∧ x < (rightIdx - leftIdx).toNat := by
+  intro hInv
+  unfold loopInvV2 at hInv
+  simpa using hInv.1
+
+omit [DecidableEq A] in theorem loopInvV2_dest_le_current
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A}
+    {leftIdx rightIdx : Int} {x : Option Nat} {state : ForInStep (MProd Int Bool)} :
+    loopInvV2 arr newItem leftIdx rightIdx x state ->
+    state.value.fst ≤ offsetToIndexV2 leftIdx rightIdx x (isBreakV2 state) := by
+  intro hInv
+  unfold loopInvV2 at hInv
+  exact hInv.2.1
+
+theorem loopInvV2_dest_eq_current_of_not_scanning
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A}
+    {leftIdx rightIdx : Int} {x : Option Nat} {state : ForInStep (MProd Int Bool)} :
+    loopInvV2 arr newItem leftIdx rightIdx x state ->
+    state.value.snd = false ->
+    isDoneV2 state x = false ->
+    state.value.fst = offsetToIndexV2 leftIdx rightIdx x (isBreakV2 state) := by
+  intro hInv hScanning hDone
+  unfold loopInvV2 at hInv
+  exact hInv.2.2.1 (by simpa [hScanning]) (by simpa [hDone])
+
+theorem loopInvV2_lt_prefix
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A}
+    {leftIdx rightIdx : Int} {x : Option Nat} {state : ForInStep (MProd Int Bool)} :
+    loopInvV2 arr newItem leftIdx rightIdx x state ->
+    ∀ i : Nat, i < state.value.fst.toNat -> (h_i_lt : i < arr.size) ->
+      YjsLtV2' (activeSetV2 arr newItem) arr[i].toV2.toRef newItem.toRef := by
+  intro hInv i hLt hILt
+  unfold loopInvV2 at hInv
+  exact hInv.2.2.2.1 i hLt hILt
+
+theorem loopInvV2_scanning_origin
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A}
+    {leftIdx rightIdx : Int} {x : Option Nat} {state : ForInStep (MProd Int Bool)} :
+    loopInvV2 arr newItem leftIdx rightIdx x state ->
+    state.value.snd = true ->
+    ∃ h_dest_lt : state.value.fst.toNat < arr.size,
+      arr[state.value.fst.toNat].toV2.origin = newItem.origin := by
+  intro hInv hScanning
+  unfold loopInvV2 at hInv
+  exact hInv.2.2.2.2.2.1 (by simpa [hScanning])
+
+theorem loopInvV2_done_lt
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A}
+    {leftIdx rightIdx : Int} {x : Option Nat} {state : ForInStep (MProd Int Bool)}
+    {item : ItemRef} :
+    loopInvV2 arr newItem leftIdx rightIdx x state ->
+    isDoneV2 state x = true ->
+    extGetElemExceptV2 arr (offsetToIndexV2 leftIdx rightIdx x (isBreakV2 state)) = Except.ok item ->
+    YjsLtV2' (activeSetV2 arr newItem) newItem.toRef item := by
+  intro hInv hDone hItem
+  unfold loopInvV2 at hInv
+  exact hInv.2.2.2.2.2.2 (by simpa [hDone]) item hItem
+
 omit [DecidableEq A] in theorem activeSetV2_itemIn_newItem
     {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
     (activeSetV2 arr newItem).ItemIn newItem := by
