@@ -127,9 +127,13 @@
   - `YjsArrInvariant_integrate_itemSetInvariantV2`
   - `YjsArrInvariant_integrateSafe_itemSetInvariantV2`
   - `YjsStateInvariant_insert_itemSetInvariantV2`
+  - `IsItemValidV2Against`
+  - `YjsItem.isValid_toV2AgainstOldItems`
 - これで integration correctness を使う consumer は、既存 theorem を壊さずに `newArr` 側の v2 invariant を直接受け取れる
+- さらに new item がまだ old item-set に入っていない段階でも、`item.isValid` を `ItemSetV2.ofOldItems arr` に対する v2 validity へ読み替えられる
 - `LeanYjs/Network/Yjs/YjsNetworkBridgeV2.lean` で network valid-message 境界の thin wrapper も追加済み
   - `IsValidMessage_insert_itemSetInvariantV2`
+  - `IsValidMessage_insert_itemValidV2Against`
   - `effect_list_itemSetInvariantV2`
 - これで network proof は `IsValidMessage` と insert success から、直接 `newState` 側の v2 invariant を引ける
 - さらに `effect_list_stateInv` を経由して、hb-consistent な operation list の評価結果から v2 invariant を直接取り出せる
