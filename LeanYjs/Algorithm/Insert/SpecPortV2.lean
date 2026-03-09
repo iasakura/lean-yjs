@@ -1,3 +1,4 @@
+import LeanYjs.Order.ItemOrderV2
 import LeanYjs.Algorithm.Insert.BasicV2
 import LeanYjs.Algorithm.Invariant.YjsArrayBridgeV2
 
@@ -204,6 +205,95 @@ theorem activeSetV2_yjsLeq_or_yjsLt_of_oldRefIn_of_toItemV2_isClockSafe
     simpa [hId] using hFresh
   · exact hx
   · exact hy
+
+theorem activeSetV2_getElem_leq_of_index_le
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {i j : Nat} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    (hij : i ≤ j) ->
+    (hj : j < arr.size) ->
+    YjsLeqV2' (activeSetV2 arr newItem) arr[i].toV2.toRef arr[j].toV2.toRef := by
+  intro hArr hFresh hij hj
+  have hi : i < arr.size := by
+    omega
+  have hLeqOld : YjsLeq' (A := A) arr[i] arr[j] := by
+    exact getElem_leq_YjsLeq' arr i j hArr hij hj
+  have hx : ArrSet arr.toList (YjsPtr.itemPtr arr[i]) := by
+    simpa [ArrSet] using
+      (show arr[i] ∈ arr.toList by
+        simpa using List.getElem_mem (l := arr.toList) (h := by simpa using hi))
+  have hy : ArrSet arr.toList (YjsPtr.itemPtr arr[j]) := by
+    simpa [ArrSet] using
+      (show arr[j] ∈ arr.toList by
+        simpa using List.getElem_mem (l := arr.toList) (h := by simpa using hj))
+  have hLeqV2Old :
+      YjsLeqV2' (ItemSetV2.ofOldItems arr.toList) arr[i].toV2.toRef arr[j].toV2.toRef := by
+    rcases hLeqOld with ⟨ h, hLeqOld ⟩
+    exact OldToV2.yjsLeq_to_v2 hArr.closed hArr.unique hLeqOld hx hy
+  exact activeSetV2_yjsLeq_of_old hFresh hLeqV2Old
+
+theorem activeSetV2_findPtrIdx_lt
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A}
+    {x y : YjsPtr A} {ix iy : Int} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    ArrSet arr.toList x ->
+    ArrSet arr.toList y ->
+    findPtrIdx x arr = Except.ok ix ->
+    findPtrIdx y arr = Except.ok iy ->
+    ix < iy ->
+    YjsLtV2' (activeSetV2 arr newItem) x.toRefV2 y.toRefV2 := by
+  intro hArr hFresh hx hy hFindX hFindY hLtIdx
+  have hLtOld : YjsLt' (A := A) x y := by
+    exact findPtrIdx_lt_YjsLt' arr x y hArr hFindX hFindY hLtIdx
+  have hLtV2Old :
+      YjsLtV2' (ItemSetV2.ofOldItems arr.toList) x.toRefV2 y.toRefV2 := by
+    exact OldToV2.yjsLt_to_v2' hArr.closed hArr.unique hLtOld hx hy
+  exact activeSetV2_yjsLt_of_old hFresh hLtV2Old
+
+theorem activeSetV2_findPtrIdx_leq
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A}
+    {x y : YjsPtr A} {ix iy : Int} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    ArrSet arr.toList x ->
+    ArrSet arr.toList y ->
+    findPtrIdx x arr = Except.ok ix ->
+    findPtrIdx y arr = Except.ok iy ->
+    ix ≤ iy ->
+    YjsLeqV2' (activeSetV2 arr newItem) x.toRefV2 y.toRefV2 := by
+  intro hArr hFresh hx hy hFindX hFindY hLeIdx
+  have hLeOld : YjsLeq' (A := A) x y := by
+    exact findPtrIdx_leq_YjsLeq' arr x y hArr hFindX hFindY hLeIdx
+  have hLeV2Old :
+      YjsLeqV2' (ItemSetV2.ofOldItems arr.toList) x.toRefV2 y.toRefV2 := by
+    rcases hLeOld with ⟨ h, hLeOld ⟩
+    exact OldToV2.yjsLeq_to_v2 hArr.closed hArr.unique hLeOld hx hy
+  exact activeSetV2_yjsLeq_of_old hFresh hLeV2Old
+
+omit [DecidableEq A] in theorem oldRefIn_ne_newItemRef_of_fresh
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {ref : ItemRef} :
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn ref ->
+    ref ≠ newItem.toRef := by
+  intro hFresh hRef hEq
+  subst hEq
+  rcases hRef with ⟨ item, hLookup ⟩
+  rw [hFresh] at hLookup
+  cases hLookup
+
+theorem activeSetV2_originReachable_of_oldRefIn
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {x y : ItemRef} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn x ->
+    OriginReachableV2 (activeSetV2 arr newItem) x y ->
+    OriginReachableV2 (ItemSetV2.ofOldItems arr.toList) x y := by
+  intro hArr hFresh hx hReach
+  exact originReachableV2_of_withItem_of_ne
+    (S := ItemSetV2.ofOldItems arr.toList) hArr.itemSetInvariantV2.closed
+    (newItem := newItem) hFresh hReach
+    (oldRefIn_ne_newItemRef_of_fresh hFresh hx)
 
 omit [DecidableEq A] in private theorem find_item_id_eq_v2
     {arr : Array (YjsItem A)} {targetId : YjsId} {item : YjsItem A} :
