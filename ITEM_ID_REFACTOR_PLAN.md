@@ -141,6 +141,12 @@
   - old `OriginReachable item x` からの forward bridge
   - `InsertInsertBridgeV2` の thin wrapper
 - この形なら current state の item-set を汚さずに、commutativity の前提だけを v2 化できる
+- その後 `LeanYjs/Network/Yjs/YjsNetwork.lean` の concurrent insert proof でも、この candidate-reachability wrapper を使う形へ切り替えた
+  - old `h_not_reach` の手作り証明は外し、
+    `toItem_*_refIn_oldItems` / `IsItemValidV2Against` / `insert_commutative_of_v2`
+    を経由する構成に整理した
+  - これにより network 本体は old commutativity proof の内部構造に直接依存せず、
+    v2 bridge の公開 interface だけを使うようになった
 - `LeanYjs/Network/Yjs/YjsNetworkBridgeV2.lean` で network valid-message 境界の thin wrapper も追加済み
   - `IsValidMessage_insert_itemSetInvariantV2`
   - `IsValidMessage_insert_itemValidV2Against`
@@ -154,8 +160,10 @@
   - reverse reachability bridge は abstract `ItemSetV2` では難しいが、concrete `ItemSetV2.ofOldItems arr` では `lookup` の具体性と old unique-id から復元できる
   - したがって移行順序は「generic v2 order を先に完成」してから「concrete old-array bridge を作る」のが正しかった
   - consumer 側を直接書き換える前に `YjsArrInvariant` / `YjsStateInvariant` から v2 theorem を引く薄い wrapper 層を置くと、既存 proof の assumption shape を壊さずに差し替えを進められる
-  - ただし `InsertInsert` の `¬OriginReachable aItem bItem` は start/end が「まだ old item-set に入っていない候補 item」なので、`ItemSetV2.ofOldItems arr` だけではそのまま表現できない
-  - commutativity を本当に v2 化するには、`ofOldItems arr` とは別に candidate item を一時的に含む拡張 `ItemSetV2` を導入するか、その reachability 条件だけ old 定義を当面残す必要がある
+  - `InsertInsert` の `¬OriginReachable aItem bItem` については、candidate 自体を set に入れるのではなく、
+    「candidate item から current item-set を辿る」専用述語 `OriginReachableFromV2` を用意するのが一番筋が良かった
+  - この設計により、state の `ItemSetV2` は常に「実際に入っている item」だけを表し続けられ、
+    commutativity / network の前提だけを局所的に v2 化できる
 
 ## Current State
 

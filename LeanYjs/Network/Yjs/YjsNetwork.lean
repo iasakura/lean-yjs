@@ -3,7 +3,8 @@ import LeanYjs.Algorithm.Delete.Basic
 import LeanYjs.Algorithm.Delete.Spec
 import LeanYjs.Algorithm.Insert.Basic
 import LeanYjs.Algorithm.Insert.Spec
-import LeanYjs.Algorithm.Commutativity.InsertInsert
+import LeanYjs.Algorithm.Insert.SpecBridgeV2
+import LeanYjs.Algorithm.Commutativity.InsertInsertBridgeV2
 import LeanYjs.Algorithm.Commutativity.InsertDelete
 import LeanYjs.Algorithm.Commutativity.DeleteDelete
 import LeanYjs.Network.CausalNetwork
@@ -799,9 +800,28 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
           (a := YjsOperation.insert aInput) h_a_mem
           (b := YjsOperation.insert bInput) h_b_mem
           h_a_b_happens_before
-      have h_not_reach :
-          ¬OriginReachable aItem (YjsPtr.itemPtr bItem) ∧
-          ¬OriginReachable bItem (YjsPtr.itemPtr aItem) := by
+      have h_sa_inv_v2 := h_sa_inv.itemSetInvariantV2
+      have h_a_origin_ref :
+          (ItemSetV2.ofOldItems sa.items.toList).RefIn aItem.toV2.origin := by
+        exact toItem_origin_refIn_oldItems h_sa_inv h_a_toItem
+      have h_a_right_ref :
+          (ItemSetV2.ofOldItems sa.items.toList).RefIn aItem.toV2.rightOrigin := by
+        exact toItem_rightOrigin_refIn_oldItems h_sa_inv h_a_toItem
+      have h_b_origin_ref :
+          (ItemSetV2.ofOldItems sa.items.toList).RefIn bItem.toV2.origin := by
+        exact toItem_origin_refIn_oldItems h_sa_inv h_b_toItem
+      have h_b_right_ref :
+          (ItemSetV2.ofOldItems sa.items.toList).RefIn bItem.toV2.rightOrigin := by
+        exact toItem_rightOrigin_refIn_oldItems h_sa_inv h_b_toItem
+      have h_a_item_valid_v2 :
+          IsItemValidV2Against (ItemSetV2.ofOldItems sa.items.toList) aItem := by
+        exact YjsItem.isValid_toV2AgainstOldItems h_sa_inv h_a_toItem h_a_item_valid
+      have h_b_item_valid_v2 :
+          IsItemValidV2Against (ItemSetV2.ofOldItems sa.items.toList) bItem := by
+        exact YjsItem.isValid_toV2AgainstOldItems h_sa_inv h_b_toItem h_b_item_valid
+      have h_not_reach_v2 :
+          ¬ OriginReachableFromV2 (ItemSetV2.ofOldItems sa.items.toList) aItem.toV2 bItem.toV2.toRef ∧
+          ¬ OriginReachableFromV2 (ItemSetV2.ofOldItems sa.items.toList) bItem.toV2 aItem.toV2.toRef := by
         obtain ⟨ arr2, h_a_ok, h_b_ok ⟩ := Except.bind_eq_ok_exist h_ab
         have h_a_ok_items : integrateSafe aInput sa.items = Except.ok arr2.items := by
           cases hsafe : integrateSafe aInput sa.items with
@@ -812,174 +832,90 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
             simpa [hsafe]
         constructor
         · intro h_reach_ab
-          generalize h_a_ptr_def : YjsPtr.itemPtr aItem = a_ptr at h_reach_ab
-          have h_OriginReachableStep_ArrSet : ∀ x,
-            OriginReachableStep a_ptr x → ArrSet sa.toList x := by
-            intro x h_step
-            cases h_step with
-            | reachable o r id c =>
-              simp at h_a_ptr_def
-              have h_to_item := (IntegrateInput.toItem_ok_iff aInput sa aItem h_sa_inv.unique).1 h_a_toItem
-              obtain ⟨ origin, rightOrigin, id', content', hdef, horigin, hrightOrigin, hid, hcontent ⟩ := h_to_item
-              rw [h_a_ptr_def] at hdef
-              cases hdef
-              cases h_originId : aInput.originId with
-              | none =>
-                simp [isLeftIdPtr, h_originId] at horigin
-                subst horigin
-                simp [ArrSet]
-              | some pid =>
-                simp [isLeftIdPtr, h_originId] at horigin
-                obtain ⟨ item, h_eq, h_find ⟩ := horigin
-                subst h_eq
-                simp [ArrSet]
-                simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
-            | reachable_right o r id c =>
-              simp at h_a_ptr_def
-              have h_to_item := (IntegrateInput.toItem_ok_iff aInput sa aItem h_sa_inv.unique).1 h_a_toItem
-              obtain ⟨ origin, rightOrigin, id', content', hdef, horigin, hrightOrigin, hid, hcontent ⟩ := h_to_item
-              rw [h_a_ptr_def] at hdef
-              cases hdef
-              cases h_rightOriginId : aInput.rightOriginId with
-              | none =>
-                simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
-                subst hrightOrigin
-                simp [ArrSet]
-              | some pid =>
-                simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
-                obtain ⟨ item, h_eq, h_find ⟩ := hrightOrigin
-                subst h_eq
-                simp [ArrSet]
-                simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
-
-          have h_b_in_sa_arrset : ArrSet sa.toList (YjsPtr.itemPtr bItem) := by
-            cases h_reach_ab with
-            | reachable_single _ _ h_step =>
-              exact h_OriginReachableStep_ArrSet _ h_step
-            | reachable_head _ y _ h_step h_reach_tail =>
-              apply h_OriginReachableStep_ArrSet at h_step
-              have h_closed : IsClosedItemSet (ArrSet sa.toList) := by
-                exact h_sa_inv.closed
-              exact reachable_in _ _ h_closed _ h_reach_tail h_step
-
-          have h_b_in_sa : bItem ∈ (show Array (YjsItem A) from sa) := by
-            simpa [ArrSet, YjsState.toList] using h_b_in_sa_arrset
-
+          have h_b_ref :
+              (ItemSetV2.ofOldItems sa.items.toList).RefIn bItem.toV2.toRef := by
+            exact OriginReachableFromV2.target_refIn h_sa_inv_v2.closed h_a_origin_ref h_a_right_ref h_reach_ab
+          have h_b_id_in : (ItemSetV2.ofOldItems sa.items.toList).IdIn bItem.id := by
+            simpa [YjsItem.toV2] using h_b_ref
+          rcases h_b_id_in with ⟨ oldItemV2, h_lookup_old ⟩
+          rcases ItemSetV2.exists_oldItem_of_lookup_eq_some (items := sa.items.toList) h_lookup_old with
+            ⟨ oldItem, h_mem_old, h_old_eq ⟩
+          have h_old_id : oldItem.id = bInput.id := by
+            calc
+              oldItem.id = oldItemV2.id := by
+                simpa [YjsItem.toV2] using congrArg YjsItemV2.id h_old_eq
+              _ = bItem.id := by
+                exact (ItemSetV2.ofOldItems sa.items.toList).lookup_sound h_lookup_old
+              _ = bInput.id := IntegrateInput.toItem_id_eq bInput sa bItem h_b_toItem
+          have h_old_in_sa : oldItem ∈ (show Array (YjsItem A) from sa) := by
+            simpa [YjsState.toList] using h_mem_old
           have ⟨ idx_a, _, h_arr2_def, _ ⟩ :=
             YjsArrInvariant_integrateSafe aInput aItem sa.items arr2.items h_sa_inv h_a_toItem h_a_item_valid h_a_ok_items
-
-          have h_b_in_arr2 : bItem ∈ (show Array (YjsItem A) from arr2) := by
+          have h_old_in_arr2 : oldItem ∈ (show Array (YjsItem A) from arr2) := by
             rw [h_arr2_def]
             by_cases hle : idx_a ≤ Array.size sa.items
-            · simp [Array.insertIdxIfInBounds, hle, Array.mem_insertIdx, h_b_in_sa]
+            · simp [Array.insertIdxIfInBounds, hle, Array.mem_insertIdx, h_old_in_sa]
             · exfalso
               omega
-
-          have h_b_item_id : bItem.id = bInput.id :=
-            IntegrateInput.toItem_id_eq bInput sa bItem h_b_toItem
-
           have h_clock_false : isClockSafe bInput.id arr2.items = false := by
             unfold isClockSafe
             simp
-            rw [Array.mem_iff_getElem] at h_b_in_arr2
-            obtain ⟨ i, hi, hget ⟩ := h_b_in_arr2
+            rw [Array.mem_iff_getElem] at h_old_in_arr2
+            obtain ⟨ i, hi, hget ⟩ := h_old_in_arr2
             refine ⟨ i, hi, ?_ ⟩
             constructor
-            · simp [hget, h_b_item_id]
-            · simp [hget, h_b_item_id]
-
+            · simpa [hget, h_old_id]
+            · simpa [hget, h_old_id]
           have h_clock_true : isClockSafe bInput.id arr2.items = true := by
             simp [YjsState.insert, integrateSafe] at h_b_ok
             split at h_b_ok
             · assumption
             · simp at h_b_ok
-
           rw [h_clock_false] at h_clock_true
           contradiction
         · intro h_reach_ba
-          generalize h_b_ptr_def : YjsPtr.itemPtr bItem = b_ptr at h_reach_ba
-          have h_OriginReachableStep_ArrSet : ∀ x,
-            OriginReachableStep b_ptr x → ArrSet sa.toList x := by
-            intro x h_step
-            cases h_step with
-            | reachable o r id c =>
-              simp at h_b_ptr_def
-              have h_to_item := (IntegrateInput.toItem_ok_iff bInput sa bItem h_sa_inv.unique).1 h_b_toItem
-              obtain ⟨ origin, rightOrigin, id', content', hdef, horigin, hrightOrigin, hid, hcontent ⟩ := h_to_item
-              rw [h_b_ptr_def] at hdef
-              cases hdef
-              cases h_originId : bInput.originId with
-              | none =>
-                simp [isLeftIdPtr, h_originId] at horigin
-                subst horigin
-                simp [ArrSet]
-              | some pid =>
-                simp [isLeftIdPtr, h_originId] at horigin
-                obtain ⟨ item, h_eq, h_find ⟩ := horigin
-                subst h_eq
-                simp [ArrSet]
-                simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
-            | reachable_right o r id c =>
-              simp at h_b_ptr_def
-              have h_to_item := (IntegrateInput.toItem_ok_iff bInput sa bItem h_sa_inv.unique).1 h_b_toItem
-              obtain ⟨ origin, rightOrigin, id', content', hdef, horigin, hrightOrigin, hid, hcontent ⟩ := h_to_item
-              rw [h_b_ptr_def] at hdef
-              cases hdef
-              cases h_rightOriginId : bInput.rightOriginId with
-              | none =>
-                simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
-                subst hrightOrigin
-                simp [ArrSet]
-              | some pid =>
-                simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
-                obtain ⟨ item, h_eq, h_find ⟩ := hrightOrigin
-                subst h_eq
-                simp [ArrSet]
-                simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
-
-          have h_a_in_sa_arrset : ArrSet sa.toList (YjsPtr.itemPtr aItem) := by
-            cases h_reach_ba with
-            | reachable_single _ _ h_step =>
-              exact h_OriginReachableStep_ArrSet _ h_step
-            | reachable_head _ y _ h_step h_reach_tail =>
-              apply h_OriginReachableStep_ArrSet at h_step
-              have h_closed : IsClosedItemSet (ArrSet sa.toList) := by
-                exact h_sa_inv.closed
-              exact reachable_in _ _ h_closed _ h_reach_tail h_step
-
-          have h_a_in_sa : aItem ∈ (show Array (YjsItem A) from sa) := by
-            simpa [ArrSet, YjsState.toList] using h_a_in_sa_arrset
-
-          have h_a_item_id : aItem.id = aInput.id :=
-            IntegrateInput.toItem_id_eq aInput sa aItem h_a_toItem
-
+          have h_a_ref :
+              (ItemSetV2.ofOldItems sa.items.toList).RefIn aItem.toV2.toRef := by
+            exact OriginReachableFromV2.target_refIn h_sa_inv_v2.closed h_b_origin_ref h_b_right_ref h_reach_ba
+          have h_a_id_in : (ItemSetV2.ofOldItems sa.items.toList).IdIn aItem.id := by
+            simpa [YjsItem.toV2] using h_a_ref
+          rcases h_a_id_in with ⟨ oldItemV2, h_lookup_old ⟩
+          rcases ItemSetV2.exists_oldItem_of_lookup_eq_some (items := sa.items.toList) h_lookup_old with
+            ⟨ oldItem, h_mem_old, h_old_eq ⟩
+          have h_old_id : oldItem.id = aInput.id := by
+            calc
+              oldItem.id = oldItemV2.id := by
+                simpa [YjsItem.toV2] using congrArg YjsItemV2.id h_old_eq
+              _ = aItem.id := by
+                exact (ItemSetV2.ofOldItems sa.items.toList).lookup_sound h_lookup_old
+              _ = aInput.id := IntegrateInput.toItem_id_eq aInput sa aItem h_a_toItem
+          have h_old_in_sa : oldItem ∈ (show Array (YjsItem A) from sa) := by
+            simpa [YjsState.toList] using h_mem_old
           have h_clock_false : isClockSafe aInput.id (show Array (YjsItem A) from sa) = false := by
             unfold isClockSafe
             simp
-            rw [Array.mem_iff_getElem] at h_a_in_sa
-            obtain ⟨ i, hi, hget ⟩ := h_a_in_sa
+            rw [Array.mem_iff_getElem] at h_old_in_sa
+            obtain ⟨ i, hi, hget ⟩ := h_old_in_sa
             refine ⟨ i, hi, ?_ ⟩
             constructor
-            · simp [hget, h_a_item_id]
-            · simp [hget, h_a_item_id]
-
+            · simpa [hget, h_old_id]
+            · simpa [hget, h_old_id]
           have h_clock_true : isClockSafe aInput.id (show Array (YjsItem A) from sa) = true := by
             simp [YjsState.insert, integrateSafe] at h_a_ok
             split at h_a_ok
             · assumption
             · simp at h_a_ok
-
           rw [h_clock_false] at h_clock_true
           contradiction
-      exact insert_commutative aInput bInput aItem bItem sa sb
+      exact insert_commutative_of_v2 aInput bInput aItem bItem sa sb
         h_sa_inv
         h_a_toItem
         h_b_toItem
         h_diff_client
-        h_not_reach.1
-        h_not_reach.2
-        h_a_item_valid
-        h_b_item_valid
+        h_not_reach_v2.1
+        h_not_reach_v2.2
+        h_a_item_valid_v2
+        h_b_item_valid_v2
         h_ab
     | delete _ deletedId =>
       simp [Operation.effect, deleteValid] at *
