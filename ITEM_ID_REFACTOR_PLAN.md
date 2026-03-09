@@ -135,8 +135,11 @@
   - `IsValidMessage_insert_itemSetInvariantV2`
   - `IsValidMessage_insert_itemValidV2Against`
   - `effect_list_itemSetInvariantV2`
+  - `broadcastSource_valid_mono`
+  - `effect_list_broadcastSource_itemSetInvariantV2`
 - これで network proof は `IsValidMessage` と insert success から、直接 `newState` 側の v2 invariant を引ける
 - さらに `effect_list_stateInv` を経由して、hb-consistent な operation list の評価結果から v2 invariant を直接取り出せる
+- 特に causal network の broadcast source だけを仮定する標準形については、`YjsNetwork` 本体の局所 proof を再利用可能な wrapper に切り出せた
 - 新しく分かった実務上のポイントは次の 2 つ
   - reverse reachability bridge は abstract `ItemSetV2` では難しいが、concrete `ItemSetV2.ofOldItems arr` では `lookup` の具体性と old unique-id から復元できる
   - したがって移行順序は「generic v2 order を先に完成」してから「concrete old-array bridge を作る」のが正しかった
