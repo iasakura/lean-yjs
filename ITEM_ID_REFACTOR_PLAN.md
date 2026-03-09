@@ -158,6 +158,18 @@
   だけで動くことが確認できた
 - したがって `Insert.Basic` の本体移行は、
   order 証明の全面移植を待たずに段階的に進められる
+- `LeanYjs/Algorithm/Insert/BasicBridgeV2.lean` で scan loop に必要な局所 bridge も追加した
+  - `findRefIdx_toRefV2_eq_findPtrIdx`
+  - `findRefIdx_origin_eq_findPtrIdx`
+  - `findRefIdx_rightOrigin_eq_findPtrIdx`
+  - `getElemExcept_mem`
+  - `getElemExcept_findRefIdx_origin_eq_findPtrIdx`
+  - `getElemExcept_findRefIdx_rightOrigin_eq_findPtrIdx`
+  - `getElemExcept_lookupPairV2_eq_lookupPair`
+- ここまでで `other <- getElemExcept arr i` の地点では、old scan と v2 scan の lookup は完全に一致させられる
+- 残るのは `for offset in ...` ループ状態
+  `(scanning, destIdx)` の遷移が両者で一致することの証明だけで、これは
+  `getElemExcept` の成功ケースごとの branch equality を並べる形で詰められる
 - さらに `ItemSetV2.withItem` を追加したので、candidate item を old item-set に一時的に載せた reachability の表現基盤もできた
 - 現時点では `withItem` の basic lookup / membership / closedness までで、wf/order invariant まではまだ載せていない
 - `withItem` を本格利用する前に、より筋の良い中間案として「candidate item から current item-set を辿る reachability」を別述語に切り出した
