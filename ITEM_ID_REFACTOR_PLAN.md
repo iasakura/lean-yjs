@@ -114,10 +114,17 @@
 - その結果、old array invariant から full `YjsItemSetInvariantV2` を構成する bridge まで完了した
   - `ofOldItems_invariant_v2`
 - ここまでで、old recursive storage を維持したまま v2 order core を downstream proof に注入できる状態になった
-- 次の段は `Invariant` / `State` 層でこの bridge を公開し、`Insert/Spec` や network proof が old `ItemSetInvariant` を直接触らずに v2 order を呼べるようにする
+- `LeanYjs/Algorithm/Invariant/YjsArrayBridgeV2.lean` で array/state 層の公開補題も追加済み
+  - `YjsArrInvariant.uniqueIdOld`
+  - `YjsArrInvariant.itemSetInvariantV2`
+  - `YjsStateInvariant.itemSetInvariantV2`
+  - `YjsArrInvariant.yjsLeq_or_yjsLtV2`
+  - `YjsStateInvariant.yjsLeq_or_yjsLtV2`
+- これで `Insert/Spec` や network proof は old `ItemSetInvariant` を直接剥がさなくても、`YjsArrInvariant` / `YjsStateInvariant` から v2 totality を引ける
 - 新しく分かった実務上のポイントは次の 2 つ
   - reverse reachability bridge は abstract `ItemSetV2` では難しいが、concrete `ItemSetV2.ofOldItems arr` では `lookup` の具体性と old unique-id から復元できる
   - したがって移行順序は「generic v2 order を先に完成」してから「concrete old-array bridge を作る」のが正しかった
+  - consumer 側を直接書き換える前に `YjsArrInvariant` / `YjsStateInvariant` から v2 theorem を引く薄い wrapper 層を置くと、既存 proof の assumption shape を壊さずに差し替えを進められる
 
 ## Current State
 
