@@ -134,6 +134,16 @@
 - これで integration correctness を使う consumer は、既存 theorem を壊さずに `newArr` 側の v2 invariant を直接受け取れる
 - さらに new item がまだ old item-set に入っていない段階でも、`item.isValid` を `ItemSetV2.ofOldItems arr` に対する v2 validity へ読み替えられる
 - reverse bridge も入ったので、必要なら v2 validity から old `item.isValid` へ戻して既存 theorem に渡せる
+- `LeanYjs/Algorithm/Insert/BasicV2.lean` で insert algorithm 側の v2-native entrypoint も追加済み
+  - `IntegrateInput.toItemV2`
+  - `getRefExcept`
+  - `mkItemV2ByIndex`
+  - old algorithm との対応補題
+    - `IntegrateInput.toItem_toItemV2`
+    - `getPtrExcept_toRefExcept`
+    - `mkItemByIndex_toV2`
+- これにより、まだ storage 自体は old recursive item のままでも、
+  algorithm 境界では `YjsItemV2` / `ItemRef` を直接返す補助 API を使い始められる
 - さらに `ItemSetV2.withItem` を追加したので、candidate item を old item-set に一時的に載せた reachability の表現基盤もできた
 - 現時点では `withItem` の basic lookup / membership / closedness までで、wf/order invariant まではまだ載せていない
 - `withItem` を本格利用する前に、より筋の良い中間案として「candidate item から current item-set を辿る reachability」を別述語に切り出した

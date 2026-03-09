@@ -26,6 +26,7 @@ import LeanYjs.Algorithm.Invariant.StructuralBridgeV2
 import LeanYjs.Algorithm.Invariant.YjsArrayBridgeV2
 import LeanYjs.Algorithm.YString
 import LeanYjs.Algorithm.Insert.Basic
+import LeanYjs.Algorithm.Insert.BasicV2
 import LeanYjs.Algorithm.Insert.Spec
 import LeanYjs.Algorithm.Insert.SpecBridgeV2
 import LeanYjs.Algorithm.Delete.Basic
