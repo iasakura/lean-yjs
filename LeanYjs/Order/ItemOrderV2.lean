@@ -158,6 +158,130 @@ theorem yjsLtV2'_cases (S : ItemSetV2 A) (x y : ItemRef) :
   rcases hLt with ⟨ h, hLt ⟩
   exact yjsLtV2_cases S h x y hLt
 
+private theorem itemIn_withItem_of_itemIn_of_fresh {S : ItemSetV2 A}
+    {item newItem : YjsItemV2 A} :
+    S.lookup newItem.id = none ->
+    S.ItemIn item ->
+    (S.withItem newItem).ItemIn item := by
+  intro hFresh hItem
+  by_cases hEq : item.id = newItem.id
+  · have hLookup : S.lookup newItem.id = some item := by
+      simpa [hEq] using hItem
+    rw [hFresh] at hLookup
+    cases hLookup
+  · exact ItemSetV2.itemIn_withItem_of_itemIn hEq hItem
+
+private theorem originLtV2_withItem {S : ItemSetV2 A} {newItem : YjsItemV2 A} :
+    OriginLtV2 S x y -> OriginLtV2 (S.withItem newItem) x y := by
+  intro hOrigin
+  cases hOrigin with
+  | lt_first hId =>
+      rename_i id
+      exact OriginLtV2.lt_first (by
+        simpa using
+          (ItemSetV2.refIn_withItem_of_refIn
+            (S := S) (item := newItem) (ref := .idRef id) hId))
+  | lt_last hId =>
+      rename_i id
+      exact OriginLtV2.lt_last (by
+        simpa using
+          (ItemSetV2.refIn_withItem_of_refIn
+            (S := S) (item := newItem) (ref := .idRef id) hId))
+  | lt_first_last =>
+      exact OriginLtV2.lt_first_last
+
+theorem yjsLtV2_withItem {S : ItemSetV2 A} {newItem : YjsItemV2 A}
+    (hFresh : S.lookup newItem.id = none) :
+    YjsLtV2 S h x y -> YjsLtV2 (S.withItem newItem) h x y := by
+  intro hLt
+  refine YjsLtV2.recOn
+      (motive_1 := fun h x y _ => YjsLtV2 (S.withItem newItem) h x y)
+      (motive_2 := fun h x y _ => YjsLeqV2 (S.withItem newItem) h x y)
+      (motive_3 := fun h item1 item2 _ => ConflictLtV2 (S.withItem newItem) h item1 item2)
+      hLt
+      ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  · intro h item1 item2 hConflict ihConflict
+    exact YjsLtV2.ltConflict (h := h) ihConflict
+  · intro x y hOrigin
+    exact YjsLtV2.ltOriginOrder (originLtV2_withItem (newItem := newItem) hOrigin)
+  · intro h x item hItem hLeq ihLeq
+    exact YjsLtV2.ltOrigin (h := h)
+      (itemIn_withItem_of_itemIn_of_fresh hFresh hItem)
+      ihLeq
+  · intro h item x hItem hLeq ihLeq
+    exact YjsLtV2.ltRightOrigin (h := h)
+      (itemIn_withItem_of_itemIn_of_fresh hFresh hItem)
+      ihLeq
+  · intro h x
+    exact YjsLeqV2.leqSame x
+  · intro h x y hLt ihLt
+    exact YjsLeqV2.leqLt (h := h) ihLt
+  · intro h1 h2 h3 h4 item1 item2 hItem1 hItem2 hLt1 hLt2 hLt3 hLt4 ih1 ih2 ih3 ih4
+    exact ConflictLtV2.ltOriginDiff (h1 := h1) (h2 := h2) (h3 := h3) (h4 := h4)
+      (itemIn_withItem_of_itemIn_of_fresh hFresh hItem1)
+      (itemIn_withItem_of_itemIn_of_fresh hFresh hItem2)
+      ih1
+      ih2
+      ih3
+      ih4
+  · intro h1 h2 item1 item2 hItem1 hItem2 hOrigin hLt1 hLt2 hId ih1 ih2
+    exact ConflictLtV2.ltOriginSame (h1 := h1) (h2 := h2)
+      (itemIn_withItem_of_itemIn_of_fresh hFresh hItem1)
+      (itemIn_withItem_of_itemIn_of_fresh hFresh hItem2)
+      hOrigin
+      ih1
+      ih2
+      hId
+
+theorem yjsLeqV2_withItem {S : ItemSetV2 A} {newItem : YjsItemV2 A}
+    (hFresh : S.lookup newItem.id = none) :
+    YjsLeqV2 S h x y -> YjsLeqV2 (S.withItem newItem) h x y := by
+  intro hLeq
+  cases hLeq with
+  | leqSame x =>
+      exact YjsLeqV2.leqSame x
+  | leqLt h hLt =>
+      exact YjsLeqV2.leqLt (h := h) (yjsLtV2_withItem hFresh hLt)
+
+theorem conflictLtV2_withItem {S : ItemSetV2 A} {newItem : YjsItemV2 A}
+    (hFresh : S.lookup newItem.id = none) :
+    ConflictLtV2 S h item1 item2 ->
+    ConflictLtV2 (S.withItem newItem) h item1 item2 := by
+  intro hConflict
+  cases hConflict with
+  | ltOriginDiff h1 h2 h3 h4 hItem1 hItem2 hLt1 hLt2 hLt3 hLt4 =>
+      exact ConflictLtV2.ltOriginDiff (h1 := h1) (h2 := h2) (h3 := h3) (h4 := h4)
+        (itemIn_withItem_of_itemIn_of_fresh hFresh hItem1)
+        (itemIn_withItem_of_itemIn_of_fresh hFresh hItem2)
+        (yjsLtV2_withItem hFresh hLt1)
+        (yjsLtV2_withItem hFresh hLt2)
+        (yjsLtV2_withItem hFresh hLt3)
+        (yjsLtV2_withItem hFresh hLt4)
+  | ltOriginSame h1 h2 hItem1 hItem2 hOrigin hLt1 hLt2 hId =>
+      exact ConflictLtV2.ltOriginSame (h1 := h1) (h2 := h2)
+        (itemIn_withItem_of_itemIn_of_fresh hFresh hItem1)
+        (itemIn_withItem_of_itemIn_of_fresh hFresh hItem2)
+        hOrigin
+        (yjsLtV2_withItem hFresh hLt1)
+        (yjsLtV2_withItem hFresh hLt2)
+        hId
+
+theorem yjsLtV2'_withItem {S : ItemSetV2 A} {newItem : YjsItemV2 A} :
+    S.lookup newItem.id = none ->
+    YjsLtV2' S x y ->
+    YjsLtV2' (S.withItem newItem) x y := by
+  intro hFresh hLt
+  rcases hLt with ⟨ h, hLt ⟩
+  exact ⟨ h, yjsLtV2_withItem hFresh hLt ⟩
+
+theorem yjsLeqV2'_withItem {S : ItemSetV2 A} {newItem : YjsItemV2 A} :
+    S.lookup newItem.id = none ->
+    YjsLeqV2' S x y ->
+    YjsLeqV2' (S.withItem newItem) x y := by
+  intro hFresh hLeq
+  rcases hLeq with ⟨ h, hLeq ⟩
+  exact ⟨ h, yjsLeqV2_withItem hFresh hLeq ⟩
+
 namespace OriginReachableV2
 
 theorem of_origin {S : ItemSetV2 A} {item : YjsItemV2 A} :
