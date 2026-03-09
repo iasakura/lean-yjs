@@ -107,10 +107,17 @@
 - `LeanYjs/Algorithm/Invariant/StructuralBridgeV2.lean` で old array から `ItemSetV2.ofOldItems` への structural bridge を追加済み
   - `ofOldItems_structural`
   - `origin_lt_rightOrigin_field_to_v2`
-- ここで新しく分かった点として、full `YjsItemSetInvariantV2` bridge の最後の難所は structural 部分ではなく reachability の向き
-  - old `OriginReachable -> OriginReachableV2` は easy に作れる
-  - しかし `origin_nearest_reachable` field を v2 invariant として立てるには、concrete `ofOldItems` 上で `OriginReachableV2 -> old OriginReachable` の逆向き bridge が必要
-  - したがって次の段は `Invariant` 全体の一括 bridge ではなく、まず reverse reachability bridge を補題として切るのがよい
+- reverse reachability bridge も `StructuralBridgeV2` で追加済み
+  - `ptr_eq_of_toRefV2_eq`
+  - `originReachableStep_from_v2`
+  - `originReachable_from_v2`
+- その結果、old array invariant から full `YjsItemSetInvariantV2` を構成する bridge まで完了した
+  - `ofOldItems_invariant_v2`
+- ここまでで、old recursive storage を維持したまま v2 order core を downstream proof に注入できる状態になった
+- 次の段は `Invariant` / `State` 層でこの bridge を公開し、`Insert/Spec` や network proof が old `ItemSetInvariant` を直接触らずに v2 order を呼べるようにする
+- 新しく分かった実務上のポイントは次の 2 つ
+  - reverse reachability bridge は abstract `ItemSetV2` では難しいが、concrete `ItemSetV2.ofOldItems arr` では `lookup` の具体性と old unique-id から復元できる
+  - したがって移行順序は「generic v2 order を先に完成」してから「concrete old-array bridge を作る」のが正しかった
 
 ## Current State
 
