@@ -167,9 +167,17 @@
   - `getElemExcept_findRefIdx_rightOrigin_eq_findPtrIdx`
   - `getElemExcept_lookupPairV2_eq_lookupPair`
 - ここまでで `other <- getElemExcept arr i` の地点では、old scan と v2 scan の lookup は完全に一致させられる
-- 残るのは `for offset in ...` ループ状態
-  `(scanning, destIdx)` の遷移が両者で一致することの証明だけで、これは
-  `getElemExcept` の成功ケースごとの branch equality を並べる形で詰められる
+- さらに scan loop 自体も helper 化して old scan と一致するところまで進めた
+  - `scanStepV2`
+  - `scanStepOld`
+  - `forIn_list_congr`
+  - `scanStepV2_eq_scanStepOld`
+  - `findIntegratedIndexV2_eq_findIntegratedIndex`
+  - `integrateV2Item_eq_integrateScan`
+- これで `findIntegratedIndexV2` は old scan と theorem-level に一致する
+- `integrateV2Item` も old `findIntegratedIndex` を使う形へ bridge できたので、
+  次は `mkItemByIndex_toV2` と合わせて old `integrate` / `integrateSafe` の postcondition を
+  v2 item へ移す段階に入れる
 - さらに `ItemSetV2.withItem` を追加したので、candidate item を old item-set に一時的に載せた reachability の表現基盤もできた
 - 現時点では `withItem` の basic lookup / membership / closedness までで、wf/order invariant まではまだ載せていない
 - `withItem` を本格利用する前に、より筋の良い中間案として「candidate item から current item-set を辿る reachability」を別述語に切り出した
