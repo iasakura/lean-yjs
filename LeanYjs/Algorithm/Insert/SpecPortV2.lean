@@ -1,0 +1,227 @@
+import LeanYjs.Algorithm.Insert.BasicV2
+import LeanYjs.Algorithm.Invariant.YjsArrayBridgeV2
+
+variable {A : Type} [DecidableEq A]
+
+def activeSetV2 (arr : Array (YjsItem A)) (newItem : YjsItemV2 A) : ItemSetV2 A :=
+  (ItemSetV2.ofOldItems arr.toList).withItem newItem
+
+def offsetToIndexV2 (leftIdx : Int) (rightIdx : Int) (offset : Option Nat) (isBreak : Bool) : Nat :=
+  let back := if isBreak then 1 else 0
+  match offset with
+  | none => rightIdx.toNat - back
+  | some o => (leftIdx + o).toNat - back
+
+def isBreakV2 (state : ForInStep (MProd Int Bool)) : Bool :=
+  match state with
+  | ForInStep.done _ => true
+  | ForInStep.yield _ => false
+
+def isDoneV2 (state : ForInStep (MProd Int Bool)) (x : Option Nat) : Bool :=
+  (match x with
+  | none => true
+  | some _ => false) ||
+  match state with
+  | ForInStep.done _ => true
+  | ForInStep.yield _ => false
+
+abbrev extGetElemExceptV2 (arr : Array (YjsItem A)) (idx : Int) : Except IntegrateError ItemRef :=
+  getRefExcept arr idx
+
+def loopInvV2 (arr : Array (YjsItem A)) (newItem : YjsItemV2 A)
+    (leftIdx rightIdx : Int) (x : Option Nat) (state : ForInStep (MProd Int Bool)) : Prop :=
+  let current := offsetToIndexV2 leftIdx rightIdx x (isBreakV2 state)
+  let S := activeSetV2 arr newItem
+  let ⟨ dest, scanning ⟩ := state.value
+  let done := isDoneV2 state x
+  (match x with
+    | none => True
+    | some x => 0 < x ∧ x < (rightIdx - leftIdx).toNat) ∧
+  (dest ≤ current) ∧
+  (!scanning → !done -> dest = current) ∧
+  let dest := dest.toNat
+  (∀ i : Nat, i < dest -> (h_i_lt : i < arr.size) -> YjsLtV2' S arr[i].toV2.toRef newItem.toRef) ∧
+  (∀ i, (h_dest_i : dest ≤ i) -> (h_i_c : i < current) ->
+    ∃ (i_lt_size : i < arr.size) (h_dest_lt : dest < arr.size),
+      (arr[i].toV2.origin = newItem.origin ∧ newItem.id < arr[i].id ∨
+        YjsLeqV2' S arr[dest].toV2.toRef arr[i].toV2.origin)) ∧
+  (scanning -> ∃ h_dest_lt : dest < arr.size, arr[dest].toV2.origin = newItem.origin) ∧
+  (done -> ∀ item : ItemRef, extGetElemExceptV2 arr current = Except.ok item -> YjsLtV2' S newItem.toRef item)
+
+omit [DecidableEq A] in theorem activeSetV2_itemIn_newItem
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    (activeSetV2 arr newItem).ItemIn newItem := by
+  exact ItemSetV2.itemIn_withItem (S := ItemSetV2.ofOldItems arr.toList) (item := newItem)
+
+omit [DecidableEq A] in theorem activeSetV2_refIn_newItem
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    (activeSetV2 arr newItem).RefIn newItem.toRef := by
+  exact ItemSetV2.refIn_of_itemIn activeSetV2_itemIn_newItem
+
+omit [DecidableEq A] in theorem activeSetV2_refIn_of_oldRefIn
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {ref : ItemRef} :
+    (ItemSetV2.ofOldItems arr.toList).RefIn ref ->
+    (activeSetV2 arr newItem).RefIn ref := by
+  intro hRef
+  exact ItemSetV2.refIn_withItem_of_refIn (S := ItemSetV2.ofOldItems arr.toList)
+    (item := newItem) hRef
+
+omit [DecidableEq A] in private theorem find_item_id_eq_v2
+    {arr : Array (YjsItem A)} {targetId : YjsId} {item : YjsItem A} :
+    arr.find? (fun cand => cand.id = targetId) = some item ->
+    item.id = targetId := by
+  intro hFind
+  rw [Array.find?_eq_some_iff_getElem] at hFind
+  simp at hFind
+  obtain ⟨ hId, _, _, _, _ ⟩ := hFind
+  exact hId
+
+omit [DecidableEq A] in theorem toItemV2_origin_refIn_oldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    input.toItemV2 arr = Except.ok newItem ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.origin := by
+  intro hArr hToItem
+  cases hOriginId : input.originId with
+  | none =>
+      cases hRightOriginId : input.rightOriginId with
+      | none =>
+          simp [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+            hOriginId, hRightOriginId] at hToItem ⊢
+          cases hToItem
+          simp
+      | some rightOriginId =>
+          cases hFindRight : arr.find? (fun item => item.id = rightOriginId) with
+          | none =>
+              have : False := by
+                simpa [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                  hOriginId, hRightOriginId, hFindRight] using hToItem
+              exact False.elim this
+          | some rightItem =>
+              simp [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                hOriginId, hRightOriginId, hFindRight] at hToItem ⊢
+              cases hToItem
+              simp
+  | some originId =>
+      cases hFindOrigin : arr.find? (fun item => item.id = originId) with
+      | none =>
+          have : False := by
+            simpa [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+              hOriginId, hFindOrigin] using hToItem
+          exact False.elim this
+      | some originItem =>
+          have hOriginEq : originItem.id = originId := find_item_id_eq_v2 hFindOrigin
+          have hOriginMem : originItem ∈ arr.toList := by
+            simpa using Array.mem_of_find?_eq_some hFindOrigin
+          have hOriginRef : (ItemSetV2.ofOldItems arr.toList).RefIn originItem.toV2.toRef := by
+            exact ItemSetV2.refIn_toRef_of_mem_of_pairwise
+              (items := arr.toList) (item := originItem) hArr.unique hOriginMem
+          cases hRightOriginId : input.rightOriginId with
+          | none =>
+              simp [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                hOriginId, hRightOriginId, hFindOrigin] at hToItem ⊢
+              cases hToItem
+              simpa [YjsItem.toV2, hOriginEq] using hOriginRef
+          | some rightOriginId =>
+              cases hFindRight : arr.find? (fun item => item.id = rightOriginId) with
+              | none =>
+                  have : False := by
+                    simpa [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                      hOriginId, hRightOriginId, hFindOrigin, hFindRight] using hToItem
+                  exact False.elim this
+              | some rightItem =>
+                  simp [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                    hOriginId, hRightOriginId, hFindOrigin, hFindRight] at hToItem ⊢
+                  cases hToItem
+                  simpa [YjsItem.toV2, hOriginEq] using hOriginRef
+
+omit [DecidableEq A] in theorem toItemV2_rightOrigin_refIn_oldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    input.toItemV2 arr = Except.ok newItem ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.rightOrigin := by
+  intro hArr hToItem
+  cases hRightOriginId : input.rightOriginId with
+  | none =>
+      cases hOriginId : input.originId with
+      | none =>
+          simp [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+            hOriginId, hRightOriginId] at hToItem ⊢
+          cases hToItem
+          simp
+      | some originId =>
+          cases hFindOrigin : arr.find? (fun item => item.id = originId) with
+          | none =>
+              have : False := by
+                simpa [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                  hOriginId, hRightOriginId, hFindOrigin] using hToItem
+              exact False.elim this
+          | some originItem =>
+              simp [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                hOriginId, hRightOriginId, hFindOrigin] at hToItem ⊢
+              cases hToItem
+              simp
+  | some rightOriginId =>
+      cases hOriginId : input.originId with
+      | none =>
+          cases hFindRight : arr.find? (fun item => item.id = rightOriginId) with
+          | none =>
+              have : False := by
+                simpa [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                  hOriginId, hRightOriginId, hFindRight] using hToItem
+              exact False.elim this
+          | some rightItem =>
+              have hRightEq : rightItem.id = rightOriginId := find_item_id_eq_v2 hFindRight
+              have hRightMem : rightItem ∈ arr.toList := by
+                simpa using Array.mem_of_find?_eq_some hFindRight
+              have hRightRef : (ItemSetV2.ofOldItems arr.toList).RefIn rightItem.toV2.toRef := by
+                exact ItemSetV2.refIn_toRef_of_mem_of_pairwise
+                  (items := arr.toList) (item := rightItem) hArr.unique hRightMem
+              simp [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                hOriginId, hRightOriginId, hFindRight] at hToItem ⊢
+              cases hToItem
+              simpa [YjsItem.toV2, hRightEq] using hRightRef
+      | some originId =>
+          cases hFindOrigin : arr.find? (fun item => item.id = originId) with
+          | none =>
+              have : False := by
+                simpa [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                  hOriginId, hFindOrigin] using hToItem
+              exact False.elim this
+          | some originItem =>
+              cases hFindRight : arr.find? (fun item => item.id = rightOriginId) with
+              | none =>
+                  have : False := by
+                    simpa [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                      hOriginId, hRightOriginId, hFindOrigin, hFindRight] using hToItem
+                  exact False.elim this
+              | some rightItem =>
+                  have hRightEq : rightItem.id = rightOriginId := find_item_id_eq_v2 hFindRight
+                  have hRightMem : rightItem ∈ arr.toList := by
+                    simpa using Array.mem_of_find?_eq_some hFindRight
+                  have hRightRef : (ItemSetV2.ofOldItems arr.toList).RefIn rightItem.toV2.toRef := by
+                    exact ItemSetV2.refIn_toRef_of_mem_of_pairwise
+                      (items := arr.toList) (item := rightItem) hArr.unique hRightMem
+                  simp [IntegrateInput.toItemV2, bind, Except.bind, pure, Except.pure,
+                    hOriginId, hRightOriginId, hFindOrigin, hFindRight] at hToItem ⊢
+                  cases hToItem
+                  simpa [YjsItem.toV2, hRightEq] using hRightRef
+
+theorem activeSetV2_closed
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.origin ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.rightOrigin ->
+    ItemSetV2.IsClosedItemSetV2 (activeSetV2 arr newItem) := by
+  intro hArr hOrigin hRight
+  exact ItemSetV2.isClosed_withItem hArr.itemSetInvariantV2.closed hOrigin hRight
+
+theorem activeSetV2_closed_of_toItemV2
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    input.toItemV2 arr = Except.ok newItem ->
+    ItemSetV2.IsClosedItemSetV2 (activeSetV2 arr newItem) := by
+  intro hArr hToItem
+  apply activeSetV2_closed hArr
+  · exact toItemV2_origin_refIn_oldItems hArr hToItem
+  · exact toItemV2_rightOrigin_refIn_oldItems hArr hToItem

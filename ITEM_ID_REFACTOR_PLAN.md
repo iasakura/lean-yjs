@@ -193,6 +193,22 @@
   3. `loopInv_YjsLt'` など scan 局所補題を `findRefIdx` / `ItemRef` / `YjsLtV2` ベースへ移植する
   4. `YjsArrInvariant_integrate` 相当の v2-native theorem を、old theorem 非依存で立てる
   5. その後で storage を old recursive item から外す
+- pivot の最初の checkpoint として `LeanYjs/Algorithm/Insert/SpecPortV2.lean` を追加した
+  - `activeSetV2 := (ItemSetV2.ofOldItems arr.toList).withItem newItem`
+  - `offsetToIndexV2` / `isBreakV2` / `isDoneV2`
+  - `extGetElemExceptV2 := getRefExcept`
+  - `loopInvV2` の最初の skeleton
+  - `toItemV2_origin_refIn_oldItems`
+  - `toItemV2_rightOrigin_refIn_oldItems`
+  - `activeSetV2_closed`
+  - `activeSetV2_closed_of_toItemV2`
+- ここで `withItem` を再導入した理由は commutativity と違って、`Spec` では candidate item 自身を order の比較対象に含める必要があるため
+  - scan invariant の内部では `newItem.toRef` に対する `YjsLtV2'` / `YjsLeqV2'` を直接述べたい
+  - そのため proof-local な active set として `old items + candidate` を持つのが自然
+  - ただしこれは `SpecPortV2` の局所装置として使い、state 全体の canonical item-set 定義は引き続き `ofOldItems` に保つ
+- したがって次の具体タスクは
+  - `loopInvV2` が必要とする closedness / ref-membership / bounds 補題を `SpecPortV2` に集める
+  - その後で old `loopInv` 補題群を 1 本ずつ `loopInvV2` に移す
 - さらに `ItemSetV2.withItem` を追加したので、candidate item を old item-set に一時的に載せた reachability の表現基盤もできた
 - 現時点では `withItem` の basic lookup / membership / closedness までで、wf/order invariant まではまだ載せていない
 - `withItem` を本格利用する前に、より筋の良い中間案として「candidate item から current item-set を辿る reachability」を別述語に切り出した
