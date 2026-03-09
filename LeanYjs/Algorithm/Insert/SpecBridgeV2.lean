@@ -130,6 +130,36 @@ theorem YjsItem.isValid_toV2AgainstOldItems
         exact Or.inr <|
           OldToV2.yjsLeq_to_v2 (arr := arr.toList) hArr.closed hArr.uniqueIdOld hLeq hRightIn hXIn
 
+theorem toItem_origin_refIn_oldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.toV2.origin := by
+  intro hArr hToItem
+  rcases newItem with ⟨ origin, rightOrigin, id, content ⟩
+  have hOriginIn : ArrSet arr.toList origin := by
+    exact reachable_in_old_items_of_toItem hArr hToItem
+      (x := origin)
+      (OriginReachable.reachable_single _ _ <|
+        OriginReachableStep.reachable _ _ _ _)
+  simpa [YjsItem.toV2] using
+    OldToV2.arrSet_refIn_toRefV2 (arr := arr.toList) hArr.uniqueIdOld hOriginIn
+
+theorem toItem_rightOrigin_refIn_oldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.toV2.rightOrigin := by
+  intro hArr hToItem
+  rcases newItem with ⟨ origin, rightOrigin, id, content ⟩
+  have hRightIn : ArrSet arr.toList rightOrigin := by
+    exact reachable_in_old_items_of_toItem hArr hToItem
+      (x := rightOrigin)
+      (OriginReachable.reachable_single _ _ <|
+        OriginReachableStep.reachable_right _ _ _ _)
+  simpa [YjsItem.toV2] using
+    OldToV2.arrSet_refIn_toRefV2 (arr := arr.toList) hArr.uniqueIdOld hRightIn
+
 theorem originReachable_to_fromV2AgainstOldItems
     {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} {x : YjsPtr A} :
     YjsArrInvariant arr.toList ->
