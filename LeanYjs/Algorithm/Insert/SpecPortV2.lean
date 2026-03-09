@@ -314,6 +314,21 @@ theorem activeSetV2_structural
   simpa [activeSetV2] using
     ItemSetV2.wellFounded_withItem hArr.itemSetInvariantV2.structural hFresh hOrigin hRight
 
+theorem activeSetV2_structural_of_toItemV2_isClockSafe
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    isClockSafe input.id arr = true ->
+    input.toItemV2 arr = Except.ok newItem ->
+    ItemSetV2.WellFoundedItemSetV2 (activeSetV2 arr newItem) := by
+  intro hArr hSafe hToItem
+  apply activeSetV2_structural hArr
+  · have hFresh : (ItemSetV2.ofOldItems arr.toList).lookup input.id = none := by
+      exact ofOldItems_lookup_none_of_isClockSafe hSafe
+    have hId : newItem.id = input.id := IntegrateInput.toItemV2_id_eq hToItem
+    simpa [hId] using hFresh
+  · exact toItemV2_origin_refIn_oldItems hArr hToItem
+  · exact toItemV2_rightOrigin_refIn_oldItems hArr hToItem
+
 theorem activeSetV2_closed_of_toItemV2
     {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
     YjsArrInvariant arr.toList ->

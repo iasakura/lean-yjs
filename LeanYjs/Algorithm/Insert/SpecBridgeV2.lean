@@ -1,4 +1,5 @@
 import LeanYjs.Algorithm.Insert.Spec
+import LeanYjs.Algorithm.Insert.SpecPortV2
 import LeanYjs.Algorithm.Invariant.YjsArrayBridgeV2
 
 variable {A : Type}
@@ -159,6 +160,20 @@ theorem toItem_rightOrigin_refIn_oldItems
         OriginReachableStep.reachable_right _ _ _ _)
   simpa [YjsItem.toV2] using
     OldToV2.arrSet_refIn_toRefV2 (arr := arr.toList) hArr.uniqueIdOld hRightIn
+
+theorem activeSetV2_structural_of_toItem_maximalId
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    maximalId newItem arr ->
+    ItemSetV2.WellFoundedItemSetV2 (activeSetV2 arr newItem.toV2) := by
+  intro hArr hToItem hMax
+  have hToItemV2 : input.toItemV2 arr = Except.ok newItem.toV2 := by
+    exact IntegrateInput.toItem_toItemV2 hToItem
+  have hSafe : isClockSafe input.id arr = true := by
+    rw [← isClockSafe_maximalId hArr.unique hToItem]
+    exact hMax
+  exact activeSetV2_structural_of_toItemV2_isClockSafe hArr hSafe hToItemV2
 
 theorem originReachable_to_fromV2AgainstOldItems
     {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} {x : YjsPtr A} :
