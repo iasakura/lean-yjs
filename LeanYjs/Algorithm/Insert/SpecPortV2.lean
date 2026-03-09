@@ -295,6 +295,47 @@ theorem activeSetV2_originReachable_of_oldRefIn
     (newItem := newItem) hFresh hReach
     (oldRefIn_ne_newItemRef_of_fresh hFresh hx)
 
+theorem activeSetV2_origin_lt_rightOrigin_of_oldItem
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {item : YjsItem A} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    item ∈ arr.toList ->
+    YjsLtV2' (activeSetV2 arr newItem) item.toV2.origin item.toV2.rightOrigin := by
+  intro hArr hFresh hMem
+  have hItemIn :
+      (ItemSetV2.ofOldItems arr.toList).ItemIn item.toV2 := by
+    exact ItemSetV2.itemIn_toV2_of_mem_of_pairwise
+      (items := arr.toList) (item := item) hArr.unique hMem
+  exact activeSetV2_yjsLt_of_old hFresh <|
+    hArr.itemSetInvariantV2.origin_lt_rightOrigin hItemIn
+
+theorem activeSetV2_origin_nearest_reachable_of_oldItem
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} {item : YjsItem A} {x : ItemRef} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    item ∈ arr.toList ->
+    OriginReachableV2 (activeSetV2 arr newItem) item.toV2.toRef x ->
+    YjsLeqV2' (activeSetV2 arr newItem) x item.toV2.origin ∨
+    YjsLeqV2' (activeSetV2 arr newItem) item.toV2.rightOrigin x := by
+  intro hArr hFresh hMem hReach
+  have hItemIn :
+      (ItemSetV2.ofOldItems arr.toList).ItemIn item.toV2 := by
+    exact ItemSetV2.itemIn_toV2_of_mem_of_pairwise
+      (items := arr.toList) (item := item) hArr.unique hMem
+  have hRefIn :
+      (ItemSetV2.ofOldItems arr.toList).RefIn item.toV2.toRef := by
+    exact ItemSetV2.refIn_of_itemIn hItemIn
+  have hReachOld :
+      OriginReachableV2 (ItemSetV2.ofOldItems arr.toList) item.toV2.toRef x := by
+    exact activeSetV2_originReachable_of_oldRefIn hArr hFresh hRefIn hReach
+  have hNearOld :=
+    hArr.itemSetInvariantV2.origin_nearest_reachable hItemIn hReachOld
+  cases hNearOld with
+  | inl hLeq =>
+      exact Or.inl (activeSetV2_yjsLeq_of_old hFresh hLeq)
+  | inr hLeq =>
+      exact Or.inr (activeSetV2_yjsLeq_of_old hFresh hLeq)
+
 omit [DecidableEq A] in private theorem find_item_id_eq_v2
     {arr : Array (YjsItem A)} {targetId : YjsId} {item : YjsItem A} :
     arr.find? (fun cand => cand.id = targetId) = some item ->

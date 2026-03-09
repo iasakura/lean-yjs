@@ -1039,9 +1039,13 @@ old item-set 側へ降ろす基盤を追加した。
 
 - `oldRefIn_ne_newItemRef_of_fresh`
 - `activeSetV2_originReachable_of_oldRefIn`
+- `activeSetV2_origin_lt_rightOrigin_of_oldItem`
+- `activeSetV2_origin_nearest_reachable_of_oldItem`
 
 ここで重要なのは、「start ref が old item-set に属している限り、
 active set の reachable path は candidate item を経由できない」と整理できた点である。
+さらに、old item に対する `origin_lt_rightOrigin` / `origin_nearest_reachable` も
+`activeSetV2` 上へ直接持ち上げられるようになった。
 これは `loopInv_YjsLt'` の old-item branch を v2 化するうえで必要な最小土台になる。
 
 ### Remaining gap on the spec side
