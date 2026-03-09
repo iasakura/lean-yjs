@@ -60,6 +60,17 @@ omit [DecidableEq A] in private theorem reachable_in_old_items_of_toItem
             exact hRightIn
       exact reachable_in arr.toList mid hArr.closed _ hTail hMidIn
 
+omit [DecidableEq A] in private theorem toItem_id_eq_local
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    newItem.id = input.id := by
+  intro hArr hToItem
+  rw [IntegrateInput.toItem_ok_iff _ _ _ hArr.unique] at hToItem
+  obtain ⟨ origin, rightOrigin, id, content, hDef, _, _, hId, _ ⟩ := hToItem
+  subst newItem
+  simpa using hId
+
 theorem YjsArrInvariant_integrate_itemSetInvariantV2
     (input : IntegrateInput A) (arr newArr : Array (YjsItem A)) :
     YjsArrInvariant arr.toList ->
@@ -203,6 +214,109 @@ theorem not_originReachable_of_not_fromV2AgainstOldItems
   intro hArr hToItem hNotV2 hReach
   exact hNotV2 <|
     originReachable_to_fromV2AgainstOldItems hArr hToItem hReach
+
+namespace IsItemValidV2Against
+
+theorem reachable_YjsLeq_fromV2AgainstOldItems
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A}
+    {x : ItemRef} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    IsItemValidV2Against (ItemSetV2.ofOldItems arr.toList) newItem ->
+    OriginReachableFromV2 (ItemSetV2.ofOldItems arr.toList) newItem.toV2 x ->
+    YjsLeqV2' (ItemSetV2.ofOldItems arr.toList) x newItem.toV2.origin ∨
+    YjsLeqV2' (ItemSetV2.ofOldItems arr.toList) newItem.toV2.rightOrigin x := by
+  intro hArr hToItem hValid hReach
+  rcases newItem with ⟨ origin, rightOrigin, id, content ⟩
+  have hOriginIn : ArrSet arr.toList origin := by
+    exact reachable_in_old_items_of_toItem hArr hToItem
+      (x := origin)
+      (OriginReachable.reachable_single _ _ (OriginReachableStep.reachable origin rightOrigin id content))
+  have hRightIn : ArrSet arr.toList rightOrigin := by
+    exact reachable_in_old_items_of_toItem hArr hToItem
+      (x := rightOrigin)
+      (OriginReachable.reachable_single _ _ (OriginReachableStep.reachable_right origin rightOrigin id content))
+  cases hReach with
+  | origin =>
+      exact Or.inl (YjsLeqV2'.leqSame _)
+  | rightOrigin =>
+      exact Or.inr (YjsLeqV2'.leqSame _)
+  | tail_origin hReachV2 =>
+      rcases OldToV2.originReachable_from_v2 (arr := arr.toList) hArr.closed hArr.uniqueIdOld hReachV2 with
+        ⟨ xOld, yOld, hxOld, hyOld, hxEq, hyEq, hReachOld ⟩
+      have hStartEq : xOld = origin := by
+        apply OldToV2.ptr_eq_of_toRefV2_eq (arr := arr.toList) hArr.uniqueIdOld hxOld hOriginIn
+        simpa [YjsItem.toV2] using hxEq
+      subst xOld
+      have hReachItem : OriginReachable (YjsItem.mk origin rightOrigin id content) yOld := by
+        exact .reachable_head _ _ _
+          (OriginReachableStep.reachable origin rightOrigin id content) hReachOld
+      simpa [YjsItem.toV2, hyEq] using hValid.reachable_YjsLeq' yOld hReachItem
+  | tail_rightOrigin hReachV2 =>
+      rcases OldToV2.originReachable_from_v2 (arr := arr.toList) hArr.closed hArr.uniqueIdOld hReachV2 with
+        ⟨ xOld, yOld, hxOld, hyOld, hxEq, hyEq, hReachOld ⟩
+      have hStartEq : xOld = rightOrigin := by
+        apply OldToV2.ptr_eq_of_toRefV2_eq (arr := arr.toList) hArr.uniqueIdOld hxOld hRightIn
+        simpa [YjsItem.toV2] using hxEq
+      subst xOld
+      have hReachItem : OriginReachable (YjsItem.mk origin rightOrigin id content) yOld := by
+        exact .reachable_head _ _ _
+          (OriginReachableStep.reachable_right origin rightOrigin id content) hReachOld
+      simpa [YjsItem.toV2, hyEq] using hValid.reachable_YjsLeq' yOld hReachItem
+
+end IsItemValidV2Against
+
+theorem activeSetV2_origin_lt_rightOrigin_of_valid
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    maximalId newItem arr ->
+    IsItemValidV2Against (ItemSetV2.ofOldItems arr.toList) newItem ->
+    YjsLtV2' (activeSetV2 arr newItem.toV2) newItem.toV2.origin newItem.toV2.rightOrigin := by
+  intro hArr hToItem hMax hValid
+  have hSafe : isClockSafe input.id arr = true := by
+    rw [← isClockSafe_maximalId hArr.unique hToItem]
+    exact hMax
+  have hFresh : (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none := by
+    have hId : newItem.id = input.id := toItem_id_eq_local hArr hToItem
+    simpa [hId] using ofOldItems_lookup_none_of_isClockSafe hSafe
+  exact activeSetV2_yjsLt_of_old hFresh hValid.origin_lt_rightOrigin
+
+theorem activeSetV2_origin_nearest_reachable_of_valid
+    {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A}
+    {x : ItemRef} :
+    YjsArrInvariant arr.toList ->
+    input.toItem arr = Except.ok newItem ->
+    maximalId newItem arr ->
+    IsItemValidV2Against (ItemSetV2.ofOldItems arr.toList) newItem ->
+    OriginReachableV2 (activeSetV2 arr newItem.toV2) newItem.toV2.toRef x ->
+    YjsLeqV2' (activeSetV2 arr newItem.toV2) x newItem.toV2.origin ∨
+    YjsLeqV2' (activeSetV2 arr newItem.toV2) newItem.toV2.rightOrigin x := by
+  intro hArr hToItem hMax hValid hReach
+  have hSafe : isClockSafe input.id arr = true := by
+    rw [← isClockSafe_maximalId hArr.unique hToItem]
+    exact hMax
+  have hFresh : (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none := by
+    have hId : newItem.id = input.id := toItem_id_eq_local hArr hToItem
+    simpa [hId] using ofOldItems_lookup_none_of_isClockSafe hSafe
+  have hOriginRef :
+      (ItemSetV2.ofOldItems arr.toList).RefIn newItem.toV2.origin := by
+    exact toItem_origin_refIn_oldItems hArr hToItem
+  have hRightRef :
+      (ItemSetV2.ofOldItems arr.toList).RefIn newItem.toV2.rightOrigin := by
+    exact toItem_rightOrigin_refIn_oldItems hArr hToItem
+  have hReachOld :
+      OriginReachableFromV2 (ItemSetV2.ofOldItems arr.toList) newItem.toV2 x := by
+    exact originReachableFromV2_of_withItem
+      (S := ItemSetV2.ofOldItems arr.toList) hArr.itemSetInvariantV2.closed
+      hFresh hOriginRef hRightRef hReach
+  have hNearOld :=
+    IsItemValidV2Against.reachable_YjsLeq_fromV2AgainstOldItems hArr hToItem hValid hReachOld
+  cases hNearOld with
+  | inl hLeq =>
+      exact Or.inl (activeSetV2_yjsLeq_of_old hFresh hLeq)
+  | inr hLeq =>
+      exact Or.inr (activeSetV2_yjsLeq_of_old hFresh hLeq)
 
 theorem YjsItem.isValid_of_v2AgainstOldItems
     {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItem A} :

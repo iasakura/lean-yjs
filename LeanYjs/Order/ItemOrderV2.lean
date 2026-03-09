@@ -359,6 +359,75 @@ theorem originReachableV2_of_withItem_of_ne
           (S := S) hClosed (newItem := newItem) hFresh hStep hStartNe
       exact .tail hStepOld (ih hMidNe)
 
+private theorem originReachableStepV2_from_self_withItem
+    {S : ItemSetV2 A} {newItem : YjsItemV2 A} {x y : ItemRef} :
+    OriginReachableStepV2 (S.withItem newItem) x y ->
+    x = newItem.toRef ->
+    y = newItem.origin ∨ y = newItem.rightOrigin := by
+  intro hStep hStart
+  cases hStep with
+  | left hItem =>
+      rename_i item
+      have hIdEq : item.id = newItem.id := by
+        simpa [YjsItemV2.toRef] using congrArg ItemRef.toOptionId hStart
+      have hItemEq : item = newItem := by
+        exact ItemSetV2.item_eq_of_itemIn_of_id_eq
+          (S := S.withItem newItem) hItem
+          (ItemSetV2.itemIn_withItem (S := S) (item := newItem)) hIdEq
+      subst hItemEq
+      exact Or.inl rfl
+  | right hItem =>
+      rename_i item
+      have hIdEq : item.id = newItem.id := by
+        simpa [YjsItemV2.toRef] using congrArg ItemRef.toOptionId hStart
+      have hItemEq : item = newItem := by
+        exact ItemSetV2.item_eq_of_itemIn_of_id_eq
+          (S := S.withItem newItem) hItem
+          (ItemSetV2.itemIn_withItem (S := S) (item := newItem)) hIdEq
+      subst hItemEq
+      exact Or.inr rfl
+
+theorem originReachableFromV2_of_withItem
+    {S : ItemSetV2 A} (hClosed : ItemSetV2.IsClosedItemSetV2 S) {newItem : YjsItemV2 A}
+    (hFresh : S.lookup newItem.id = none)
+    (hOrigin : S.RefIn newItem.origin)
+    (hRight : S.RefIn newItem.rightOrigin) :
+    OriginReachableV2 (S.withItem newItem) newItem.toRef x ->
+    OriginReachableFromV2 S newItem x := by
+  intro hReach
+  have hNotRefIn : ¬ S.RefIn newItem.toRef :=
+    not_refIn_toRef_of_lookup_none (S := S) (newItem := newItem) hFresh
+  have hOriginNe : newItem.origin ≠ newItem.toRef := by
+    intro hEq
+    apply hNotRefIn
+    simpa [hEq] using hOrigin
+  have hRightNe : newItem.rightOrigin ≠ newItem.toRef := by
+    intro hEq
+    apply hNotRefIn
+    simpa [hEq] using hRight
+  cases hReach with
+  | single hStep =>
+      cases originReachableStepV2_from_self_withItem (S := S) (newItem := newItem) hStep rfl with
+      | inl hEq =>
+          subst x
+          exact .origin
+      | inr hEq =>
+          subst x
+          exact .rightOrigin
+  | tail hStep hTail =>
+      rename_i mid
+      cases originReachableStepV2_from_self_withItem (S := S) (newItem := newItem) hStep rfl with
+      | inl hEq =>
+          subst mid
+          exact .tail_origin <|
+            originReachableV2_of_withItem_of_ne
+              (S := S) hClosed (newItem := newItem) hFresh hTail hOriginNe
+      | inr hEq =>
+          subst mid
+          exact .tail_rightOrigin <|
+            originReachableV2_of_withItem_of_ne
+              (S := S) hClosed (newItem := newItem) hFresh hTail hRightNe
+
 namespace OriginReachableV2
 
 theorem of_origin {S : ItemSetV2 A} {item : YjsItemV2 A} :
