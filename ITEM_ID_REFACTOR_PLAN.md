@@ -59,16 +59,23 @@
   - `first` / `last` の base ordering
   - pair / triple measure induction combinator
   - `yjsLeq_or_yjsLt`
-- `LeanYjs/Order/AsymmetryV2.lean`
-  - `YjsId_lt_asymm`
-  - sentinel の trivial impossible cases
 - `LeanYjs/Order/BoundaryV2.lean`
   - `not_ref_lt_first`
   - `not_last_lt_ref`
   - sentinel impossibility を `TransitivityV2` / `AsymmetryV2` の共通土台に分離
 - `LeanYjs/Order/TransitivityV2.lean`
-  - `YjsId_lt_trans`
-  - conflict helper 群 (`conflict_lt_x_origin_lt_y` など)
+  - `YjsId_lt_trans_v2`
+  - conflict helper 群
+  - `yjsLt_trans_v2`
+  - `yjsLeq_lt_trans_v2`
+  - `yjsLt_leq_trans_v2`
+  - `yjsLeq_trans_v2`
+- `LeanYjs/Order/AsymmetryV2.lean`
+  - `yjsLt_conflictLt_decreases_v2`
+  - `yjsLeq_rightOrigin_decreases_v2`
+  - `yjsLeq_origin_decreases_v2`
+  - `yjsLt_asymm_v2`
+  - `yjsLt_of_not_leq_v2`
 
 この進捗により、次の方針修正が確定した。
 
@@ -86,6 +93,12 @@
 - したがって measure は用途別に分ける
   - totality: `depth`
   - transitivity / asymmetry: `sizeV2`
+- order core (`totality` / `transitivity` / `asymmetry`) は v2 側で一通り揃った
+- 次の重い作業は order 証明そのものではなく、`Invariant` / `Insert/Spec` / `InsertInsert` を v2 order に載せ替える段階に移った
+- 移行は big-bang より staged bridge の方が安全
+  - まず既存の recursive `YjsItem` / `YjsPtr` から `YjsItemV2` / `ItemSetV2` への変換層を置く
+  - その上で既存 array/state を保ったまま v2 order を利用可能にする
+  - 最後に storage / algorithm 本体を v2 表現へ置き換える
 
 ## Current State
 

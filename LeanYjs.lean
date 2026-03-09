@@ -3,6 +3,7 @@
 import LeanYjs.ListLemmas
 import LeanYjs.Item
 import LeanYjs.ItemV2
+import LeanYjs.ItemBridgeV2
 import LeanYjs.ItemSet
 import LeanYjs.ItemSetV2
 import LeanYjs.ClientId
