@@ -226,6 +226,12 @@
 - 一方で `scanStepV2` の branch-shape を直接露出する補題は、この段階では保留にした
   - do-notation 展開に引きずられて証明が brittle になりやすい
   - 先に `loopInvV2` 側の projection と preservation を積み、必要になったら statement を絞って再導入する
+- `withItem` を本格利用するための structural 補題も追加した
+  - `ItemSetV2.dependsOnId_withItem_of_ne`
+  - `ItemSetV2.wellFounded_withItem`
+  - `SpecPortV2.activeSetV2_structural`
+  - これで `activeSetV2` は `closed` だけでなく、fresh id 仮定つきで `WellFoundedItemSetV2` まで引ける
+  - 次段ではここから `activeSetV2` 上の totality / transitivity を proof-local に使えるようにする
 - ここで `withItem` を再導入した理由は commutativity と違って、`Spec` では candidate item 自身を order の比較対象に含める必要があるため
   - scan invariant の内部では `newItem.toRef` に対する `YjsLtV2'` / `YjsLeqV2'` を直接述べたい
   - そのため proof-local な active set として `old items + candidate` を持つのが自然

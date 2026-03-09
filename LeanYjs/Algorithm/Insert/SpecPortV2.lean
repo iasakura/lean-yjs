@@ -303,6 +303,17 @@ theorem activeSetV2_closed
   intro hArr hOrigin hRight
   exact ItemSetV2.isClosed_withItem hArr.itemSetInvariantV2.closed hOrigin hRight
 
+theorem activeSetV2_structural
+    {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
+    YjsArrInvariant arr.toList ->
+    (ItemSetV2.ofOldItems arr.toList).lookup newItem.id = none ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.origin ->
+    (ItemSetV2.ofOldItems arr.toList).RefIn newItem.rightOrigin ->
+    ItemSetV2.WellFoundedItemSetV2 (activeSetV2 arr newItem) := by
+  intro hArr hFresh hOrigin hRight
+  simpa [activeSetV2] using
+    ItemSetV2.wellFounded_withItem hArr.itemSetInvariantV2.structural hFresh hOrigin hRight
+
 theorem activeSetV2_closed_of_toItemV2
     {input : IntegrateInput A} {arr : Array (YjsItem A)} {newItem : YjsItemV2 A} :
     YjsArrInvariant arr.toList ->
