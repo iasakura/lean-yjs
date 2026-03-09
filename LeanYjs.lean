@@ -37,3 +37,4 @@ import LeanYjs.Network.CausalNetwork
 import LeanYjs.Network.StrongCausalOrder
 import LeanYjs.Network.OperationNetwork
 import LeanYjs.Network.Yjs.YjsNetwork
+import LeanYjs.Network.Yjs.YjsNetworkBridgeV2

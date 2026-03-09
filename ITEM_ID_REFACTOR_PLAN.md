@@ -128,6 +128,9 @@
   - `YjsArrInvariant_integrateSafe_itemSetInvariantV2`
   - `YjsStateInvariant_insert_itemSetInvariantV2`
 - これで integration correctness を使う consumer は、既存 theorem を壊さずに `newArr` 側の v2 invariant を直接受け取れる
+- `LeanYjs/Network/Yjs/YjsNetworkBridgeV2.lean` で network valid-message 境界の thin wrapper も追加済み
+  - `IsValidMessage_insert_itemSetInvariantV2`
+- これで network proof は `IsValidMessage` と insert success から、直接 `newState` 側の v2 invariant を引ける
 - 新しく分かった実務上のポイントは次の 2 つ
   - reverse reachability bridge は abstract `ItemSetV2` では難しいが、concrete `ItemSetV2.ofOldItems arr` では `lookup` の具体性と old unique-id から復元できる
   - したがって移行順序は「generic v2 order を先に完成」してから「concrete old-array bridge を作る」のが正しかった
