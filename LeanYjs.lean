@@ -18,6 +18,12 @@ import LeanYjs.Algorithm.Delete.Spec
 import LeanYjs.Algorithm.Commutativity.InsertInsert
 import LeanYjs.Algorithm.Commutativity.InsertDelete
 import LeanYjs.Algorithm.Commutativity.DeleteDelete
+import LeanYjs.Indirect.Item
+import LeanYjs.Indirect.Algorithm.Basic
+import LeanYjs.Indirect.Algorithm.Delete.Basic
+import LeanYjs.Indirect.Algorithm.Insert.Basic
+import LeanYjs.Indirect.Algorithm.Equivalence
+import LeanYjs.Indirect.Network.Yjs.YjsNetwork
 import LeanYjs.Network.CausalNetwork
 import LeanYjs.Network.StrongCausalOrder
 import LeanYjs.Network.OperationNetwork

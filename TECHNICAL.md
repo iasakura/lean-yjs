@@ -238,6 +238,148 @@ How the final step works:
 - `YjsOperationNetwork_concurrentCommutative` is proved by case analysis on concurrent operation pairs (insert/insert, insert/delete, delete/delete), using the commutativity theorems from Section 6.
 - `YjsOperationNetwork_converge'` then applies the generic convergence machinery for hb-consistent executions (from the network/order layer) together with the Yjs commutativity and validity/invariant lemmas, yielding equal final states when delivered operation sets are equal.
 
+## 8. Indirect Reference Variant
+
+Files:
+
+- `LeanYjs/Indirect/Item.lean`
+- `LeanYjs/Indirect/Algorithm/Basic.lean`
+- `LeanYjs/Indirect/Algorithm/Delete/Basic.lean`
+- `LeanYjs/Indirect/Algorithm/Insert/Basic.lean`
+- `LeanYjs/Indirect/Algorithm/Equivalence.lean`
+- `LeanYjs/Indirect/Network/Yjs/YjsNetwork.lean`
+
+The direct model stores `origin` and `rightOrigin` as recursive pointers (`YjsPtr`). For the indirect variant, the project keeps the original direct-reference development unchanged and adds a separate `Indirect` namespace. The purpose is to replace direct recursive pointers with id-based references while preserving the same executable behavior and convergence theorem.
+
+### 8.1 Indirect Item Representation
+
+`LeanYjs/Indirect/Item.lean` introduces:
+
+```lean
+inductive YjsRef where
+  | itemId (id : YjsId)
+  | first
+  | last
+
+structure YjsItem (A : Type) where
+  origin : YjsRef
+  rightOrigin : YjsRef
+  id : YjsId
+  content : A
+```
+
+So the indirect state removes recursive pointer structure from `YjsItem`. Instead of storing `YjsPtr.itemPtr item`, the item stores only `YjsId`, plus sentinels `first` and `last`.
+
+The bridge from the direct model is:
+
+- `YjsRef.ofDirectPtr`
+- `ofDirectItem`
+- `ofDirectState`
+
+These collapse direct pointers to ids without changing item order, item ids, or payloads.
+
+### 8.2 Indirect Algorithms
+
+`LeanYjs/Indirect/Algorithm/Insert/Basic.lean` re-implements the integration algorithm using `YjsRef` lookup:
+
+- `findRefIdx`
+- `findLeftIdx`
+- `findRightIdx`
+- `findIntegratedIndex`
+- `mkItem`
+- `integrate`
+- `integrateSafe`
+- `YjsState.insert`
+
+`LeanYjs/Indirect/Algorithm/Delete/Basic.lean` keeps deletion behavior the same as the direct model: delete only inserts into `deletedIds`.
+
+The key point is that the indirect algorithm is not a wrapper around the direct algorithm. It is a separate executable implementation that works on indirect states.
+
+### 8.3 State Equivalence
+
+The relation between direct and indirect states is intentionally simple:
+
+```lean
+def StateEquivalent (direct : _root_.YjsState A) (indirect : YjsState A) : Prop :=
+  ofDirectState direct = indirect
+```
+
+This means equivalence is extensional: the indirect state must literally be the direct state after erasing recursive pointers down to ids. Concretely, this implies:
+
+- the arrays have the same length
+- corresponding items have the same `id` and `content`
+- corresponding `origin`/`rightOrigin` point to the same logical positions, but encoded as `YjsId`/sentinels rather than recursive pointers
+- `deletedIds` are equal
+
+### 8.4 Direct/Indirect Algorithm Correspondence
+
+`LeanYjs/Indirect/Algorithm/Equivalence.lean` proves that the indirect executable algorithm matches the direct executable algorithm after applying `ofDirectState`.
+
+Important bridge lemmas:
+
+- `findLeftIdx_ofDirect`
+- `findRightIdx_ofDirect`
+- `findIntegratedIndex_ofDirect`
+- `ofDirectItem_mkItemByIndex`
+- `integrate_ofDirect`
+- `integrateSafe_ofDirect`
+- `insert_ofDirectState`
+- `deleteById_ofDirectState`
+
+The main preservation results are:
+
+- `insert_preserves_stateEquivalent`
+- `delete_preserves_stateEquivalent`
+
+These are the formal version of the intended statement:
+
+- if a direct state `s₁` and an indirect state `s₂` are equivalent
+- and we perform corresponding direct/indirect operations successfully
+- then the resulting states are again equivalent
+
+So the indirect algorithm is proved behaviorally identical to the direct algorithm under the erasure map `ofDirectState`.
+
+### 8.5 Indirect Network-Level Convergence
+
+`LeanYjs/Indirect/Network/Yjs/YjsNetwork.lean` lifts the one-step correspondence to network executions.
+
+It defines:
+
+- `effect` for indirect `YjsOperation`
+- `interpOps` for indirect states
+
+Then it proves:
+
+- `effect_ofDirectState`
+- `effect_preserves_stateEquivalent`
+
+To reach a convergence theorem, the file reconstructs a successful direct execution from a successful indirect execution:
+
+- `stateInv_of_prefix` recovers the direct state invariant for every direct prefix execution
+- `direct_of_indirect_suffix` lifts one-step equivalence to suffix executions
+- `direct_of_indirect_from_source` reconstructs an entire successful direct run from an indirect run
+
+Finally, the indirect network theorem is:
+
+```lean
+theorem YjsOperationNetwork_converge {A} [DecidableEq A]
+  (network : _root_.YjsOperationNetwork A) (i j : ClientId) (res₀ res₁ : YjsState A) :
+  let hist_i := network.toCausalNetwork.toDeliverMessages i
+  let hist_j := network.toCausalNetwork.toDeliverMessages j
+  interpOps hist_i YjsEmptyState = Except.ok res₀ →
+  interpOps hist_j YjsEmptyState = Except.ok res₁ →
+  (∀ item, item ∈ hist_i ↔ item ∈ hist_j) →
+  res₀ = res₁
+```
+
+This theorem is proved by:
+
+1. converting each successful indirect execution into a successful direct execution with an equivalent final state
+2. applying the existing direct convergence theorem `YjsOperationNetwork_converge'`
+3. transporting the resulting direct-state equality back through `ofDirectState`
+
+So the indirect variant reuses the original network proof architecture, but only after proving that indirect execution is a faithful implementation of the direct algorithm.
+
 ## Appendix: Executable Differential Testing
 
 - Lean runner: `DiffTestRunner.lean`
