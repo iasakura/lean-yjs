@@ -71,6 +71,8 @@ instance [DecidableEq A] : Operation (YjsOperation A) where
   | YjsOperation.insert item => state.insert item
   | YjsOperation.delete _id deletedId =>
     Except.ok <| deleteValid deletedId state
+
+instance [DecidableEq A] : OperationValidity (YjsOperation A) where
   isValidState op state := IsValidMessage state op
   StateInv state := YjsStateInvariant state
   stateInv_init := by
@@ -83,8 +85,8 @@ instance [DecidableEq A] : Operation (YjsOperation A) where
       obtain ⟨ item, hitem, hitem_valid ⟩ := h_valid
       apply YjsStateInvariant_insert s s' input h_inv hitem hitem_valid h_effect
     | delete _ deletedId =>
-      have hs' : s' = deleteById s deletedId := by
-        simpa [deleteValid] using h_effect.symm
+      have hs' : deleteById s deletedId = s' := by
+        simpa [Operation.effect, deleteValid] using h_effect
       subst hs'
       simpa [deleteById] using h_inv
 
@@ -787,11 +789,11 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
     | insert bInput =>
       simp [Operation.effect, integrateValidState] at h_ab ⊢
       have h_sa_inv : YjsArrInvariant sa.toList := by
-        simpa [Operation.StateInv] using havalid
+        simpa [OperationValidity.StateInv] using havalid
       have h_a_valid_msg : ∃ aItem, aInput.toItem sa = Except.ok aItem ∧ aItem.isValid := by
-        simpa [Operation.isValidState, IsValidMessage] using hbvalid
+        simpa [OperationValidity.isValidState, IsValidMessage] using hbvalid
       have h_b_valid_msg : ∃ bItem, bInput.toItem sa = Except.ok bItem ∧ bItem.isValid := by
-        simpa [Operation.isValidState, IsValidMessage] using hab
+        simpa [OperationValidity.isValidState, IsValidMessage] using hab
       obtain ⟨ aItem, h_a_toItem, h_a_item_valid ⟩ := h_a_valid_msg
       obtain ⟨ bItem, h_b_toItem, h_b_item_valid ⟩ := h_b_valid_msg
       have h_diff_client : aInput.id.clientId ≠ bInput.id.clientId := by
@@ -3081,19 +3083,20 @@ theorem YjsOperationNetwork_converge' {A} [DecidableEq A] (network : YjsOperatio
     apply YjsOperationNetwork_concurrentCommutative network i
 
   let StateSource : YjsOperation A → Prop := fun a => ∃ i, Event.Broadcast a ∈ network.toCausalNetwork.histories i
-  have h_valid_mono : IsValidStateMonotone (A := YjsOperation A) (S := YjsId) (hb := hb) StateSource := by
-    intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
-    cases a with
-    | delete _ _ =>
-      simp [Operation.isValidState, IsValidMessage]
-    | insert input =>
-      simpa [Operation.isValidState, IsValidMessage] using
-        (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
-          h_source h_lt h_consistent h_closed h_effect h_nodup)
+  haveI : OperationReplayValidity (A := YjsOperation A) (S := YjsId) (hb := hb) StateSource := {
+    isValidState_of_history := by
+      intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
+      cases a with
+      | delete _ _ =>
+        simp [OperationValidity.isValidState, IsValidMessage]
+      | insert input =>
+        simpa [OperationValidity.isValidState, IsValidMessage] using
+          (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
+            h_source h_lt h_consistent h_closed h_effect h_nodup)
+  }
 
   have h := hb_consistent_effect_convergent (s := res₀) (hb := hb)
     StateSource
-    h_valid_mono
     (network.toCausalNetwork.toDeliverMessages i)
     (network.toCausalNetwork.toDeliverMessages j)
     (by
