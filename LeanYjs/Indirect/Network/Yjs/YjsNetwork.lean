@@ -56,8 +56,7 @@ theorem effect_preserves_stateEquivalent {op : _root_.YjsOperation A}
 private theorem stateInv_of_prefix
     {hb : CausalOrder (_root_.YjsOperation A)}
     (StateSource : _root_.YjsOperation A → Prop)
-    (h_valid_mono :
-      IsValidStateMonotone (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource)
+    [OperationReplayValidity (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
     (preOps restOps : List (_root_.YjsOperation A))
     {direct : _root_.YjsState A}
     (h_source : ∀ x, x ∈ preOps ++ restOps → StateSource x)
@@ -77,14 +76,13 @@ private theorem stateInv_of_prefix
     exact List.Pairwise.sublist (List.sublist_append_left preOps restOps) h_nodup
   exact effect_list_stateInv
     (A := _root_.YjsOperation A) (S := YjsId) (hb := hb)
-    (StateSource := StateSource) h_valid_mono
+    (StateSource := StateSource)
     (ops := preOps) h_source_prefix h_consistent_prefix h_closed_prefix h_nodup_prefix h_preOps_direct
 
 private theorem direct_of_indirect_suffix
     {hb : CausalOrder (_root_.YjsOperation A)}
     (StateSource : _root_.YjsOperation A → Prop)
-    (h_valid_mono :
-      IsValidStateMonotone (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource)
+    [OperationReplayValidity (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
     (preOps restOps : List (_root_.YjsOperation A))
     {direct : _root_.YjsState A} {indirect indirect' : YjsState A}
     (h_source : ∀ x, x ∈ preOps ++ restOps → StateSource x)
@@ -103,7 +101,7 @@ private theorem direct_of_indirect_suffix
   | cons op restOps ih =>
       have h_direct_inv :
           _root_.YjsStateInvariant direct :=
-        stateInv_of_prefix StateSource h_valid_mono preOps (op :: restOps)
+        stateInv_of_prefix StateSource preOps (op :: restOps)
           h_source h_consistent h_closed h_nodup h_preOps_direct
       have h_source_op : StateSource op := by
         exact h_source op (by simp)
@@ -114,15 +112,14 @@ private theorem direct_of_indirect_suffix
         exact hbClosed_prefix (hb := hb) (ops₀ := preOps) (ops₁ := op :: restOps) h_closed
       have h_nodup_prefix : IdNoDup preOps := by
         exact List.Pairwise.sublist (List.sublist_append_left preOps (op :: restOps)) h_nodup
-      have h_valid_op : _root_.Operation.isValidState op direct := by
-        apply h_valid_mono (a := op) (s := direct) (l := preOps)
+      have h_valid_op : OperationValidity.isValidState op direct := by
+        refine OperationReplayValidity.isValidState_of_history
+          (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) (StateSource := StateSource)
+          (a := op) (s := direct) (l := preOps) ?_ ?_ h_consistent_prefix h_closed_prefix
+          h_preOps_direct h_nodup_prefix
         · exact h_source_op
         · intro x hx_lt
           simpa using h_closed op x preOps restOps rfl hx_lt
-        · exact h_consistent_prefix
-        · exact h_closed_prefix
-        · exact h_preOps_direct
-        · exact h_nodup_prefix
       have h_rest_indirect' :
           effect op indirect >>= interpOps restOps = Except.ok indirect' := by
         simpa [interpOps] using h_rest_indirect
@@ -145,7 +142,7 @@ private theorem direct_of_indirect_suffix
               _root_.interpOps (preOps ++ [op]) _root_.Operation.init = Except.ok direct1 := by
             rw [_root_.interpOps, effect_list_append]
             rw [h_preOps_effect_list]
-            simpa [_root_.interpOps, effect_list_cons, bind, Except.bind, h_effect_direct]
+            simp [effect_list_cons, bind, Except.bind, h_effect_direct]
           have h_source' : ∀ x, x ∈ (preOps ++ [op]) ++ restOps → StateSource x := by
             intro x hx
             exact h_source x (by simpa [List.append_assoc] using hx)
@@ -165,8 +162,7 @@ private theorem direct_of_indirect_suffix
 private theorem direct_of_indirect_from_source
     {hb : CausalOrder (_root_.YjsOperation A)}
     (StateSource : _root_.YjsOperation A → Prop)
-    (h_valid_mono :
-      IsValidStateMonotone (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource)
+    [OperationReplayValidity (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
     (ops : List (_root_.YjsOperation A))
     {indirect' : YjsState A}
     (h_source : ∀ x, x ∈ ops → StateSource x)
@@ -177,7 +173,7 @@ private theorem direct_of_indirect_from_source
     ∃ direct', _root_.interpOps ops _root_.Operation.init = Except.ok direct' ∧
       StateEquivalent direct' indirect' := by
   simpa using
-    (direct_of_indirect_suffix (StateSource := StateSource) (h_valid_mono := h_valid_mono)
+    (direct_of_indirect_suffix (StateSource := StateSource)
       (preOps := []) (restOps := ops)
       (direct := _root_.YjsEmptyArray) (indirect := YjsEmptyState)
       (h_source := by
@@ -232,16 +228,18 @@ theorem YjsOperationNetwork_converge {A} [DecidableEq A]
         simpa using h_ev_mem
   let StateSource : _root_.YjsOperation A → Prop :=
     fun a => ∃ i, Event.Broadcast a ∈ network.toCausalNetwork.histories i
-  have h_valid_mono :
-      IsValidStateMonotone (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource := by
-    intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
-    cases a with
-    | delete _ _ =>
-        simp [Operation.isValidState, IsValidMessage]
-    | insert input =>
-        simpa [Operation.isValidState, IsValidMessage] using
-          (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
-            h_source h_lt h_consistent h_closed h_effect h_nodup)
+  haveI :
+      OperationReplayValidity (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource := {
+    isValidState_of_history := by
+      intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
+      cases a with
+      | delete _ _ =>
+          simp [OperationValidity.isValidState, IsValidMessage]
+      | insert input =>
+          simpa [OperationValidity.isValidState, IsValidMessage] using
+            (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
+              h_source h_lt h_consistent h_closed h_effect h_nodup)
+  }
   have h_source_i :
       ∀ x, x ∈ network.toCausalNetwork.toDeliverMessages i → StateSource x := by
     intro x hx
@@ -257,11 +255,11 @@ theorem YjsOperationNetwork_converge {A} [DecidableEq A]
     obtain ⟨ c, h_broadcast_x_mem ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_x_mem
     exact ⟨ c, h_broadcast_x_mem ⟩
   obtain ⟨ direct₀, h_direct₀, h_eq₀ ⟩ :=
-    direct_of_indirect_from_source StateSource h_valid_mono
+    direct_of_indirect_from_source StateSource
       (network.toCausalNetwork.toDeliverMessages i)
       h_source_i h_consistent_i h_closed_i h_nodup_i h_res₀
   obtain ⟨ direct₁, h_direct₁, h_eq₁ ⟩ :=
-    direct_of_indirect_from_source StateSource h_valid_mono
+    direct_of_indirect_from_source StateSource
       (network.toCausalNetwork.toDeliverMessages j)
       h_source_j h_consistent_j h_closed_j h_nodup_j h_res₁
   have h_direct_eq : direct₀ = direct₁ := by
@@ -273,7 +271,7 @@ theorem YjsOperationNetwork_converge {A} [DecidableEq A]
     simpa [StateEquivalent] using h_eq₁
   calc
     res₀ = ofDirectState direct₀ := by simpa using h_res₀_eq.symm
-    _ = ofDirectState direct₁ := by simpa [h_direct_eq]
+    _ = ofDirectState direct₁ := by simp [h_direct_eq]
     _ = res₁ := by simpa using h_res₁_eq
 
 end Indirect
