@@ -72,7 +72,7 @@ instance [DecidableEq A] : Operation (YjsOperation A) where
   | YjsOperation.delete _id deletedId =>
     Except.ok <| deleteValid deletedId state
 
-instance [DecidableEq A] : OperationValidity (YjsOperation A) where
+instance [DecidableEq A] : ValidatableOperation (YjsOperation A) where
   isValidState op state := IsValidMessage state op
   StateInv state := YjsStateInvariant state
   stateInv_init := by
@@ -779,6 +779,109 @@ theorem IntegrateInput.toItem_deleteById_valid {A : Type} [DecidableEq A]
   refine ⟨ item, ?_, h_valid ⟩
   exact IntegrateInput.toItem_deleteById_ok input arr item deletedId h_toItem
 
+/-- If `input.toItem arr = ok item`, then any origin/rightOrigin step from `item`
+    lands in `ArrSet arr.toList`. In other words, both pointers of a freshly resolved
+    item refer to elements already present in the array. -/
+private theorem toItem_originStep_in_arrSet [DecidableEq A]
+    {input : IntegrateInput A} {arr : YjsState A} {item : YjsItem A}
+    (h_unique : uniqueId arr.items.toList)
+    (h_toItem : input.toItem arr.items = Except.ok item)
+    (x : YjsPtr A) (h_step : OriginReachableStep (YjsPtr.itemPtr item) x) :
+    ArrSet arr.toList x := by
+  have h_to_item := (IntegrateInput.toItem_ok_iff input arr.items item h_unique).1 h_toItem
+  obtain ⟨ origin, rightOrigin, id, content, hdef, horigin, hrightOrigin, -, - ⟩ := h_to_item
+  cases h_step with
+  | reachable o r id' c =>
+    cases hdef
+    cases h_originId : input.originId with
+    | none =>
+      simp [isLeftIdPtr, h_originId] at horigin; subst horigin; simp [ArrSet]
+    | some pid =>
+      simp [isLeftIdPtr, h_originId] at horigin
+      obtain ⟨ item', h_eq, h_find ⟩ := horigin; subst h_eq
+      simp [ArrSet]; simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
+  | reachable_right o r id' c =>
+    cases hdef
+    cases h_rightOriginId : input.rightOriginId with
+    | none =>
+      simp [isRightIdPtr, h_rightOriginId] at hrightOrigin; subst hrightOrigin; simp [ArrSet]
+    | some pid =>
+      simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
+      obtain ⟨ item', h_eq, h_find ⟩ := hrightOrigin; subst h_eq
+      simp [ArrSet]; simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
+
+/-- An item resolved via `toItem` that is origin-reachable from the pre-state
+    must already be a member of that pre-state's array. -/
+private theorem toItem_reachable_mem [DecidableEq A]
+    {input : IntegrateInput A} {arr : YjsState A} {item other : YjsItem A}
+    (h_inv : YjsArrInvariant arr.toList)
+    (h_toItem : input.toItem arr.items = Except.ok item)
+    (h_reach : OriginReachable (YjsPtr.itemPtr item) (YjsPtr.itemPtr other)) :
+    other ∈ (show Array (YjsItem A) from arr) := by
+  have h_arrset : ArrSet arr.toList (YjsPtr.itemPtr other) := by
+    cases h_reach with
+    | reachable_single _ _ h_step =>
+      exact toItem_originStep_in_arrSet h_inv.unique h_toItem _ h_step
+    | reachable_head _ y _ h_step h_reach_tail =>
+      have hy := toItem_originStep_in_arrSet h_inv.unique h_toItem _ h_step
+      exact reachable_in _ _ h_inv.closed _ h_reach_tail hy
+  simpa [ArrSet, YjsState.toList] using h_arrset
+
+/-- If an item is already present in an array, clock safety fails for its id. -/
+private theorem isClockSafe_false_of_mem
+    {input_id : YjsId} {arr : Array (YjsItem A)} {item : YjsItem A}
+    (h_mem : item ∈ arr) (h_id : item.id = input_id) :
+    isClockSafe input_id arr = false := by
+  unfold isClockSafe; simp
+  rw [Array.mem_iff_getElem] at h_mem
+  obtain ⟨ i, hi, hget ⟩ := h_mem
+  exact ⟨ i, hi, by simp [hget, h_id], by simp [hget, h_id] ⟩
+
+/-- Two items resolved from concurrent insert inputs against the same pre-state
+    cannot be origin-reachable from each other. The proof derives a clock-safety
+    contradiction: if item₂ were reachable from item₁, then item₂ already existed
+    in the pre-state, so its id's clock check would fail — contradicting the
+    successful second insert. -/
+theorem concurrent_insert_not_reachable [DecidableEq A]
+    {input₁ input₂ : IntegrateInput A} {item₁ item₂ : YjsItem A}
+    {sa sb : YjsState A}
+    (h_inv : YjsArrInvariant sa.toList)
+    (h_toItem₁ : input₁.toItem sa.items = Except.ok item₁)
+    (h_toItem₂ : input₂.toItem sa.items = Except.ok item₂)
+    (h_item₁_valid : item₁.isValid)
+    (h_ab : (do let arr₂ ← sa.insert input₁; arr₂.insert input₂) = Except.ok sb) :
+    ¬OriginReachable item₁ (YjsPtr.itemPtr item₂) ∧
+    ¬OriginReachable item₂ (YjsPtr.itemPtr item₁) := by
+  obtain ⟨ arr₂, h_ins₁, h_ins₂ ⟩ := Except.bind_eq_ok_exist h_ab
+  have h_ins₁_items : integrateSafe input₁ sa.items = Except.ok arr₂.items := by
+    cases hsafe : integrateSafe input₁ sa.items with
+    | error err => simp [YjsState.insert, hsafe] at h_ins₁
+    | ok arr => simp [YjsState.insert, hsafe] at h_ins₁; cases h_ins₁; simpa [hsafe]
+  constructor
+  · -- item₂ reachable from item₁ ⟹ item₂ ∈ sa ⟹ item₂ ∈ arr₂ ⟹ clock contradiction
+    intro h_reach
+    have h_mem_sa := toItem_reachable_mem h_inv h_toItem₁ h_reach
+    have ⟨ idx, _, h_arr₂_def, _ ⟩ :=
+      YjsArrInvariant_integrateSafe input₁ item₁ sa.items arr₂.items h_inv h_toItem₁ h_item₁_valid h_ins₁_items
+    have h_mem_arr₂ : item₂ ∈ (show Array (YjsItem A) from arr₂) := by
+      rw [h_arr₂_def]
+      by_cases hle : idx ≤ Array.size sa.items
+      · simp [Array.insertIdxIfInBounds, hle, Array.mem_insertIdx, h_mem_sa]
+      · omega
+    have h_id₂ := IntegrateInput.toItem_id_eq input₂ sa item₂ h_toItem₂
+    have h_clock_false := isClockSafe_false_of_mem h_mem_arr₂ h_id₂
+    have h_clock_true : isClockSafe input₂.id arr₂.items = true := by
+      simp [YjsState.insert, integrateSafe] at h_ins₂; split at h_ins₂ <;> [assumption; simp at h_ins₂]
+    rw [h_clock_false] at h_clock_true; exact absurd h_clock_true (by simp)
+  · -- item₁ reachable from item₂ ⟹ item₁ ∈ sa ⟹ clock contradiction on sa directly
+    intro h_reach
+    have h_mem_sa := toItem_reachable_mem h_inv h_toItem₂ h_reach
+    have h_id₁ := IntegrateInput.toItem_id_eq input₁ sa item₁ h_toItem₁
+    have h_clock_false := isClockSafe_false_of_mem h_mem_sa h_id₁
+    have h_clock_true : isClockSafe input₁.id (show Array (YjsItem A) from sa) = true := by
+      simp [YjsState.insert, integrateSafe] at h_ins₁; split at h_ins₁ <;> [assumption; simp at h_ins₁]
+    rw [h_clock_false] at h_clock_true; exact absurd h_clock_true (by simp)
+
 theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network : YjsOperationNetwork A) (i : ClientId) :
   concurrent_commutative (hb := instCausalNetworkElemCausalOrder network.toCausalNetwork) (network.toCausalNetwork.toDeliverMessages i) := by
   intros a b sa sb h_a_mem h_b_mem h_a_b_happens_before havalid hbvalid hab
@@ -789,190 +892,20 @@ theorem YjsOperationNetwork_concurrentCommutative {A} [DecidableEq A] (network :
     | insert bInput =>
       simp [Operation.effect, integrateValidState] at h_ab ⊢
       have h_sa_inv : YjsArrInvariant sa.toList := by
-        simpa [OperationValidity.StateInv] using havalid
+        simpa [ValidatableOperation.StateInv] using havalid
       have h_a_valid_msg : ∃ aItem, aInput.toItem sa = Except.ok aItem ∧ aItem.isValid := by
-        simpa [OperationValidity.isValidState, IsValidMessage] using hbvalid
+        simpa [ValidatableOperation.isValidState, IsValidMessage] using hbvalid
       have h_b_valid_msg : ∃ bItem, bInput.toItem sa = Except.ok bItem ∧ bItem.isValid := by
-        simpa [OperationValidity.isValidState, IsValidMessage] using hab
+        simpa [ValidatableOperation.isValidState, IsValidMessage] using hab
       obtain ⟨ aItem, h_a_toItem, h_a_item_valid ⟩ := h_a_valid_msg
       obtain ⟨ bItem, h_b_toItem, h_b_item_valid ⟩ := h_b_valid_msg
-      have h_diff_client : aInput.id.clientId ≠ bInput.id.clientId := by
-        exact hb_concurrent_diff_id network i
+      have h_diff_client : aInput.id.clientId ≠ bInput.id.clientId :=
+        hb_concurrent_diff_id network i
           (a := YjsOperation.insert aInput) h_a_mem
           (b := YjsOperation.insert bInput) h_b_mem
           h_a_b_happens_before
-      have h_not_reach :
-          ¬OriginReachable aItem (YjsPtr.itemPtr bItem) ∧
-          ¬OriginReachable bItem (YjsPtr.itemPtr aItem) := by
-        obtain ⟨ arr2, h_a_ok, h_b_ok ⟩ := Except.bind_eq_ok_exist h_ab
-        have h_a_ok_items : integrateSafe aInput sa.items = Except.ok arr2.items := by
-          cases hsafe : integrateSafe aInput sa.items with
-          | error err => simp [YjsState.insert, hsafe] at h_a_ok
-          | ok arr =>
-            simp [YjsState.insert, hsafe] at h_a_ok
-            cases h_a_ok
-            simpa [hsafe]
-        constructor
-        · intro h_reach_ab
-          generalize h_a_ptr_def : YjsPtr.itemPtr aItem = a_ptr at h_reach_ab
-          have h_OriginReachableStep_ArrSet : ∀ x,
-            OriginReachableStep a_ptr x → ArrSet sa.toList x := by
-            intro x h_step
-            cases h_step with
-            | reachable o r id c =>
-              simp at h_a_ptr_def
-              have h_to_item := (IntegrateInput.toItem_ok_iff aInput sa aItem h_sa_inv.unique).1 h_a_toItem
-              obtain ⟨ origin, rightOrigin, id', content', hdef, horigin, hrightOrigin, hid, hcontent ⟩ := h_to_item
-              rw [h_a_ptr_def] at hdef
-              cases hdef
-              cases h_originId : aInput.originId with
-              | none =>
-                simp [isLeftIdPtr, h_originId] at horigin
-                subst horigin
-                simp [ArrSet]
-              | some pid =>
-                simp [isLeftIdPtr, h_originId] at horigin
-                obtain ⟨ item, h_eq, h_find ⟩ := horigin
-                subst h_eq
-                simp [ArrSet]
-                simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
-            | reachable_right o r id c =>
-              simp at h_a_ptr_def
-              have h_to_item := (IntegrateInput.toItem_ok_iff aInput sa aItem h_sa_inv.unique).1 h_a_toItem
-              obtain ⟨ origin, rightOrigin, id', content', hdef, horigin, hrightOrigin, hid, hcontent ⟩ := h_to_item
-              rw [h_a_ptr_def] at hdef
-              cases hdef
-              cases h_rightOriginId : aInput.rightOriginId with
-              | none =>
-                simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
-                subst hrightOrigin
-                simp [ArrSet]
-              | some pid =>
-                simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
-                obtain ⟨ item, h_eq, h_find ⟩ := hrightOrigin
-                subst h_eq
-                simp [ArrSet]
-                simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
-
-          have h_b_in_sa_arrset : ArrSet sa.toList (YjsPtr.itemPtr bItem) := by
-            cases h_reach_ab with
-            | reachable_single _ _ h_step =>
-              exact h_OriginReachableStep_ArrSet _ h_step
-            | reachable_head _ y _ h_step h_reach_tail =>
-              apply h_OriginReachableStep_ArrSet at h_step
-              have h_closed : IsClosedItemSet (ArrSet sa.toList) := by
-                exact h_sa_inv.closed
-              exact reachable_in _ _ h_closed _ h_reach_tail h_step
-
-          have h_b_in_sa : bItem ∈ (show Array (YjsItem A) from sa) := by
-            simpa [ArrSet, YjsState.toList] using h_b_in_sa_arrset
-
-          have ⟨ idx_a, _, h_arr2_def, _ ⟩ :=
-            YjsArrInvariant_integrateSafe aInput aItem sa.items arr2.items h_sa_inv h_a_toItem h_a_item_valid h_a_ok_items
-
-          have h_b_in_arr2 : bItem ∈ (show Array (YjsItem A) from arr2) := by
-            rw [h_arr2_def]
-            by_cases hle : idx_a ≤ Array.size sa.items
-            · simp [Array.insertIdxIfInBounds, hle, Array.mem_insertIdx, h_b_in_sa]
-            · exfalso
-              omega
-
-          have h_b_item_id : bItem.id = bInput.id :=
-            IntegrateInput.toItem_id_eq bInput sa bItem h_b_toItem
-
-          have h_clock_false : isClockSafe bInput.id arr2.items = false := by
-            unfold isClockSafe
-            simp
-            rw [Array.mem_iff_getElem] at h_b_in_arr2
-            obtain ⟨ i, hi, hget ⟩ := h_b_in_arr2
-            refine ⟨ i, hi, ?_ ⟩
-            constructor
-            · simp [hget, h_b_item_id]
-            · simp [hget, h_b_item_id]
-
-          have h_clock_true : isClockSafe bInput.id arr2.items = true := by
-            simp [YjsState.insert, integrateSafe] at h_b_ok
-            split at h_b_ok
-            · assumption
-            · simp at h_b_ok
-
-          rw [h_clock_false] at h_clock_true
-          contradiction
-        · intro h_reach_ba
-          generalize h_b_ptr_def : YjsPtr.itemPtr bItem = b_ptr at h_reach_ba
-          have h_OriginReachableStep_ArrSet : ∀ x,
-            OriginReachableStep b_ptr x → ArrSet sa.toList x := by
-            intro x h_step
-            cases h_step with
-            | reachable o r id c =>
-              simp at h_b_ptr_def
-              have h_to_item := (IntegrateInput.toItem_ok_iff bInput sa bItem h_sa_inv.unique).1 h_b_toItem
-              obtain ⟨ origin, rightOrigin, id', content', hdef, horigin, hrightOrigin, hid, hcontent ⟩ := h_to_item
-              rw [h_b_ptr_def] at hdef
-              cases hdef
-              cases h_originId : bInput.originId with
-              | none =>
-                simp [isLeftIdPtr, h_originId] at horigin
-                subst horigin
-                simp [ArrSet]
-              | some pid =>
-                simp [isLeftIdPtr, h_originId] at horigin
-                obtain ⟨ item, h_eq, h_find ⟩ := horigin
-                subst h_eq
-                simp [ArrSet]
-                simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
-            | reachable_right o r id c =>
-              simp at h_b_ptr_def
-              have h_to_item := (IntegrateInput.toItem_ok_iff bInput sa bItem h_sa_inv.unique).1 h_b_toItem
-              obtain ⟨ origin, rightOrigin, id', content', hdef, horigin, hrightOrigin, hid, hcontent ⟩ := h_to_item
-              rw [h_b_ptr_def] at hdef
-              cases hdef
-              cases h_rightOriginId : bInput.rightOriginId with
-              | none =>
-                simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
-                subst hrightOrigin
-                simp [ArrSet]
-              | some pid =>
-                simp [isRightIdPtr, h_rightOriginId] at hrightOrigin
-                obtain ⟨ item, h_eq, h_find ⟩ := hrightOrigin
-                subst h_eq
-                simp [ArrSet]
-                simpa [YjsState.toList] using Array.mem_of_find?_eq_some h_find
-
-          have h_a_in_sa_arrset : ArrSet sa.toList (YjsPtr.itemPtr aItem) := by
-            cases h_reach_ba with
-            | reachable_single _ _ h_step =>
-              exact h_OriginReachableStep_ArrSet _ h_step
-            | reachable_head _ y _ h_step h_reach_tail =>
-              apply h_OriginReachableStep_ArrSet at h_step
-              have h_closed : IsClosedItemSet (ArrSet sa.toList) := by
-                exact h_sa_inv.closed
-              exact reachable_in _ _ h_closed _ h_reach_tail h_step
-
-          have h_a_in_sa : aItem ∈ (show Array (YjsItem A) from sa) := by
-            simpa [ArrSet, YjsState.toList] using h_a_in_sa_arrset
-
-          have h_a_item_id : aItem.id = aInput.id :=
-            IntegrateInput.toItem_id_eq aInput sa aItem h_a_toItem
-
-          have h_clock_false : isClockSafe aInput.id (show Array (YjsItem A) from sa) = false := by
-            unfold isClockSafe
-            simp
-            rw [Array.mem_iff_getElem] at h_a_in_sa
-            obtain ⟨ i, hi, hget ⟩ := h_a_in_sa
-            refine ⟨ i, hi, ?_ ⟩
-            constructor
-            · simp [hget, h_a_item_id]
-            · simp [hget, h_a_item_id]
-
-          have h_clock_true : isClockSafe aInput.id (show Array (YjsItem A) from sa) = true := by
-            simp [YjsState.insert, integrateSafe] at h_a_ok
-            split at h_a_ok
-            · assumption
-            · simp at h_a_ok
-
-          rw [h_clock_false] at h_clock_true
-          contradiction
+      have h_not_reach :=
+        concurrent_insert_not_reachable h_sa_inv h_a_toItem h_b_toItem h_a_item_valid h_ab
       exact insert_commutative aInput bInput aItem bItem sa sb
         h_sa_inv
         h_a_toItem
@@ -2773,7 +2706,7 @@ theorem toItem_isValid_transport_min_bridge {A : Type} [DecidableEq A]
           simp [h_find₀o, h_find₀r] at h_toItem₀
           simpa [h_find_so, h_find_sr] using h_toItem₀
 
-theorem isValidState_insert_from_source {A : Type} [DecidableEq A]
+theorem isValidState_insert_causally {A : Type} [DecidableEq A]
   {network : YjsOperationNetwork A}
   (input : IntegrateInput A)
   (s : Operation.State (YjsOperation A))
@@ -2907,217 +2840,41 @@ theorem YjsOperationNetwork_converge' {A} [DecidableEq A] (network : YjsOperatio
   subst hist_i hist_j
 
   let hb : CausalOrder (YjsOperation A) := instCausalNetworkElemCausalOrder network.toCausalNetwork
-  have h_consistent_i : hb_consistent hb (network.toCausalNetwork.toDeliverMessages i) := by
-    apply hb_consistent_local_history
-  have h_consistent_j : hb_consistent hb (network.toCausalNetwork.toDeliverMessages j) := by
-    apply hb_consistent_local_history
 
-  have h_noDup_i : (network.toCausalNetwork.toDeliverMessages i).Nodup := by
-    apply toDeliverMessages_Nodup
-
-  have h_noDup_j : (network.toCausalNetwork.toDeliverMessages j).Nodup := by
-    apply toDeliverMessages_Nodup
-
-  have h_deliver_mem_of_toDeliver_mem :
-      ∀ {k : ClientId} {m : YjsOperation A},
-        m ∈ network.toCausalNetwork.toDeliverMessages k →
-          Event.Deliver m ∈ network.toCausalNetwork.histories k := by
+  have h_deliver_mem : ∀ {k : ClientId} {m : YjsOperation A},
+      m ∈ network.toCausalNetwork.toDeliverMessages k →
+        Event.Deliver m ∈ network.toCausalNetwork.histories k := by
     intro k m h_mem
     simp [CausalNetwork.toDeliverMessages] at h_mem
     obtain ⟨ ev, h_ev_mem, h_ev_eq ⟩ := h_mem
     cases ev with
-    | Broadcast _ =>
-      simp at h_ev_eq
-    | Deliver m' =>
-      simp at h_ev_eq
-      subst h_ev_eq
-      simpa using h_ev_mem
-
-  have h_toDeliver_mem_of_deliver_mem :
-      ∀ {k : ClientId} {m : YjsOperation A},
-        Event.Deliver m ∈ network.toCausalNetwork.histories k →
-          m ∈ network.toCausalNetwork.toDeliverMessages k := by
-    intro k m h_mem
-    simp [CausalNetwork.toDeliverMessages]
-    exact ⟨ Event.Deliver m, h_mem, by simp ⟩
-
-  have h_closed_i :
-      hbClosed hb (network.toCausalNetwork.toDeliverMessages i) := by
-    intro a b l₁ l₂ h_eq h_b_lt_a
-    have h_a_mem : a ∈ network.toCausalNetwork.toDeliverMessages i := by
-      rw [h_eq]
-      simp
-    have h_deliver_a_mem : Event.Deliver a ∈ network.toCausalNetwork.histories i := by
-      exact h_deliver_mem_of_toDeliver_mem h_a_mem
-    have h_local :
-        locallyOrdered network.toCausalNetwork.toNodeHistories i (Event.Deliver b) (Event.Deliver a) := by
-      exact network.toCausalNetwork.causal_delivery h_deliver_a_mem h_b_lt_a
-    have h_deliver_b_mem : Event.Deliver b ∈ network.toCausalNetwork.histories i := by
-      obtain ⟨ pre, mid, post, h_hist_eq ⟩ := h_local
-      rw [h_hist_eq]
-      simp
-    have h_b_mem : b ∈ network.toCausalNetwork.toDeliverMessages i := by
-      exact h_toDeliver_mem_of_deliver_mem h_deliver_b_mem
-    have h_cons_suffix : hb_consistent hb (a :: l₂) := by
-      apply hb_consistent_sublist (hb := hb) h_consistent_i
-      rw [h_eq]
-      simpa using (List.sublist_append_right (l₁ := a :: l₂) (l₂ := l₁))
-    have h_not_b_in_l₂ : b ∉ l₂ := by
-      intro h_b_in_l₂
-      cases h_cons_suffix with
-      | cons _ _ _ h_no_lt =>
-        exact h_no_lt b h_b_in_l₂ (le_of_lt h_b_lt_a)
-    rw [h_eq] at h_b_mem
-    simp [List.mem_append] at h_b_mem
-    rcases h_b_mem with h_b_in_l₁ | h_b_eq_a | h_b_in_l₂
-    · exact h_b_in_l₁
-    · subst h_b_eq_a
-      exfalso
-      exact lt_irrefl _ h_b_lt_a
-    · exfalso
-      exact h_not_b_in_l₂ h_b_in_l₂
-
-  have h_closed_j :
-      hbClosed hb (network.toCausalNetwork.toDeliverMessages j) := by
-    intro a b l₁ l₂ h_eq h_b_lt_a
-    have h_a_mem : a ∈ network.toCausalNetwork.toDeliverMessages j := by
-      rw [h_eq]
-      simp
-    have h_deliver_a_mem : Event.Deliver a ∈ network.toCausalNetwork.histories j := by
-      exact h_deliver_mem_of_toDeliver_mem h_a_mem
-    have h_local :
-        locallyOrdered network.toCausalNetwork.toNodeHistories j (Event.Deliver b) (Event.Deliver a) := by
-      exact network.toCausalNetwork.causal_delivery h_deliver_a_mem h_b_lt_a
-    have h_deliver_b_mem : Event.Deliver b ∈ network.toCausalNetwork.histories j := by
-      obtain ⟨ pre, mid, post, h_hist_eq ⟩ := h_local
-      rw [h_hist_eq]
-      simp
-    have h_b_mem : b ∈ network.toCausalNetwork.toDeliverMessages j := by
-      exact h_toDeliver_mem_of_deliver_mem h_deliver_b_mem
-    have h_cons_suffix : hb_consistent hb (a :: l₂) := by
-      apply hb_consistent_sublist (hb := hb) h_consistent_j
-      rw [h_eq]
-      simpa using (List.sublist_append_right (l₁ := a :: l₂) (l₂ := l₁))
-    have h_not_b_in_l₂ : b ∉ l₂ := by
-      intro h_b_in_l₂
-      cases h_cons_suffix with
-      | cons _ _ _ h_no_lt =>
-        exact h_no_lt b h_b_in_l₂ (le_of_lt h_b_lt_a)
-    rw [h_eq] at h_b_mem
-    simp [List.mem_append] at h_b_mem
-    rcases h_b_mem with h_b_in_l₁ | h_b_eq_a | h_b_in_l₂
-    · exact h_b_in_l₁
-    · subst h_b_eq_a
-      exfalso
-      exact lt_irrefl _ h_b_lt_a
-    · exfalso
-      exact h_not_b_in_l₂ h_b_in_l₂
-
-  have h_op_id_eq_msg_id : ∀ op : YjsOperation A, WithId.id op = Message.messageId op := by
-    intro op
-    cases op <;> rfl
-
-  have h_id_no_dup_i : IdNoDup (network.toCausalNetwork.toDeliverMessages i) := by
-    unfold IdNoDup
-    rw [List.pairwise_iff_getElem]
-    intro idx₁ idx₂ h_idx₁ h_idx₂ h_idx_lt h_id_eq
-    have h_pairwise_ne_i : List.Pairwise (fun x y => x ≠ y) (network.toCausalNetwork.toDeliverMessages i) := by
-      simpa [List.nodup_iff_pairwise_ne] using h_noDup_i
-    rw [List.pairwise_iff_getElem] at h_pairwise_ne_i
-    have h_msg_id_eq :
-        Message.messageId (network.toCausalNetwork.toDeliverMessages i)[idx₁] =
-          Message.messageId (network.toCausalNetwork.toDeliverMessages i)[idx₂] := by
-      rw [←h_op_id_eq_msg_id (network.toCausalNetwork.toDeliverMessages i)[idx₁]]
-      rw [←h_op_id_eq_msg_id (network.toCausalNetwork.toDeliverMessages i)[idx₂]]
-      exact h_id_eq
-    have h_deliver_mem₁ :
-        Event.Deliver (network.toCausalNetwork.toDeliverMessages i)[idx₁] ∈
-          network.toCausalNetwork.histories i := by
-      apply h_deliver_mem_of_toDeliver_mem
-      exact List.getElem_mem (l := network.toCausalNetwork.toDeliverMessages i) (h := h_idx₁)
-    have h_deliver_mem₂ :
-        Event.Deliver (network.toCausalNetwork.toDeliverMessages i)[idx₂] ∈
-          network.toCausalNetwork.histories i := by
-      apply h_deliver_mem_of_toDeliver_mem
-      exact List.getElem_mem (l := network.toCausalNetwork.toDeliverMessages i) (h := h_idx₂)
-    obtain ⟨ c₁, h_broadcast_mem₁ ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_mem₁
-    obtain ⟨ c₂, h_broadcast_mem₂ ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_mem₂
-    have h_op_eq :
-        (network.toCausalNetwork.toDeliverMessages i)[idx₁] =
-          (network.toCausalNetwork.toDeliverMessages i)[idx₂] := by
-      exact (network.toCausalNetwork.msg_id_unique h_broadcast_mem₁ h_broadcast_mem₂ h_msg_id_eq).2
-    exact h_pairwise_ne_i idx₁ idx₂ h_idx₁ h_idx₂ h_idx_lt h_op_eq
-
-  have h_id_no_dup_j : IdNoDup (network.toCausalNetwork.toDeliverMessages j) := by
-    unfold IdNoDup
-    rw [List.pairwise_iff_getElem]
-    intro idx₁ idx₂ h_idx₁ h_idx₂ h_idx_lt h_id_eq
-    have h_pairwise_ne_j : List.Pairwise (fun x y => x ≠ y) (network.toCausalNetwork.toDeliverMessages j) := by
-      simpa [List.nodup_iff_pairwise_ne] using h_noDup_j
-    rw [List.pairwise_iff_getElem] at h_pairwise_ne_j
-    have h_msg_id_eq :
-        Message.messageId (network.toCausalNetwork.toDeliverMessages j)[idx₁] =
-          Message.messageId (network.toCausalNetwork.toDeliverMessages j)[idx₂] := by
-      rw [←h_op_id_eq_msg_id (network.toCausalNetwork.toDeliverMessages j)[idx₁]]
-      rw [←h_op_id_eq_msg_id (network.toCausalNetwork.toDeliverMessages j)[idx₂]]
-      exact h_id_eq
-    have h_deliver_mem₁ :
-        Event.Deliver (network.toCausalNetwork.toDeliverMessages j)[idx₁] ∈
-          network.toCausalNetwork.histories j := by
-      apply h_deliver_mem_of_toDeliver_mem
-      exact List.getElem_mem (l := network.toCausalNetwork.toDeliverMessages j) (h := h_idx₁)
-    have h_deliver_mem₂ :
-        Event.Deliver (network.toCausalNetwork.toDeliverMessages j)[idx₂] ∈
-          network.toCausalNetwork.histories j := by
-      apply h_deliver_mem_of_toDeliver_mem
-      exact List.getElem_mem (l := network.toCausalNetwork.toDeliverMessages j) (h := h_idx₂)
-    obtain ⟨ c₁, h_broadcast_mem₁ ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_mem₁
-    obtain ⟨ c₂, h_broadcast_mem₂ ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_mem₂
-    have h_op_eq :
-        (network.toCausalNetwork.toDeliverMessages j)[idx₁] =
-          (network.toCausalNetwork.toDeliverMessages j)[idx₂] := by
-      exact (network.toCausalNetwork.msg_id_unique h_broadcast_mem₁ h_broadcast_mem₂ h_msg_id_eq).2
-    exact h_pairwise_ne_j idx₁ idx₂ h_idx₁ h_idx₂ h_idx_lt h_op_eq
-
-  have h_concurrent_commutative : concurrent_commutative (hb := hb) (network.toCausalNetwork.toDeliverMessages i) := by
-    apply YjsOperationNetwork_concurrentCommutative network i
+    | Broadcast _ => simp at h_ev_eq
+    | Deliver m' => simp at h_ev_eq; subst h_ev_eq; simpa using h_ev_mem
 
   let StateSource : YjsOperation A → Prop := fun a => ∃ i, Event.Broadcast a ∈ network.toCausalNetwork.histories i
-  haveI : OperationReplayValidity (A := YjsOperation A) (S := YjsId) (hb := hb) StateSource := {
+  haveI : CausallyValidatableOperation (A := YjsOperation A) (S := YjsId) (hb := hb) StateSource := {
     isValidState_of_history := by
       intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
       cases a with
-      | delete _ _ =>
-        simp [OperationValidity.isValidState, IsValidMessage]
+      | delete _ _ => simp [ValidatableOperation.isValidState, IsValidMessage]
       | insert input =>
-        simpa [OperationValidity.isValidState, IsValidMessage] using
-          (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
-            h_source h_lt h_consistent h_closed h_effect h_nodup)
+        simpa [ValidatableOperation.isValidState, IsValidMessage] using
+          isValidState_insert_causally (network := network) (input := input) (s := s) (l := l)
+            h_source h_lt h_consistent h_closed h_effect h_nodup
   }
 
-  have h := hb_consistent_effect_convergent (s := res₀) (hb := hb)
-    StateSource
+  have h := hb_consistent_effect_convergent (s := res₀) (hb := hb) StateSource
     (network.toCausalNetwork.toDeliverMessages i)
     (network.toCausalNetwork.toDeliverMessages j)
-    (by
-      intro x hx
-      have h_deliver_x_mem : Event.Deliver x ∈ network.toCausalNetwork.histories i := by
-        exact h_deliver_mem_of_toDeliver_mem hx
-      obtain ⟨ c, h_broadcast_x_mem ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_x_mem
-      exact ⟨ c, h_broadcast_x_mem ⟩)
-    (by
-      intro x hx
-      have h_deliver_x_mem : Event.Deliver x ∈ network.toCausalNetwork.histories j := by
-        exact h_deliver_mem_of_toDeliver_mem hx
-      obtain ⟨ c, h_broadcast_x_mem ⟩ := network.toCausalNetwork.deliver_has_a_cause h_deliver_x_mem
-      exact ⟨ c, h_broadcast_x_mem ⟩)
-    h_consistent_i
-    h_consistent_j
-    h_closed_i
-    h_closed_j
-    h_concurrent_commutative
-    h_id_no_dup_i
-    h_id_no_dup_j
+    (fun x hx => let ⟨ c, h ⟩ := network.toCausalNetwork.deliver_has_a_cause (h_deliver_mem hx); ⟨ c, h ⟩)
+    (fun x hx => let ⟨ c, h ⟩ := network.toCausalNetwork.deliver_has_a_cause (h_deliver_mem hx); ⟨ c, h ⟩)
+    (hb_consistent_local_history (network := network.toCausalNetwork) (i := i))
+    (hb_consistent_local_history (network := network.toCausalNetwork) (i := j))
+    (toDeliverMessages_hbClosed (network := network) (i := i))
+    (toDeliverMessages_hbClosed (network := network) (i := j))
+    (YjsOperationNetwork_concurrentCommutative network i)
+    (toDeliverMessages_IdNoDup (network := network) (i := i))
+    (toDeliverMessages_IdNoDup (network := network) (i := j))
     h_hist_mem
     h_res₀
 

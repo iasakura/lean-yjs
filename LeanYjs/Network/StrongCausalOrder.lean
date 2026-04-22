@@ -101,7 +101,7 @@ def effect_list [Operation A] (ops : List A) (s : Operation.State A) :=
   | cons a ops₀ ih =>
     simp [effect_list]
 
-class OperationValidity (A : Type) [Operation A] where
+class ValidatableOperation (A : Type) [Operation A] where
   isValidState : A → Operation.State A → Prop
   StateInv : Operation.State A → Prop := fun _ => True
   stateInv_init : StateInv (Operation.init (A := A))
@@ -111,9 +111,9 @@ class OperationValidity (A : Type) [Operation A] where
     Operation.effect op s = Except.ok s' →
     StateInv s'
 
-class OperationReplayValidity
+class CausallyValidatableOperation
   (A : Type) [DecidableEq A] {S : Type} [DecidableEq S]
-  [Operation A] [OperationValidity A] [WithId A S]
+  [Operation A] [ValidatableOperation A] [WithId A S]
   (hb : CausalOrder A) (StateSource : A → Prop) : Prop where
   isValidState_of_history :
     ∀ {a : A} {s : Operation.State A} {l : List A},
@@ -123,19 +123,19 @@ class OperationReplayValidity
       hbClosed hb l →
       effect_list l (Operation.init (A := A)) = Except.ok s →
       IdNoDup l →
-      OperationValidity.isValidState a s
+      ValidatableOperation.isValidState a s
 end effect
 
 section commutativity
 
 variable {A : Type} [DecidableEq A] {S : Type} [DecidableEq S] {hb : CausalOrder A}
-variable [WithId A S] [Operation A] [OperationValidity A]
+variable [WithId A S] [Operation A] [ValidatableOperation A]
 
 def concurrent_commutative (list : List A) : Prop :=
   ∀ a b (s s' : Operation.State A), a ∈ list → b ∈ list → hb_concurrent hb a b →
-    OperationValidity.StateInv s →
-    OperationValidity.isValidState a s →
-    OperationValidity.isValidState b s →
+    ValidatableOperation.StateInv s →
+    ValidatableOperation.isValidState a s →
+    ValidatableOperation.isValidState b s →
     (Operation.effect a s >>= Operation.effect b) = Except.ok s' → (Operation.effect b s >>= Operation.effect a) = Except.ok s'
 
 theorem Except.bind_eq_ok_exist' {α β : Type} {e : Except α β} {f : β → Except α β'} {v : β'} :
@@ -150,19 +150,19 @@ theorem Except.bind_eq_ok_exist' {α β : Type} {e : Except α β} {f : β → E
     exact h
 
 theorem effect_list_stateInv (StateSource : A → Prop)
-  [OperationReplayValidity (A := A) (S := S) (hb := hb) StateSource] :
+  [CausallyValidatableOperation (A := A) (S := S) (hb := hb) StateSource] :
   ∀ {ops : List A} {s : Operation.State A},
     (∀ op, op ∈ ops → StateSource op) →
     hb_consistent hb ops →
     hbClosed hb ops →
     IdNoDup ops →
     effect_list ops Operation.init = Except.ok s →
-    OperationValidity.StateInv s := by
+    ValidatableOperation.StateInv s := by
   intro ops s h_source h_consistent h_closed h_no_dup h_effect
   induction ops using List.reverseRecOn generalizing s with
   | nil =>
     cases h_effect
-    exact OperationValidity.stateInv_init (A := A)
+    exact ValidatableOperation.stateInv_init (A := A)
   | append_singleton ops a ih =>
     have h_consistent_ops : hb_consistent hb ops := by
       apply hb_consistent_sublist (hb := hb) h_consistent
@@ -187,20 +187,20 @@ theorem effect_list_stateInv (StateSource : A → Prop)
         simpa using h_last_eq
       subst hs_after
       exact h_last_ok
-    have h_stateInv_prev : OperationValidity.StateInv s_prev :=
+    have h_stateInv_prev : ValidatableOperation.StateInv s_prev :=
       ih
         (by
           intro op hop
           exact h_source op (by simp [hop]))
         h_consistent_ops h_closed_ops h_no_dup_ops h_prefix
-    have h_valid_a : OperationValidity.isValidState a s_prev := by
-      refine OperationReplayValidity.isValidState_of_history
+    have h_valid_a : ValidatableOperation.isValidState a s_prev := by
+      refine CausallyValidatableOperation.isValidState_of_history
         (A := A) (S := S) (hb := hb) (StateSource := StateSource)
         (a := a) (s := s_prev) (l := ops) ?_ ?_ h_consistent_ops h_closed_ops h_prefix h_no_dup_ops
       · exact h_source a (by simp)
       · intro x hx_lt
         exact h_closed a x ops [] (by simp) hx_lt
-    exact OperationValidity.stateInv_effect (A := A) a s_prev s h_stateInv_prev h_valid_a h_last
+    exact ValidatableOperation.stateInv_effect (A := A) a s_prev s h_stateInv_prev h_valid_a h_last
 
 @[grind .] theorem hb_consistent_concurrent (a : A) (ops₀ ops₁ : List A) :
   hb_consistent hb (ops₀ ++ a :: ops₁) →
@@ -300,7 +300,7 @@ theorem hb_consistent_swap (ops₀ ops₁ : List A) (a b : A) :
         exact h_no_lt_x y hy' hle
 
 theorem hb_concurrent_effect_list_reorder (StateSource : A → Prop)
-  [OperationReplayValidity (A := A) (S := S) (hb := hb) StateSource]
+  [CausallyValidatableOperation (A := A) (S := S) (hb := hb) StateSource]
   {s : Operation.State A} :
   (∀ x, x ∈ (ops₀ ++ a :: ops₁) → StateSource x) →
   concurrent_commutative (hb := hb) (ops₀ ++ a :: ops₁) →
@@ -327,7 +327,7 @@ theorem hb_concurrent_effect_list_reorder (StateSource : A → Prop)
         simp; assumption
       grind [Except.bind_eq_ok_exist]
     obtain ⟨ u, h_effects_eq, h_effect_b_eq ⟩ := Except.bind_eq_ok_exist h
-    have h_stateInv_u : OperationValidity.StateInv u := by
+    have h_stateInv_u : ValidatableOperation.StateInv u := by
       apply effect_list_stateInv (hb := hb) (S := S) (StateSource := StateSource) (ops := ops₀)
       · intro x hx
         exact h_source x (by simp [hx])
@@ -342,7 +342,7 @@ theorem hb_concurrent_effect_list_reorder (StateSource : A → Prop)
       . simp
       . grind [hb_concurrent_symm]
       . exact h_stateInv_u
-      . refine OperationReplayValidity.isValidState_of_history
+      . refine CausallyValidatableOperation.isValidState_of_history
           (A := A) (S := S) (hb := hb) (StateSource := StateSource)
           (a := a) (s := u) (l := ops₀) ?_ ?_ ?_ ?_ h_effects_eq ?_
         · exact h_source a (by simp)
@@ -351,7 +351,7 @@ theorem hb_concurrent_effect_list_reorder (StateSource : A → Prop)
         · grind [hb_consistent_sublist]
         · grind [hbClosed]
         · grind [IdNoDup]
-      . refine OperationReplayValidity.isValidState_of_history
+      . refine CausallyValidatableOperation.isValidState_of_history
           (A := A) (S := S) (hb := hb) (StateSource := StateSource)
           (a := b) (s := u) (l := ops₀) ?_ ?_ ?_ ?_ h_effects_eq ?_
         · exact h_source b (by simp)
@@ -503,7 +503,7 @@ theorem mem_ops0_prefix_iff_ops1
         simpa [List.append_assoc] using hx_all
 
 theorem hb_consistent_effect_convergent (StateSource : A → Prop)
-  [OperationReplayValidity (A := A) (S := S) (hb := hb) StateSource]
+  [CausallyValidatableOperation (A := A) (S := S) (hb := hb) StateSource]
   (ops₀ ops₁ : List A) (s : Operation.State A)
   (h_source₀ : ∀ x, x ∈ ops₀ → StateSource x)
   (h_source₁ : ∀ x, x ∈ ops₁ → StateSource x)
@@ -655,7 +655,7 @@ by
             simpa [effect_list_append] using h
           have h_closed_prefix : hbClosed hb (ops₀_first ++ ops₀_last) :=
             hbClosed_remove_concurrent (hb := hb) ops₀_first ops₀_last a b hclosed₀ h_a_concurrent_ops₀_last
-          have h_stateInv_s' : OperationValidity.StateInv s' := by
+          have h_stateInv_s' : ValidatableOperation.StateInv s' := by
             apply effect_list_stateInv (hb := hb) (S := S) (StateSource := StateSource) (ops := ops₀_first ++ ops₀_last)
             · intro x hx
               exact h_source₀ x (by
@@ -689,7 +689,7 @@ by
               exact And.intro h_not_b_le_a h_not_a_le_b
             · exact h_stateInv_s'
             · -- isValidState b s'
-              refine OperationReplayValidity.isValidState_of_history
+              refine CausallyValidatableOperation.isValidState_of_history
                 (A := A) (S := S) (hb := hb) (StateSource := StateSource)
                 (a := b) (s := s') (l := ops₀_first ++ ops₀_last) ?_ ?_ ?_ ?_ h_eff ?_
               · exact h_source₀ b (by simp [List.mem_append, List.append_assoc])
@@ -701,7 +701,7 @@ by
               · exact h_closed_prefix
               · grind [IdNoDup]
             · -- isValidState a s'
-              refine OperationReplayValidity.isValidState_of_history
+              refine CausallyValidatableOperation.isValidState_of_history
                 (A := A) (S := S) (hb := hb) (StateSource := StateSource)
                 (a := a) (s := s') (l := ops₀_first ++ ops₀_last) ?_ ?_ ?_ ?_ h_eff ?_
               · exact h_source₀ a (by simp [List.mem_append, List.append_assoc])
