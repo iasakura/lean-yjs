@@ -37,6 +37,7 @@
 \newcommand{\histories}{\mathcal{H}}
 \newcommand{\Deliver}{\mathsf{Deliver}}
 \newcommand{\Broadcast}{\mathsf{Broadcast}}
+\newcommand{\Delivered}[1]{\mathit{delivered}_{#1}}
 
 \copyrightyear{2025}
 \acmYear{2025}
@@ -58,12 +59,12 @@ counterexample in Lean~4.  To close this gap, we introduce a
 \emph{conditional commutativity} framework that requires commutativity only
 on states satisfying an invariant maintained by causal delivery.  We prove a
 generic convergence theorem within this framework and instantiate it for Yjs,
-obtaining the first complete machine-checked proof that the Yjs integration
-algorithm achieves strong eventual consistency.  The instantiation requires a
-mechanized strict total order on Yjs items, a loop-invariant argument for the
-integration scan, and a transport lemma carrying broadcast-time item validity
-to any causally compatible state.  The entire development is formalized in
-Lean~4 with no axioms beyond those of its type theory.
+obtaining the first complete machine-checked proof that the Yjs core CRDT
+algorithm achieves strong eventual consistency.  The instantiation establishes
+that Yjs insert and delete operations preserve a strict total order on items
+and rests on a transport lemma carrying broadcast-time item validity to any
+causally compatible state.  The entire development is formalized in Lean~4
+with no axioms beyond those of its type theory.
 \end{abstract}
 
 \maketitle
@@ -77,23 +78,14 @@ Lean~4 with no axioms beyond those of its type theory.
 %% P1: Motivation
 Yjs~\cite{Yjs2023} is one of the most widely deployed conflict-free replicated
 data type (CRDT) implementations, powering collaborative editors such as
-ProseMirror and CodeMirror~6.  Despite its practical importance, Yjs lacks a
-complete correctness proof.  The YATA paper~\cite{Nicolaescu2016}, which
-describes the algorithm underlying Yjs, provides only partial proofs for
-selected lemmas, and a bug was later discovered in the original algorithm that
-required a fix in the Yjs implementation.
-
-%% P2: How Yjs works (intuitive)
-Yjs resolves concurrent insertions by recording, for each item, an
-\emph{origin} (left neighbor at creation time) and a \emph{right-origin}
-(right neighbor at creation time).  When multiple clients insert items
-targeting overlapping positions, the integration scan walks from the origin
-to the right-origin, comparing each encountered item against the new one
-using a deterministic tiebreaker based on origin positions and client
-identifiers.
+TipTap.  Despite its practical importance, Yjs lacks a complete correctness
+proof.  The YATA paper~\cite{Nicolaescu2016}, which describes the algorithm
+underlying Yjs, provides only partial proofs for selected lemmas, and we
+later discovered a bug in the original algorithm that required a fix in the
+Yjs implementation~\cite{YjsBugDiscussion2024}.
 
 %% P3: Standard proof pattern — unconditional commutativity
-A standard proof technique for operation-based CRDTs is
+A standard proof technique for operation-based CRDTs~\cite{Shapiro2011} is
 \emph{unconditional commutativity}: for all operations $x$, $y$ and
 every state~$s$,
 $\effect(x, \effect(y, s)) = \effect(y, \effect(x, s))$.
@@ -116,7 +108,7 @@ to break the property entirely.
 %% P5: Our solution — conditional commutativity
 We address this with \emph{conditional commutativity}: for all operations
 $x$, $y$ and every state~$s$,
-if $\Phi(s)$, $\mathit{Valid}(x, s)$, and $\mathit{Valid}(y, s)$, then
+if $\mathit{Valid}(x, s)$ and $\mathit{Valid}(y, s)$, then
 $\effect(x, \effect(y, s)) = \effect(y, \effect(x, s))$.  This alone is
 not enough---the convergence proof reorders operations, so an operation
 may be applied against a different state than the one it was broadcast
@@ -124,40 +116,33 @@ against.  We therefore require a second condition, \emph{causal validity}:
 each broadcast operation remains valid at every state produced by an
 $\hb$-consistent execution containing its causal predecessors.  Together,
 conditional commutativity and causal validity yield a generic convergence
-theorem (Theorem~\ref{thm:generic-conv}) that is independent of Yjs.
-We instantiate it for Yjs, obtaining the first complete machine-checked
-proof of strong eventual consistency for the Yjs integration algorithm
-(Theorem~\ref{thm:yjs-convergence}).
-
-%% P5: Scope
-Our formalization models the core Yjs integration algorithm with insert and
-delete operations under an abstract causal network.  Items are represented using
-a pointer-embedded model in which origins and right-origins are stored as direct
-pointers.  We do not model garbage collection, undo/redo, subdocuments, or the
-awareness protocol; the artifact also contains an alternative indirect variant
-(\texttt{LeanYjs/Indirect}) where items reference origins by identifier, though
-its verification is not complete.
+theorem (Theorem~\ref{thm:generic-conv}) that is independent of any
+particular CRDT.  We instantiate it for Yjs, obtaining the first complete
+machine-checked proof of strong eventual consistency for the Yjs core
+CRDT algorithm (Theorem~\ref{thm:yjs-convergence}).
 
 %% P6: Contributions
-This work makes three contributions.
+This work makes two contributions.
 \begin{enumerate}
 \item \textbf{A generic conditional commutativity convergence framework.}
-  We generalize the standard commutativity-based convergence argument to
-  require commutativity only on invariant-satisfying states, formalized as a
-  reusable theorem in Lean~4 with a bubble-sort reordering proof.  We
-  accompany this with a mechanized counterexample showing that unconditional
-  commutativity fails for Yjs.
-\item \textbf{First formal verification of the Yjs integration algorithm.}
+  We identify that unconditional concurrent commutativity fails for Yjs
+  (exhibited as a mechanized counterexample) and, to overcome this, we
+  generalize the standard commutativity-based convergence argument to require
+  commutativity only on invariant-satisfying states, formalized as a reusable
+  theorem in Lean~4.  The proof establishes convergence by reordering the
+  delivery list through repeated swaps of adjacent concurrent operations.
+\item \textbf{First formal verification of the Yjs core CRDT algorithm.}
   We instantiate the generic framework for Yjs, providing the first
   machine-checked proof that the core algorithm achieves strong eventual
-  consistency.  The instantiation requires a strict total order on items, a
-  loop-invariant argument for the integration scan, and a transport lemma
-  carrying broadcast-time validity to any causally compatible state.
-\item \textbf{A mechanized strict total order on Yjs items.}
-  We prove totality, transitivity, and asymmetry of the Yjs item order,
-  together with a no-cross-origin lemma that is central to the integration
-  proof.  The order definition carefully balances the inference rules so that
-  both transitivity and asymmetry can be recovered via size-based induction.
+  consistency.  Our main lemma is the preservation of the total order on items
+  by the Yjs insert and delete operations.  In particular, the insert
+  operation is defined by a non-trivial procedural loop, and establishing its
+  order-preserving behavior requires discovering a four-part invariant
+  maintained by the scan.  We also mechanize a strict total order on Yjs
+  items---with totality, transitivity, and asymmetry---together with a
+  no-cross-origin lemma that drives the preservation proof; the inference
+  rules of the order are carefully balanced so that transitivity and asymmetry
+  can be recovered via size-based induction.
 \end{enumerate}
 
 %% P7: Paper organization
@@ -168,26 +153,41 @@ conditional commutativity and gives an overview of the proof architecture.
 Sections~\ref{sec:order}--\ref{sec:convergence} develop the proof.
 Section~\ref{sec:related} discusses related work, and
 Section~\ref{sec:conclusion} concludes.
-Detailed proof sketches for the order-theoretic properties appear in
+Detailed proofs for the order-theoretic properties appear in
 Appendix~\ref{app:order-proofs}.
 
 %%
 %% -------------------------------------------------------------------
-\section{Definitions and Main Theorem}
+\section{Network and Execution Model}
 \label{sec:definitions}
 %%
 
-This section defines a generic operation network model (following
-Gomes et al.~\cite{Gomes2017}), instantiates it with Yjs-specific data types,
-and states the main convergence theorem.
+This section formalizes the setting in which Yjs operates.  We first fix a
+generic operation network model, following Gomes et al.~\cite{Gomes2017}, that
+captures operation-based CRDT executions under causal delivery.  We then
+specialize it with Yjs-specific data structures and state the main convergence
+theorem.
 
 %%
 \subsection{Network Model}
 \label{subsec:network}
 %%
 
+Our goal in this subsection is to formalize what it means for a collection of
+replicas to execute an operation-based CRDT.  A network consists of several
+replicas indexed by a set $N$; each replica maintains a local sequence of
+events that records, in order, the \emph{broadcast} of a locally issued
+operation and the \emph{deliver} events at which operations (either local or
+remote) are applied to the local state.  A broadcast event disseminates the
+operation to other replicas, whereas a deliver event is the single site at
+which operations actually modify the state.  On top of this bare structure, we
+add a causality condition (so the dependency order of broadcasts is respected
+on delivery) and then equip operations with a transition semantics.  The
+resulting model is a mild reformulation of the OOPSLA'17 framework of
+Gomes~et~al.~\cite{Gomes2017}.
+
 %% P1: Messages, Events, Node Histories, Local Ordering
-The network model is parameterized by a message type~$A$.
+The model is parameterized by a message type~$A$.
 Each message $m \in A$ carries an identifier $\mathit{msgId}(m) \in M$
 that uniquely determines it.
 
@@ -199,14 +199,16 @@ An \emph{event} is either the broadcast or delivery of a message:
 \end{definition}
 
 \begin{definition}[Node history (\leanref{NodeHistories})]\label{def:node-history}
-A \emph{node history} $H_i$ for node $i$ is a duplicate-free list of events.
-For events $e_1, e_2 \in H_i$ we write $e_1 <_i e_2$ (\emph{locally ordered})
-when $e_1$ appears before $e_2$ in $H_i$.
+Fix a set $N$ of node identifiers.  A \emph{node history} $H_i$ for node
+$i \in N$ is a duplicate-free list of events.  For events $e_1, e_2 \in H_i$
+we write $e_1 <_i e_2$ (\emph{locally ordered}) when $e_1$ appears before
+$e_2$ in $H_i$.
 \end{definition}
 
-%% P2: Network Base, Happens-Before, Causal Network
-\begin{definition}[Network base (\leanref{NetworkBase})]\label{def:network-base}
-A \emph{network base} is a collection of node histories $\{H_i\}$ satisfying:
+%% P2: Network, Happens-Before, Causal Network
+\begin{definition}[Network (\leanref{NetworkBase})]\label{def:network-base}
+A \emph{network} is a collection of node histories
+$\{H_i \mid i \in N\}$ satisfying the following properties:
 \begin{itemize}
 \item[(N1)] Every delivered message has a broadcasting node:
   $\Deliver(m) \in H_i \Rightarrow \exists j.\; \Broadcast(m) \in H_j$.
@@ -217,6 +219,11 @@ A \emph{network base} is a collection of node histories $\{H_i\}$ satisfying:
   $\Rightarrow m_1 = m_2$.
 \end{itemize}
 \end{definition}
+
+Operation-based CRDTs rely on a \emph{causal network}: the network is required
+to deliver messages in an order that respects the happens-before relation of
+Lamport~\cite{Lamport1978}, so that every message encounters its causal
+predecessors at replay time.  We make this precise next.
 
 \begin{definition}[Happens-before (\leanref{HappensBefore})]\label{def:happens-before}
 The \emph{happens-before} relation $\hb$ is the least relation satisfying:
@@ -236,7 +243,7 @@ The \emph{happens-before} relation $\hb$ is the least relation satisfying:
 \end{definition}
 
 \begin{definition}[Causal network (\leanref{CausalNetwork})]\label{def:causal-network}
-A \emph{causal network} extends a network base with the axiom that if
+A \emph{causal network} extends a network with the property that if
 $m_2$ is delivered at node~$i$ and $m_1 \hb m_2$, then $\Deliver(m_1) <_i
 \Deliver(m_2)$.
 \end{definition}
@@ -245,32 +252,55 @@ $m_2$ is delivered at node~$i$ and $m_1 \hb m_2$, then $\Deliver(m_1) <_i
 So far, the message type~$A$ only carries an identifier.
 An \emph{operation network} equips messages with additional structure---a
 state-transition semantics and a validity predicate---so that messages can be
-interpreted as state-transforming operations.
+interpreted as state-transforming operations.  We first define the
+state-transition structure, then the delivered-message projection that turns a
+history into the sequence of operations that actually affect state, and
+finally the validity predicate.
 
 \begin{definition}[Operation (\leanref{Operation})]\label{def:operation}
-An \emph{operation structure} on a message type~$A$ consists of a state type
-$\mathit{St}$, an error type $\mathit{Err}$, an initial state
-$\init \in \mathit{St}$, and a partial effect function
-$\effect : A \to \mathit{St} \to \mathit{St} + \mathit{Err}$.
+An \emph{operation structure} on a message type~$A$ is a tuple
+$(\mathit{St},\; \init,\; \effect)$ where
+$\mathit{St}$ is the set of states,
+$\init \in \mathit{St}$ is the initial state, and
+$\effect : A \to \mathit{St} \to \mathit{St}_\bot$ is a partial effect
+function; here $\mathit{St}_\bot = \mathit{St} + \{\bot\}$ denotes the state
+type extended with a single failure value, written $\bot$.\footnote{In
+the Lean~4 artifact the failure value carries a string error message
+(\leanref{Err}); we omit this detail here because the error payload plays no
+role in the proofs.}
 \end{definition}
+\noindent
 We write $\interpOps(ms, s)$ for the result of folding $\effect$ over a message
 list~$ms$ starting from state~$s$.
+
+\begin{definition}[Delivered messages]\label{def:delivered}
+The \emph{delivered messages} at node~$i$, written
+$\Delivered{i}(H_i)$, is the sublist of $H_i$ consisting of all
+$\Deliver$ events projected to their message payloads.
+\end{definition}
+\noindent
+Because broadcasts have no effect, the local state at node~$i$ after running
+the history $H_i$ is precisely
+$\interpOps(\Delivered{i}(H_i),\, \init)$.
 
 \begin{definition}[Operation network (\leanref{OperationNetwork})]\label{def:operation-network}
 An \emph{operation network} extends a causal network whose message type~$A$
 is equipped with both an operation structure
 (Definition~\ref{def:operation}) and a validity predicate
-$\mathit{isValid} : \mathit{St} \to A \to \mathit{Prop}$.
-It requires that every broadcast is valid at the current local state: for
-every node history $H_i$ with $H_i = \mathit{pre} \mathbin{+\!\!+}
+$\mathit{isValid} : \mathit{St} \to A \to \mathit{Prop}$, subject to the
+following condition.
+\begin{itemize}
+\item[(V)] \emph{Broadcast validity.} For every node history $H_i$ with
+$H_i = \mathit{pre} \mathbin{+\!\!+}
 [\Broadcast(m)] \mathbin{+\!\!+} \mathit{post}$, there exists a state $s$
-such that $\interpOps(\mathit{pre}, \init) = \mathit{Ok}(s)$ and
+such that $\interpOps(\Delivered{i}(\mathit{pre}), \init) = s$ and
 $\mathit{isValid}(s, m)$ holds.
-
-The \emph{delivered messages} at node~$i$, written $\mathit{Del}(i)$, is the
-sublist of $H_i$ consisting of all $\Deliver$ events projected to their message
-payloads.
+\end{itemize}
 \end{definition}
+\noindent
+Condition~(V) is the OOPSLA'17 valid-message property~\cite{Gomes2017}: every
+locally broadcast message must be valid at the local state reached just before
+the broadcast.
 
 %%
 \subsection{Yjs Data Model}
@@ -279,45 +309,51 @@ payloads.
 
 We now define the data structures that represent a Yjs document.
 A document is a sequence of \emph{items}, each recording the neighbors it was
-inserted between (its \emph{origin} and \emph{right-origin}).
+inserted between (its \emph{origin} and \emph{right-origin}).  This subsection
+fixes those data structures; we make no attempt to model garbage collection,
+undo/redo, subdocuments, or the awareness protocol of the Yjs
+manual~\cite{Yjs2023}.
 
 %% P4: YjsId, YjsPtr, YjsItem
 \begin{definition}[Yjs identifier (\leanref{YjsId})]\label{def:yjs-id}
 A \emph{Yjs identifier} pairs a client identifier with a logical clock:
 $\mathit{YjsId} = \mathit{ClientId} \times \mathbb{N}$.
-Identifiers are ordered lexicographically (first by client ID, then
-\emph{decreasingly} by clock, so that higher clocks compare as smaller within
-the same client).
+Identifiers are compared lexicographically.
 \end{definition}
 
-\begin{definition}[Yjs pointer (\leanref{YjsPtr})]\label{def:yjs-ptr}
-\emph{Yjs pointers} extend items with two sentinels:
-\[
-  p \bnfdef \First \bnfmid \Last \bnfmid \langle x \rangle
-\]
-where $\First$ and $\Last$ are the left and right sentinels of every document.
-\end{definition}
+Each item records who its immediate left and right neighbors were at the
+moment of the originating broadcast.  Because the endpoints of a document
+have no such neighbors, we introduce two sentinel pointers, $\First$ and
+$\Last$, so that insertions at either end still have well-defined origins.
+A pointer is therefore either one of these sentinels or a reference to
+another item; in particular, pointers and items are mutually recursive.
 
-\begin{definition}[Yjs item (\leanref{YjsItem})]\label{def:yjs-item}
-A \emph{Yjs item} bundles an origin pointer, a right-origin pointer, an
-identifier, and a content value:
-\[
-  \mathit{YjsItem} = \{
+\begin{definition}[Yjs pointer and item (\leanref{YjsPtr}, \leanref{YjsItem})]
+\label{def:yjs-item}
+\emph{Yjs pointers}~$p$ and \emph{Yjs items}~$x$ are defined by mutual
+recursion:
+\begin{align*}
+  p &\bnfdef \First \bnfmid \Last \bnfmid \langle x \rangle \\
+  x &\bnfdef \{
     \mathit{origin} : p,\;
     \mathit{rightOrigin} : p,\;
     \mathit{id} : \mathit{YjsId},\;
     \mathit{content} : A \}
-\]
-Items are mutually recursive with pointers: a pointer may embed an item, giving
-origin and right-origin chains their tree structure.\footnote{The artifact also
-contains an alternative \emph{indirect} variant in which items reference their
-origin and right-origin by identifier rather than by direct pointer embedding,
-found in \texttt{LeanYjs/Indirect}.}
+\end{align*}
+The $\mathit{origin}$ and $\mathit{rightOrigin}$ fields store the left and
+right neighbors the item was inserted between at broadcast time, using
+$\First$ or $\Last$ as sentinels when the item is inserted at a document
+boundary.\footnote{The Lean~4 formalization embeds items directly inside
+pointers, making origins concrete sub-terms; the real Yjs implementation
+instead references origins by identifier.  The artifact contains an
+alternative \emph{indirect} variant (\texttt{LeanYjs/Indirect}) that follows
+the implementation faithfully, though its verification is not complete.}
 \end{definition}
 
 %% P5: YjsState, deletion
 \begin{definition}[Yjs state (\leanref{YjsState})]\label{def:yjs-state}
-A \emph{Yjs state} consists of an array of live items together with a set of
+A \emph{Yjs state} consists of an array of all items inserted so far
+(including those that have since been deleted) together with a set of
 deleted identifiers:
 \[
   \mathit{YjsState}(A) = \{
@@ -334,42 +370,51 @@ the anchor points needed by subsequent insertions.
 \label{subsec:yjs-network}
 %%
 
-To apply the generic network model to Yjs, we must define the message type,
-its operation structure (state and effect), and the validity predicate.
+To specialize the generic operation network model of
+\S\ref{subsec:network} to Yjs, we give the message type, its operation
+structure, and the validity predicate; we additionally impose two
+Yjs-specific well-formedness properties on how clients issue broadcasts.
 
-%% P6: YjsOperation, Effect, Integration Algorithm, YjsOperationNetwork
+%% P6: YjsOperation, Effect, Insert Algorithm, YjsOperationNetwork
 \begin{definition}[Yjs operation (\leanref{YjsOperation})]\label{def:yjs-operation}
 A \emph{Yjs operation} either inserts a new item or marks an existing one as
 deleted:
-\[
-  \mathit{op}
-    \bnfdef \mathsf{Insert}(\mathit{inp})
-    \bnfmid \mathsf{Delete}(\mathit{id},\, \mathit{deletedId})
-\]
-where $\mathit{inp}$ is an \emph{integrate input} recording the IDs of the
-origin and right-origin neighbors, the content, and the new item's ID.
-This instantiates Definition~\ref{def:operation} with
+\begin{align*}
+  \mathit{op} &\bnfdef \mathsf{Insert}(\mathit{inp})
+                \bnfmid \mathsf{Delete}(\mathit{id},\, \mathit{deletedId}) \\
+  \mathit{inp} &\bnfdef \{
+    \mathit{originId} : \mathit{YjsId},\;
+    \mathit{rightOriginId} : \mathit{YjsId},\; \\
+  &\qquad\; \mathit{content} : A,\;
+    \mathit{id} : \mathit{YjsId} \}
+\end{align*}
+where $\mathit{inp}$ is an \emph{insert input} recording the identifiers of
+the origin and right-origin neighbors, the content, and the new item's
+identifier.  This instantiates Definition~\ref{def:operation} with
 $\mathit{St} = \mathit{YjsState}$,
-$\mathit{Err} = \mathsf{String}$,
 $\mathit{init} = ([\,],\; \emptyset)$, and
 \[
   \effect(\mathit{op},\, \sigma) \;=\;
   \begin{cases}
     \mathit{insert}(\sigma,\, \mathit{inp})
       & \text{if } \mathit{op} = \mathsf{Insert}(\mathit{inp}) \\
-    \mathit{Ok}(\mathit{deleteById}(\sigma,\, \mathit{did}))
+    \mathit{deleteById}(\sigma,\, \mathit{did})
       & \text{if } \mathit{op} = \mathsf{Delete}(\mathit{id},\, \mathit{did})
   \end{cases}
 \]
 Deletion simply adds $\mathit{did}$ to the tombstone set, so it always
-succeeds.  Insertion is defined by the \emph{integration algorithm}, which
-resolves the insertion position among conflicting items:
+succeeds.  Insertion is defined by Algorithm~\ref{alg:integrate}: starting
+from the origin, the scan walks rightward through the existing items,
+comparing each encountered item against the new one using the order
+developed in \S\ref{sec:order}, and inserts the new item at the first
+position where no conflicting item precedes it.  The detailed invariant
+maintained by the loop is analyzed in \S\ref{sec:algorithm}.
 \end{definition}
 
-\begin{algorithm}
-\caption{Yjs integration algorithm}\label{alg:integrate}
+\begin{algorithm}[t]
+\caption{Yjs insert algorithm}\label{alg:integrate}
 \begin{algorithmic}[1]
-\Require{integrate input $\mathit{inp}$, items array $\mathit{arr}$}
+\Require{insert input $\mathit{inp}$, items array $\mathit{arr}$}
 \State $\mathit{leftIdx} \gets \mathit{findIndex}(\mathit{inp.originId},\, \mathit{arr})$
 \Comment{$-1$ if origin is $\First$}
 \State $\mathit{rightIdx} \gets \mathit{findIndex}(\mathit{inp.rightOriginId},\, \mathit{arr})$
@@ -400,16 +445,17 @@ resolves the insertion position among conflicting items:
 \end{algorithm}
 
 \begin{definition}[Yjs operation network (\leanref{YjsOperationNetwork})]\label{def:yjs-op-network}
-A \emph{Yjs operation network} extends the operation network with two axioms:
+A \emph{Yjs operation network} is an operation network on the Yjs operation
+type satisfying the following Yjs-specific properties on broadcasts:
 \begin{itemize}
 \item[(Y1)] \textbf{Client ID consistency.} Every operation broadcast by node
   $i$ carries client ID $i$.
-\item[(Y2)] \textbf{Clock uniqueness.} Each client assigns strictly increasing
-  clocks: no two distinct broadcast operations from the same client share a
-  clock value.
+\item[(Y2)] \textbf{Clock monotonicity.} The clock component of the
+  identifiers broadcast by a single client is strictly increasing along the
+  local history.
 \end{itemize}
-These axioms ensure that Yjs item identifiers are globally unique, which is
-required by the invariant.
+Both properties hold in any faithful Yjs implementation; they ensure, in
+particular, that item identifiers are globally unique.
 \end{definition}
 
 %%
@@ -423,21 +469,27 @@ We can now state the main convergence result.
 \begin{theorem}[Yjs Convergence, \leanref{YjsOperationNetwork\_converge'}]
 \label{thm:convergence}
 For any Yjs operation network and any two nodes $i$, $j$, if
-$\mathit{Del}(i) = \mathit{Del}(j)$ (as sets), then
-$\interpOps(\mathit{Del}(i), \init) = \interpOps(\mathit{Del}(j), \init)$.
+$\Delivered{i}(H_i) \approx \Delivered{j}(H_j)$ (equality as sets), then
+$\interpOps(\Delivered{i}(H_i), \init) =
+ \interpOps(\Delivered{j}(H_j), \init)$.
 \end{theorem}
 
 \noindent
-That is, any two nodes that have delivered the same set of operations will have
-equal states.  This theorem covers the core Yjs integration algorithm with
-insert and delete operations under the abstract causal network model defined
-above.  It does not cover garbage collection, undo/redo, or subdocuments.
+Here $\approx$ denotes that the two lists contain the same set of messages;
+the ordering may differ.  That is, any two nodes that have delivered the same
+set of operations converge to equal states.
 
 %%
 %% -------------------------------------------------------------------
 \section{Overview}
 \label{sec:overview}
 %%
+
+This section motivates the shape of our proof.  We first demonstrate that
+the standard, unconditional commutativity strategy cannot be used for Yjs
+by exhibiting a concrete counterexample; we then sketch how a conditional
+commutativity argument recovers convergence and indicate how the remaining
+sections fit together.
 
 \subsection{Counterexample: Unconditional Commutativity Fails}
 
@@ -446,10 +498,10 @@ We exhibit a mechanized counterexample
 insert operations can produce different results depending on delivery order.
 
 \smallskip\noindent\textbf{Initial state.}
-The items array contains two items:
+Consider a document \texttt{"ab"} consisting of two items produced by two
+earlier (concurrent) insert operations:
 $a$ (content \texttt{"a"}, id $(0,0)$, origin $\First$, right-origin $\Last$)
-and $b$ (content \texttt{"b"}, id $(1,0)$, origin $a$, right-origin $\Last$),
-yielding the document \texttt{"ab"}.
+and $b$ (content \texttt{"b"}, id $(1,0)$, origin $a$, right-origin $\Last$).
 
 \smallskip\noindent\textbf{Concurrent operations.}
 \begin{itemize}
@@ -461,22 +513,26 @@ yielding the document \texttt{"ab"}.
 
 \smallskip\noindent\textbf{Two delivery orders.}
 \begin{center}
-\begin{tabular}{lll}
-  Order & Result & String \\
+\begin{tabular}{ll}
+  Order & Result \\
   \hline
-  $o$ then $n$ & $[\,a,\, n,\, o,\, b\,]$ & \texttt{"anob"} \\
-  $n$ then $o$ & $[\,a,\, o,\, b,\, n\,]$ & \texttt{"aobn"}
+  $o$ then $n$ & $[\,a,\, n,\, o,\, b\,]$ \\
+  $n$ then $o$ & $[\,a,\, o,\, b,\, n\,]$
 \end{tabular}
 \end{center}
 
 \smallskip\noindent\textbf{Root cause.}
-Item~$o$ has origin $\First$ and right-origin $b$, so its interval spans the
-already-inserted item~$a$.  This violates the structural invariant~I2
-(\S\ref{sec:order}), which requires that no item reachable from~$o$ lies
-strictly between its origin and right-origin.  Under causal delivery, $o$'s
-insertion would have to precede~$a$'s, so the initial state above is
-\emph{unreachable}---but it demonstrates that unconditional commutativity
-fails as a property of the effect function.
+In isolation each of the four items is perfectly well-formed: their origin
+and right-origin fields name existing pointers and the algorithm accepts
+them individually.  The anomaly is that insert operations are generated with
+\emph{adjacent} neighbors at broadcast time; item $o$ was broadcast with
+origin $\First$ and right-origin $b$ because, at the generating replica, no
+item lay strictly between them, while item $a$ originated at a different
+replica in which $o$ was not yet present.  Under causal delivery $o$ could
+never see a state already containing $a$, so the configuration above is
+\emph{unreachable}.  Unconditional commutativity, however, is stated as a
+property of the pure effect function over \emph{all} states, and the
+unreachable initial state above is enough to refute it.
 
 \smallskip\noindent\textbf{Consequence.}
 The standard convergence framework of Gomes et al.~\cite{Gomes2017}, which
@@ -484,37 +540,39 @@ requires unconditional commutativity, cannot be applied to Yjs.  Our
 conditional commutativity framework resolves this by requiring commutativity
 only on invariant-satisfying states that causal delivery actually produces.
 
-\subsection{Proof Architecture}
+\subsection{Proof Outline}
 
-Our proof of conditional commutativity proceeds through the following
-dependency chain, with each layer building on the previous one:
-\begin{enumerate}
-\item \textbf{Item-set invariant} (\S\ref{sec:order}): a closed item set
-  $P$ with origin ordering~(I1), origin reachability~(I2), and ID
-  uniqueness~(I3).  These conditions characterize the structural properties
-  that causal delivery maintains.
-\item \textbf{Strict total order} (\S\ref{sec:order}): totality,
-  transitivity, and asymmetry of $\YjsLt$ on any item set satisfying the
-  invariant, together with the no-cross-origin lemma---the key auxiliary
-  result connecting the order to the algorithm.
-\item \textbf{Integration invariant and insert preservation}
-  (\S\ref{sec:algorithm}): a four-part loop invariant for the integration
-  scan, proved preserved across all six branches of the algorithm.  The
-  no-cross-origin lemma is the primary tool.
-\item \textbf{Conditional commutativity} (\S\ref{sec:algorithm}): insert
-  preservation implies that two sorted arrays with the same elements are
-  identical (by the strict total order), yielding insert-insert
-  commutativity on invariant-satisfying states.
-\item \textbf{Generic convergence} (\S\ref{sec:convergence}): a
-  bubble-sort reordering argument reduces convergence to five premises:
-  $\hb$-consistency, $\hb$-closure, duplicate-freedom, conditional
-  commutativity, and causal validity.
-\item \textbf{Yjs convergence} (\S\ref{sec:convergence}): instantiation of
-  the generic theorem by verifying each premise for the Yjs causal network.
-  The most subtle is \emph{causal validity}, which transports broadcast-time
-  item validity to any causally compatible state via invariant preservation
-  and membership monotonicity.
-\end{enumerate}
+We prove convergence in two layers.  The first is a \emph{generic} argument
+(\S\ref{sec:convergence}): starting from a single delivery list, we reorder
+it by repeatedly swapping adjacent concurrent operations until it matches
+any other delivery list with the same underlying set.  Each adjacent swap
+must preserve the state, so this layer needs
+\emph{conditional} concurrent commutativity, and, because a swapped
+operation is applied to a state different from the one it was broadcast
+against, a \emph{causal validity} transport property.  The second layer
+(\S\ref{sec:order}--\ref{sec:algorithm}) establishes these two premises for
+Yjs.  The Yjs-specific argument proceeds as follows.
+
+Section~\ref{sec:order} fixes a strict total order $\YjsLt$ on Yjs items
+(totality, transitivity, and asymmetry), defined on any item set satisfying
+an \emph{item-set invariant} (origin ordering, origin reachability, and ID
+uniqueness).  The role of this invariant is to carve out exactly the
+configurations on which the order is well-behaved; the proof also depends
+on a key auxiliary result, the \emph{no-cross-origin lemma}, which controls
+how the origins of ordered items can relate.  The no-cross-origin lemma is
+used in Section~\ref{sec:algorithm} to show that Yjs insert and delete
+operations preserve the invariant together with pairwise sortedness under
+$\YjsLt$.  In particular, Yjs insert is a non-trivial procedural loop, and
+proving order preservation requires discovering a four-part loop invariant
+for the scan.  Once preservation is established, conditional commutativity
+is immediate: two sorted arrays with the same underlying set are equal
+under any strict total order.
+
+Finally, causal validity for Yjs reduces to showing that an item's
+broadcast-time validity survives the causal reordering: the argument uses
+invariant preservation from Section~\ref{sec:algorithm} together with
+monotonicity of the items array to transport validity to any causally
+compatible state.
 
 %%
 %% -------------------------------------------------------------------
@@ -522,18 +580,34 @@ dependency chain, with each layer building on the previous one:
 \label{sec:order}
 %%
 
-The correctness of the integration algorithm rests on a strict total order
-$\YjsLt$ on items.  This section defines the order and establishes its key
-properties---totality, transitivity, and asymmetry---under an invariant that
-captures the structural constraints maintained by causal delivery.
+This section defines the strict total order $\YjsLt$ on Yjs items that
+underpins every subsequent argument.  The order is only well-behaved on item
+sets that are structurally closed and satisfy a small invariant; we therefore
+begin by fixing those conditions, then define $\YjsLt$, and finally establish
+totality, transitivity, and asymmetry.  We close the section with a key
+auxiliary lemma---the \emph{no-cross-origin lemma}---that will be used in
+Section~\ref{sec:algorithm} to show that the Yjs insert algorithm terminates
+in the correct position.
 
 %% P1: Closed Item Set, Origin Reachability, Item-Set Invariant
+Because $\YjsLt$ is defined by recursion on the origin and right-origin
+components of items, the set of pointers we reason about must be closed under
+those fields; otherwise a recursive call could land outside the set.
+
 \begin{definition}[Closed item set (\leanref{IsClosedItemSet})]\label{def:closed-item-set}
-A set $P$ of Yjs pointers is a \emph{closed item set} if
-$\First \in P$, $\Last \in P$, and $P$ is closed under origin and right-origin:
-whenever $\langle x \rangle \in P$ we also have $x.\mathit{origin} \in P$ and
-$x.\mathit{rightOrigin} \in P$.
+A set $P$ of Yjs pointers is a \emph{closed item set} when the following
+hold:
+\begin{itemize}
+\item $\First \in P$ and $\Last \in P$;
+\item whenever $\langle x \rangle \in P$ we have
+  $x.\mathit{origin} \in P$ and $x.\mathit{rightOrigin} \in P$.
+\end{itemize}
 \end{definition}
+
+The invariant we impose on a closed item set restricts, in addition, how
+reachability through origins can relate to $\YjsLt$.  Origin reachability is
+the least relation that takes one step to either $\mathit{origin}$ or
+$\mathit{rightOrigin}$, transitively closed.
 
 \begin{definition}[Origin reachability (\leanref{OriginReachable})]\label{def:origin-reachability}
 \emph{Origin reachability} is the least relation $\mathit{Reach}$ satisfying:
@@ -553,7 +627,8 @@ $x.\mathit{rightOrigin} \in P$.
 \end{definition}
 
 \begin{definition}[Item-set invariant (\leanref{ItemSetInvariant})]\label{def:item-set-invariant}
-A closed item set $P$ satisfies the \emph{item-set invariant} when:
+A closed item set $P$ satisfies the \emph{item-set invariant} when the
+following hold:
 \begin{itemize}
 \item[(I1)] \textbf{Origin ordering.} For every $\langle o, r, \mathit{id}, c \rangle \in P$,
   we have $o \YjsLt r$.
@@ -571,72 +646,58 @@ $\First \YjsLt a \YjsLt b$, so $a$ lies strictly between $\First$ and $b$,
 violating the ``no intermediary reachable'' requirement.
 
 %% P2: Yjs Order
-\begin{definition}[Yjs order (\leanref{YjsLt}, \leanref{YjsLeq}, \leanref{ConflictLt})]\label{def:yjs-order}
-The relations $\YjsLt$, $\YjsLeq$, and
-a \emph{conflict order} $\mathrel{<_C}$ are defined by simultaneous induction, all indexed by a bound $h$:
+With the invariant in place, we now define the Yjs order.  We will show that
+on any closed item set satisfying the invariant, the defined relation is a
+strict total order (Theorems~\ref{thm:totality}--\ref{thm:asymmetry}).  The
+rules in Figure~\ref{fig:yjs-order} encode the Yjs tiebreaker: when two
+items compete for the same interval, the one with the smaller origin (under
+$\YjsLt$) wins; among items with equal origins, the one with the smaller
+identifier wins.
+
+\begin{figure*}[t]
 \begin{mathpar}
 \inferrule*[right=Lt-OrigOrd]
   {p_1 \OriginLt p_2}
   {p_1 \YjsLt p_2}
 \and
 \inferrule*[right=Lt-Origin]
-  {x \YjsLeq o}
-  {x \YjsLt \langle o,r,\mathit{id},c \rangle}
-\\
+  {p \YjsLeq x.\mathit{origin}}
+  {p \YjsLt \langle x \rangle}
+\and
 \inferrule*[right=Lt-RightOrigin]
-  {r \YjsLeq y}
-  {\langle o,r,\mathit{id},c \rangle \YjsLt y}
+  {x.\mathit{rightOrigin} \YjsLeq p}
+  {\langle x \rangle \YjsLt p}
 \and
 \inferrule*[right=Lt-Conflict]
   {x \mathrel{<_C} y}
-  {x \YjsLt y}
-\end{mathpar}
-where $p_1 \OriginLt p_2$ holds when $p_1 = \First$ and $p_2 \neq \First$, or
-$p_1 \neq \Last$ and $p_2 = \Last$.
-The conflict order $x = \langle l_1, r_1, \mathit{id}_1, c_1 \rangle \mathrel{<_C}
-y = \langle l_2, r_2, \mathit{id}_2, c_2 \rangle$ is defined by two rules:
-\begin{mathpar}
+  {\langle x \rangle \YjsLt \langle y \rangle}
+\and
 \inferrule*[right=Conflict-DiffOrigin]
-  {l_2 \YjsLt l_1 \\
-   x \YjsLt r_2 \\
-   l_1 \YjsLt y \\
-   y \YjsLt r_1}
+  {y.\mathit{origin} \YjsLt x.\mathit{origin} \\
+   \langle x \rangle \YjsLt y.\mathit{rightOrigin} \\
+   x.\mathit{origin} \YjsLt \langle y \rangle \\
+   \langle y \rangle \YjsLt x.\mathit{rightOrigin}}
   {x \mathrel{<_C} y}
 \and
 \inferrule*[right=Conflict-SameOrigin]
-  {l_1 = l_2 \\
-   x \YjsLt r_2 \\
-   y \YjsLt r_1 \\
-   \mathit{id}_1 < \mathit{id}_2}
+  {x.\mathit{origin} = y.\mathit{origin} \\
+   \langle x \rangle \YjsLt y.\mathit{rightOrigin} \\
+   \langle y \rangle \YjsLt x.\mathit{rightOrigin} \\
+   x.\mathit{id} < y.\mathit{id}}
   {x \mathrel{<_C} y}
 \end{mathpar}
-We write $\mathit{YjsLt}'$ and $\mathit{YjsLeq}'$ for the
-existential closures $\exists h.\; \YjsLt_h$ and $\exists h.\; \YjsLeq_h$
-that expose the order relation without the bound.
+\caption{The Yjs order $\YjsLt$ and the conflict order $\mathrel{<_C}$,
+  defined by simultaneous induction.  $\YjsLeq$ is the reflexive closure of
+  $\YjsLt$; $p \OriginLt q$ holds when $p = \First$ and $q \neq \First$, or
+  $p \neq \Last$ and $q = \Last$.}
+\label{fig:yjs-order}
+\end{figure*}
+
+\begin{definition}[Yjs order (\leanref{YjsLt}, \leanref{YjsLeq}, \leanref{ConflictLt})]\label{def:yjs-order}
+The relations $\YjsLt$, $\YjsLeq$, and the \emph{conflict order}
+$\mathrel{<_C}$ are defined by simultaneous induction via the rules of
+Figure~\ref{fig:yjs-order}.
 \end{definition}
-
-These rules encode the Yjs tiebreaker: when two items compete for the same
-interval, the one with the smaller origin (under $\YjsLt$) wins; among items
-with equal origins, the one with the smaller identifier (comparing client IDs
-then clocks) wins.
-
-The design of these inference rules required careful balancing.
-Including transitivity as an explicit rule would make transitivity trivial but
-render asymmetry unprovable: induction on derivations could no longer rule out
-cycles.  Conversely, dropping \textsc{Lt-Origin} or \textsc{Lt-RightOrigin}
-would simplify asymmetry but remove the ``bridges'' that the transitivity proof
-relies on.  The present rules thread this needle: they are strong enough that
-transitivity can be recovered via size-based induction, yet constrained enough
-that every derivation decomposes into structurally smaller sub-problems for the
-asymmetry proof.
-
-All three proofs below use \emph{strong induction on the structural size} of
-the pointers involved ($|x| + |y|$ or $|x| + |y| + |z|$), where
-$|\First| = |\Last| = 0$ and
-$|\langle o, r, \mathit{id}, c \rangle| = |o| + |r| + 2$.
-Structural induction on derivations is not available because the recursive
-comparisons involve \emph{different pairs} of pointers (e.g.\ $x$ vs.\ $y_o$,
-$y_r$ vs.\ $x$) rather than structural sub-terms.
 
 \begin{theorem}[Totality (\leanref{yjs\_lt\_total})]
 \label{thm:totality}
@@ -647,24 +708,29 @@ $y \YjsLt x$.
 
 \begin{theorem}[Transitivity (\leanref{yjs\_lt\_trans})]
 \label{thm:transitivity}
-$\mathit{YjsLt}'$ is transitive on any closed item set
-satisfying the item-set invariant.
+For any closed item set $P$ satisfying the item-set invariant,
+$\YjsLt$ is transitive on $P$.
 \end{theorem}
 
 \begin{theorem}[Asymmetry (\leanref{yjs\_lt\_asymm})]
 \label{thm:asymmetry}
-$\mathit{YjsLt}'$ is asymmetric on any closed item set
-satisfying the item-set invariant.
+For any closed item set $P$ satisfying the item-set invariant,
+$\YjsLt$ is asymmetric on $P$.
 \end{theorem}
 
 \noindent
-Together, these three properties establish that $\YjsLt$ defines a strict
-total order on the items of any valid state.  The proofs involve intricate
-case analyses; we give detailed proof sketches in
-Appendix~\ref{app:order-proofs}.
+All three proofs proceed by strong induction on the structural size of the
+pointers involved ($|x| + |y|$ or $|x| + |y| + |z|$), where
+$|\First| = |\Last| = 0$ and
+$|\langle o, r, \mathit{id}, c \rangle| = |o| + |r| + 2$.
+Together, these three properties establish that $\YjsLt$ is a strict total
+order on the items of any $P$ satisfying the invariant.  Detailed proofs
+appear in Appendix~\ref{app:order-proofs}.
 
 %% P4: No-Cross-Origin
-A crucial auxiliary result for the commutativity proof is the following:
+We conclude this section with a key lemma used in Section~\ref{sec:algorithm}
+to prove that the Yjs insert scan terminates at a position respecting the
+total order.
 
 \begin{lemma}[No-Cross-Origin, \leanref{no\_cross\_origin}]
 \label{lem:no-cross-origin}
@@ -680,58 +746,50 @@ Intuitively, this says that if $x$ precedes $y$ in the order, then $y$'s
 origin does not ``cross over'' $x$: it is either at or left of $x$'s origin,
 or at or right of $x$ itself.  Figure~\ref{fig:no-cross-origin} illustrates
 the two cases.
-The no-cross-origin lemma is the
-linchpin of the pending-propagation lemma (\S\ref{sec:algorithm}).
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[>=Stealth, every node/.style={font=\small},
              item/.style={circle, draw, inner sep=1.5pt, minimum size=14pt},
              ptr/.style={rectangle, draw, inner sep=1.5pt, minimum size=12pt,
-                         rounded corners=2pt}]
-%% Case (a): y_o ≤ x_o  — y's origin is at or left of x's origin
+                         rounded corners=2pt},
+             origin/.style={->, thick, bend right=60, densely dashed}]
+%% Case (a): y_o <= x_o  - y's origin at or left of x's origin
 \begin{scope}[local bounding box=caseA]
-  %% axis
-  \draw[->] (-0.3,0) -- (5.5,0);
-  %% items
-  \node[ptr] (yo) at (0.5,0) {$y_o$};
-  \node[ptr] (xo) at (1.8,0) {$x_o$};
-  \node[item] (x)  at (3.0,0) {$x$};
-  \node[item] (y)  at (4.2,0) {$y$};
-  %% ordering arc x < y
-  \draw[->, thick, bend left=35] (x) to
-    node[above,font=\scriptsize] {$\YjsLt$} (y);
-  %% origin brackets
+  \node[ptr]  (yoA) at (0.0,0) {$y_o$};
+  \node[ptr]  (xoA) at (1.5,0) {$x_o$};
+  \node[item] (xA)  at (3.0,0) {$x$};
+  \node[item] (yA)  at (4.5,0) {$y$};
+  %% origin reference arrows (dashed)
+  \draw[origin] (xA) to (xoA);
+  \draw[origin] (yA) to (yoA);
+  %% horizontal brace for y_o <= x_o
   \draw[decorate, decoration={brace, amplitude=4pt, mirror}]
-    (yo.south west) ++(0,-0.15) -- node[below=4pt,font=\scriptsize]
-    {$y_o \YjsLeq x_o$} (xo.south east |- yo.south west) ++(0,-0.15);
+    ([yshift=-2pt]yoA.south) -- ([yshift=-2pt]xoA.south)
+    node[midway, below=4pt, font=\scriptsize] {$y_o \YjsLeq x_o$};
 \end{scope}
-\node[above=2pt] at (caseA.north) {\textbf{Case (a)}};
+\node[above=10pt] at (caseA.north) {\textbf{Case (a):} $y_o \YjsLeq x_o$};
 
-%% Case (b): x ≤ y_o  — x is at or left of y's origin
-\begin{scope}[local bounding box=caseB, shift={(0,-2.0)}]
-  %% axis
-  \draw[->] (-0.3,0) -- (5.5,0);
-  %% items
-  \node[ptr] (xo2) at (0.5,0) {$x_o$};
-  \node[item] (x2)  at (1.8,0) {$x$};
-  \node[ptr] (yo2) at (3.0,0) {$y_o$};
-  \node[item] (y2)  at (4.2,0) {$y$};
-  %% ordering arc x < y
-  \draw[->, thick, bend left=35] (x2) to
-    node[above,font=\scriptsize] {$\YjsLt$} (y2);
-  %% origin bracket
+%% Case (b): x <= y_o  - x at or left of y's origin
+\begin{scope}[local bounding box=caseB, shift={(0,-2.8)}]
+  \node[ptr]  (xoB) at (0.0,0) {$x_o$};
+  \node[item] (xB)  at (1.5,0) {$x$};
+  \node[ptr]  (yoB) at (3.0,0) {$y_o$};
+  \node[item] (yB)  at (4.5,0) {$y$};
+  \draw[origin] (xB) to (xoB);
+  \draw[origin] (yB) to (yoB);
   \draw[decorate, decoration={brace, amplitude=4pt, mirror}]
-    (x2.south west) ++(0,-0.15) -- node[below=4pt,font=\scriptsize]
-    {$x \YjsLeq y_o$} (yo2.south east |- x2.south west) ++(0,-0.15);
+    ([yshift=-2pt]xB.south) -- ([yshift=-2pt]yoB.south)
+    node[midway, below=4pt, font=\scriptsize] {$x \YjsLeq y_o$};
 \end{scope}
-\node[above=2pt] at (caseB.north) {\textbf{Case (b)}};
+\node[above=10pt] at (caseB.north) {\textbf{Case (b):} $x \YjsLeq y_o$};
 \end{tikzpicture}
-\caption{The No-Cross-Origin lemma
-  (Lemma~\ref{lem:no-cross-origin}).  If $x \YjsLt y$,
-  then either (a)~$y$'s origin is at or left of $x$'s
-  origin, or (b)~$x$ itself is at or left of $y$'s origin.
-  The ``forbidden'' configuration---$y_o$ strictly between
+\caption{The No-Cross-Origin lemma (Lemma~\ref{lem:no-cross-origin}).
+  Items are circles, pointers (origins) are rectangles, and dashed arrows
+  indicate the $\mathit{origin}$ field of each item; positions on the line
+  reflect the order $\YjsLt$.  Assuming $x \YjsLt y$, either (a)~$y$'s
+  origin lies at or left of $x$'s origin or (b)~$x$ itself lies at or left
+  of $y$'s origin; the ``forbidden'' configuration---$y_o$ strictly between
   $x_o$ and $x$---cannot arise.}
 \label{fig:no-cross-origin}
 \end{figure}
@@ -739,228 +797,274 @@ linchpin of the pending-propagation lemma (\S\ref{sec:algorithm}).
 \noindent
 The proof uses strong induction on $|x| + |y|$; the key case
 (\textsc{Lt-RightOrigin}) relies on condition~I2 to chain origin
-reachability.  See Appendix~\ref{app:order-proofs} for the full sketch.
+reachability.  See Appendix~\ref{app:order-proofs} for the full proof.
 
 %%
 %% -------------------------------------------------------------------
-\section{Integration Algorithm and Commutativity}
+\section{Insert Algorithm and Commutativity}
 \label{sec:algorithm}
 %%
 
 %% P1: Goal is commutativity
-The goal of this section is to derive \emph{insert-insert commutativity}, the
-most involved commutativity case.  The other two cases are simpler:
-\begin{theorem}[Insert-Delete Commutativity]
-\label{thm:ins-del}
-For any invariant-satisfying state $s$ and concurrent insert $a$, delete~$b$,
-$\effect(a, \effect(b, s)) = \effect(b, \effect(a, s))$.
-\end{theorem}
-\begin{theorem}[Delete-Delete Commutativity]
-\label{thm:del-del}
-For any state $s$ and concurrent deletes $a$, $b$,
-$\effect(a, \effect(b, s)) = \effect(b, \effect(a, s))$.
-\end{theorem}
-Both hold because deletion only modifies the $\mathit{deletedIds}$ set and
-insert does not inspect $\mathit{deletedIds}$.  The central case is
-insert-insert: the total order $\YjsLt$ determines a unique sorted sequence for
-any set of items, and if integration preserves sortedness then the same sorted
-sequence must result regardless of delivery order.
+The goal of this section is to establish concurrent commutativity for Yjs,
+that is, to show that concurrent operations commute when both are valid at
+the state at which they are applied.  Three cases arise.  Delete-delete is
+immediate because deletion only adds to the $\mathit{deletedIds}$ set and
+the set union is commutative.  Insert-delete is immediate for a similar
+reason: the items array and $\mathit{deletedIds}$ are independent
+components of the state, so an insert and a delete touch disjoint data and
+always commute.  The interesting case is insert-insert, to which the rest
+of this section is devoted.  The strategy, foreshadowed in
+\S\ref{sec:overview}, is that the Yjs insert operation preserves an
+invariant that includes pairwise sortedness under $\YjsLt$: once
+preservation is established, the two delivery orders produce sorted arrays
+containing the same items, and a strict total order admits at most one such
+arrangement, so the two results coincide.
 
 %% P2: State Invariant
-\begin{definition}[State Invariant (\leanref{YjsArrInvariant})]
+We begin by stating the invariant that states must satisfy throughout the
+execution; it is the state-level counterpart of the item-set invariant of
+\S\ref{sec:order}, together with a pairwise-sortedness condition on the
+items array.
+
+\begin{definition}[State invariant (\leanref{YjsArrInvariant})]
 \label{def:state-inv}
 A state $s = (\mathit{arr}, \mathit{del})$ satisfies the \emph{Yjs array
-invariant} when:
+invariant} when the following hold:
 \begin{enumerate}
 \item $\mathit{ArrSet}(\mathit{arr})$ is a closed item set.
 \item $\mathit{ArrSet}(\mathit{arr})$ satisfies the item-set invariant
   (I1--I3).
-\item $\mathit{arr}$ is pairwise sorted by $\mathit{YjsLt}'$:
-  $\forall i < j.\; \mathit{arr}[i] \mathrel{<_Y} \mathit{arr}[j]$.
+\item $\mathit{arr}$ is pairwise sorted by $\YjsLt$:
+  for all $i < j$, $\mathit{arr}[i] \YjsLt \mathit{arr}[j]$.
 \item All item identifiers in $\mathit{arr}$ are pairwise distinct.
 \end{enumerate}
-\end{definition}
-where $\mathit{ArrSet}(\mathit{arr})$ is the item set induced by the array,
+Here $\mathit{ArrSet}(\mathit{arr})$ is the item set induced by the array,
 containing $\First$, $\Last$, and each item in $\mathit{arr}$.
+\end{definition}
+
+%% P5: Item Validity
+The broadcast validity predicate (V) from Definition~\ref{def:operation-network}
+requires each broadcast insert to be valid at the state at which it is
+broadcast.  For Yjs we make that predicate concrete: an insert's item must
+satisfy the per-item analogues of I1 and I2, evaluated in the item set
+induced by the state to which the insert is being applied.
+
+\begin{definition}[Item validity (\leanref{IsItemValid})]
+\label{def:item-valid}
+An item $x = \langle o, r, \mathit{id}, c \rangle$ is \emph{valid} in an
+item set $P$ (containing $x$ together with its ancestors) when the following
+hold:
+\begin{enumerate}
+\item $o \YjsLt r$ (origin strictly precedes right-origin);
+\item for every pointer $z$ reachable from $x$ via $\mathit{Reach}$,
+  either $z \YjsLeq o$ or $r \YjsLeq z$.
+\end{enumerate}
+An insert input $\mathit{inp}$ is valid at a state $s$, written
+$\mathit{inp}.\mathit{isValid}(s)$, when the item
+$\mathit{inp}.\mathit{toItem}(s)$ it resolves to is valid in
+$\mathit{ArrSet}(s.\mathit{arr})$; this is the predicate used to instantiate
+condition~(V).
+\end{definition}
+
+\noindent
+Item validity is state-dependent: the same item may be valid at one state
+but invalid at another.  Broadcast validity speaks of the state at which the
+item is \emph{issued}, whereas the preservation and commutativity theorems
+below need validity at the state to which the insert is \emph{applied}.  The
+bridge between the two---sufficient under causal delivery---is deferred to
+\S\ref{sec:convergence} as \emph{causal validity}.
+
+%% P6: Insert Preservation
+\begin{theorem}[Insert preservation (\leanref{YjsArrInvariant\_integrate})]
+\label{thm:ins-pres}
+If state $s$ satisfies the Yjs array invariant and $\mathit{inp}$ is an
+insert input valid at $s$, then
+$\effect(\mathsf{Insert}(\mathit{inp}), s)$ also satisfies the invariant.
+\end{theorem}
+
+\noindent
+The analogous preservation for deletes is trivial, since deletion only
+modifies $\mathit{deletedIds}$; we therefore focus on insert preservation.
+The proof is a standard loop-invariant argument on
+Algorithm~\ref{alg:integrate}: we give a four-part invariant for the scan,
+show that each iteration preserves it, and show that the invariant implies
+the desired post-condition at termination.
 
 %% P3: Loop Invariant
-\begin{definition}[Integration Invariant (\leanref{IntegrationInvariant})]
+\begin{definition}[Integration invariant (\leanref{IntegrationInvariant})]
 \label{def:loop-inv}
-During the integration scan, the \emph{integration invariant} at position~$i$
+During the insert scan, the \emph{integration invariant} at position~$i$
 (with candidate destination~$\mathit{dest}$, flag~$\mathit{scanning}$, and
-termination flag~$\mathit{done}$) asserts:
+termination flag~$\mathit{done}$) asserts the following.
 \begin{enumerate}
 \item \textbf{Confirmed prefix} (\texttt{prefixLt}).
-  For all $j < \mathit{dest}$:
-  $\mathit{arr}[j] \mathrel{<_Y} \mathit{newItem}$.
+  For all $j < \mathit{dest}$, $\mathit{arr}[j] \YjsLt \mathit{newItem}$.
 \item \textbf{Pending region} (\texttt{scannedRegion}).
-  For all $\mathit{dest} \leq j < i$:
-  either (a)~$\mathit{arr}[j].\mathit{origin} = \mathit{newItem}.\mathit{origin}$
-  and $\mathit{newItem}.\mathit{id} < \mathit{arr}[j].\mathit{id}$
-  (same-origin competition with new item winning by ID), or
-  (b)~$\mathit{arr}[\mathit{dest}].\mathit{origin} \YjsLeq
-  \mathit{arr}[j].\mathit{origin}$
-  (different origin, ambiguous ranking requires more scanning).
+  For all $\mathit{dest} \leq j < i$, one of the following holds:
+  \begin{itemize}
+  \item[(a)] $\mathit{arr}[j].\mathit{origin} = \mathit{newItem}.\mathit{origin}$
+    and $\mathit{newItem}.\mathit{id} < \mathit{arr}[j].\mathit{id}$;
+  \item[(b)] $\mathit{newItem}.\mathit{origin} \YjsLt
+    \mathit{arr}[j].\mathit{origin}$.
+  \end{itemize}
 \item \textbf{Scanning flag} (\texttt{scanningOrigin}).
   $\mathit{scanning}$ is set exactly when
   $\mathit{arr}[\mathit{dest}].\mathit{origin} =
   \mathit{newItem}.\mathit{origin}$.
 \item \textbf{Boundary ordering} (\texttt{doneLt}).
-  If $\mathit{done}$, then $\mathit{newItem} \mathrel{<_Y} \mathit{arr}[i]$.
+  If $\mathit{done}$, then $\mathit{newItem} \YjsLt \mathit{arr}[i]$.
 \end{enumerate}
 \end{definition}
-The two cases in the pending region correspond to the two branches in the
-conflict order: the same-origin rule \textsc{Conflict-SameOrigin} and the
-different-origin rule \textsc{Conflict-DiffOrigin}.
-The boundary ordering condition records that the scan has found a
-strictly greater element, which is the premise needed by the pending
-propagation lemma below.
 
-%% P5: Item Validity
-\begin{definition}[Item Validity (\leanref{IsItemValid})]
-\label{def:item-valid}
-An item $x = \langle o, r, \mathit{id}, c \rangle$ is \emph{valid} when:
-\begin{enumerate}
-\item $o \mathrel{<_Y} r$ (origin strictly precedes right-origin), and
-\item for every pointer $z$ reachable from $x$ via $\mathit{Reach}$,
-  either $z \YjsLeq o$ or $r \YjsLeq z$.
-\end{enumerate}
-\end{definition}
-Item validity is the per-item version of conditions~I1 and~I2 from the
-item-set invariant.  The valid-message predicate in the Yjs operation network
-requires that an insert operation's item be valid at the broadcast state.
+\noindent
+The pending region collects those array positions whose ordering against
+$\mathit{newItem}$ the scan has not yet resolved.  Case~(a) applies when
+the element shares $\mathit{newItem}$'s origin but has a larger id; deciding
+it via \textsc{Conflict-SameOrigin} is blocked because
+$\mathit{newItem} \YjsLt \mathit{arr}[j].\mathit{rightOrigin}$ has not yet
+been established by the scan.  Case~(b) applies when the element has a
+strictly greater origin; \textsc{Conflict-DiffOrigin} is blocked for the
+same reason.  The \textbf{doneLt} clause records that, when the scan stops,
+it has found an element strictly greater than $\mathit{newItem}$; the
+pending propagation lemma below uses this information to promote every
+pending element to a confirmed one, showing that $\mathit{dest}$ is the
+smallest position at which $\mathit{newItem}$ can be inserted while
+preserving pairwise sortedness.
 
-%% P6: Insert Preservation, Delete Preservation
-\begin{theorem}[Insert Preservation (\leanref{YjsArrInvariant\_integrate})]
-\label{thm:ins-pres}
-If state $s$ satisfies the Yjs array invariant and $\mathit{inp}$ is an insert
-operation whose induced item is valid (as in Definition~\ref{def:item-valid}),
-then $\effect(\mathsf{Insert}(\mathit{inp}), s)$ also satisfies the invariant.
-\end{theorem}
+\paragraph{Initialization.}
+The scan starts at $i = \mathit{leftIdx} + 1$ with
+$\mathit{dest} = \mathit{leftIdx} + 1$,
+$\mathit{scanning} = \mathbf{false}$, and
+$\mathit{done} = \mathbf{false}$.  The confirmed prefix contains all
+elements before $\mathit{leftIdx} + 1$, each $\YjsLt \mathit{newItem}$
+because $\mathit{newItem}.\mathit{origin}$ sits at position
+$\mathit{leftIdx}$ and the array is sorted; the pending region and
+scanning flag are vacuous, and boundary ordering holds vacuously.
 
-\begin{theorem}[Delete Preservation]
-\label{thm:del-pres}
-If state $s$ satisfies the Yjs array invariant, then
-$\effect(\mathsf{Delete}(\mathit{id}, \mathit{deletedId}), s)$ also satisfies
-the invariant.
-\end{theorem}
-Delete preservation is immediate because deletion only modifies
-$\mathit{deletedIds}$, leaving the items array unchanged.
+\paragraph{Preservation (\leanref{loopInv\_preserve1}).}
+Let $u = \mathit{newItem}$ and $o = \mathit{arr}[i]$ be the scanned
+element.  The scan branches on the order between $u.\mathit{origin}$ and
+$o.\mathit{origin}$, and, in the equal-origin subcase, on the id comparison
+and on whether $o.\mathit{rightOrigin} = u.\mathit{origin}$:
+\begin{itemize}
+\item \emph{$o.\mathit{origin} \YjsLt u.\mathit{origin}$}: \textsc{break}
+  with $\mathit{done}$ set.
+\item \emph{$o.\mathit{origin} = u.\mathit{origin}$}:
+  (i)~if $u.\mathit{id} > o.\mathit{id}$, advance $\mathit{dest}$ to
+  $i+1$ and clear $\mathit{scanning}$;
+  (ii)~else if $o.\mathit{rightOrigin} = u.\mathit{origin}$,
+  \textsc{break};
+  (iii)~else, set $\mathit{scanning}$ and keep the element pending.
+\item \emph{$u.\mathit{origin} \YjsLt o.\mathit{origin}$}: keep the
+  element pending (scanning flag unchanged).
+\end{itemize}
+The last branch splits further according to the scanning flag (advance
+$\mathit{dest}$ when $\neg\mathit{scanning}$, otherwise only extend the
+pending region), giving six sub-cases in total.  Preservation is discharged
+uniformly: \textbf{doneLt} in the two \textsc{break} branches follows from
+\textsc{Conflict-SameOrigin} or from no-cross-origin
+(Lemma~\ref{lem:no-cross-origin}), which rules out the configuration in
+which $o$ would lie at or left of $u.\mathit{origin}$ when
+$o.\mathit{origin} \YjsLt u.\mathit{origin}$; \textbf{prefixLt} in the
+advance branches follows from pending propagation applied to the current
+region, combined with the new inequality produced by the branch; and
+\textbf{scannedRegion} in the pending-extension branches follows directly
+from the branch condition, without any appeal to no-cross-origin (this is
+the reason for using $u.\mathit{origin} \YjsLt \mathit{arr}[j].\mathit{origin}$
+in case~(2b) of the invariant).  The full case analysis is in
+Appendix~\ref{app:preservation-cases}.
 
-The proof of insert preservation is the heart of the formalization.  It
-proceeds by a standard loop-invariant argument in three steps:
+\paragraph{Postcondition.}
+When the scan terminates the invariant gives a destination~$d$ and a loop
+bound~$i$ such that $\mathit{arr}[j] \YjsLt u$ for all $j < d$ (confirmed
+prefix) and that $u \YjsLt \mathit{arr}[i]$ (from \textbf{doneLt} in the
+\textsc{break} case, or vacuously when the scan reaches
+$\mathit{rightIdx}$).  The pending region $d \leq j < i$ must be collapsed
+onto the confirmed prefix; this is precisely the role of the pending
+propagation lemma.
 
-\paragraph{Step 1: Initialization.}
-The integration scan starts at position $\mathit{leftIdx} + 1$ (one past the
-origin) with $\mathit{dest} = \mathit{leftIdx} + 1$, $\mathit{scanning} =
-\mathit{false}$, and $\mathit{done} = \mathit{false}$.  The integration
-invariant holds vacuously: the confirmed prefix contains all elements before
-$\mathit{leftIdx} + 1$ (which are $<_Y \mathit{newItem}$ because the array is
-sorted and origin is at $\mathit{leftIdx}$), the pending region and scanning
-flag are empty/false, and the boundary ordering is vacuous because
-$\mathit{done}$ is false.
-
-\paragraph{Step 2: Preservation (\leanref{loopInv\_preserve1}).}
-We must show that each iteration preserves the invariant.
-Let $u = \mathit{newItem}$ and $o = \mathit{arr}[i]$ be the scanned element.
-The algorithm branches into six cases based on origin comparisons and IDs.
-Two cases trigger a \textsc{break} (requiring \textbf{doneLt}: $u \YjsLt o$),
-two advance $\mathit{dest}$ (requiring \textbf{prefixLt} for the expanded
-prefix), and two extend the pending region (requiring \textbf{scannedRegion}).
-The no-cross-origin lemma (Lemma~\ref{lem:no-cross-origin}) is the key tool:
-it resolves the \textsc{break} case when $o.\mathit{origin} < u.\mathit{origin}$
-and the scanning case when $o.\mathit{origin} > u.\mathit{origin}$.
-The detailed case analysis appears in Appendix~\ref{app:preservation-cases}.
-
-\paragraph{Step 3: Postcondition.}
-When the scan terminates (either by reaching position $\mathit{rightIdx}$ or
-by a \textsc{break}), the integration invariant gives us a destination~$d$
-and a position~$i$ such that:
-$\mathit{arr}[j] <_Y \mathit{newItem}$ for all $j < d$ (confirmed prefix),
-and the pending region $d \leq j < i$ must be resolved.  This is exactly
-the role of the pending propagation lemma:
-
-\begin{lemma}[Pending Propagation (\leanref{pending\_propagation})]
+\begin{lemma}[Pending propagation (\leanref{pending\_propagation})]
 \label{lem:pending-prop}
-Under the integration invariant with $\mathit{done} = \mathit{true}$, every
-element in the pending region satisfies
-$\mathit{newItem} \mathrel{<_Y} \mathit{arr}[j]$ for all
-$\mathit{dest} \leq j \leq i$.
+Suppose the integration invariant holds at position~$i$ and
+$u \YjsLt \mathit{arr}[i]$.  Then $u \YjsLt \mathit{arr}[j]$ for every
+$j$ with $\mathit{dest} \leq j < i$.
 \end{lemma}
 
-The proof proceeds by strong induction on the size of $\mathit{arr}[j]$.
-\textbf{Case (a):} $\mathit{arr}[j]$ has the same origin as $\mathit{newItem}$
-and $\mathit{newItem}.\mathit{id} < \mathit{arr}[j].\mathit{id}$.  We must
-show $\mathit{newItem} \YjsLt \mathit{arr}[j]$.  Both items share the same
-origin~$l$; let $r_1 = \mathit{newItem}.\mathit{rightOrigin}$ and
-$r_2 = \mathit{arr}[j].\mathit{rightOrigin}$.  We need
-$\mathit{newItem} \YjsLt r_2$ and $\mathit{arr}[j] \YjsLt r_1$ to apply rule
-\textsc{Conflict-SameOrigin}.
-The first follows because the scan has not yet reached $r_2$ at position~$j$
-(the loop would have broken).
-For the second, the no-cross-origin lemma
-(Lemma~\ref{lem:no-cross-origin}) applied to $\mathit{arr}[j] \YjsLt
-\mathit{arr}[i]$ (which holds by the sorted invariant) gives either
-$\mathit{arr}[i].\mathit{origin} \YjsLeq \mathit{arr}[j].\mathit{origin}$
-or $\mathit{arr}[j] \YjsLeq \mathit{arr}[i].\mathit{origin}$; combined with
-the loop bound, this forces $\mathit{arr}[j] \YjsLt r_1$.
-\textbf{Case (b):} $\mathit{arr}[j]$ has a different origin.  The condition
-$\mathit{arr}[\mathit{dest}].\mathit{origin} \YjsLeq
-\mathit{arr}[j].\mathit{origin}$ and the sorted structure of the prefix together
-with no-cross-origin allow us to apply rule \textsc{Conflict-DiffOrigin},
-establishing $\mathit{newItem} \YjsLt \mathit{arr}[j]$.
+\noindent\textit{Proof sketch.}
+By strong induction on the size of $a_j := \mathit{arr}[j]$.  Let
+$r_1 = u.\mathit{rightOrigin}$ and $r_2 = a_j.\mathit{rightOrigin}$.
+
+\textbf{Case (a):} $a_j.\mathit{origin} = u.\mathit{origin}$ and
+$u.\mathit{id} < a_j.\mathit{id}$.  We apply
+\textsc{Conflict-SameOrigin}, which requires
+$u \YjsLt r_2$ and $a_j \YjsLt r_1$.  The second holds because the
+sorted invariant places $a_j$ strictly before the array position of
+$r_1$, which the scan has not yet reached.  For the first, write
+$r_2 = \mathit{arr}[k]$ for some index $k > j$.  If $k < i$ then $k$
+itself lies in the pending region, so the inductive hypothesis gives
+$u \YjsLt \mathit{arr}[k] = r_2$; if $i \leq k$ then
+$u \YjsLt \mathit{arr}[i] \YjsLeq \mathit{arr}[k] = r_2$ by the scan
+hypothesis combined with sortedness.  In either case,
+\textsc{Conflict-SameOrigin} gives $u \YjsLt a_j$.
+
+\textbf{Case (b):} $u.\mathit{origin} \YjsLt a_j.\mathit{origin}$.  Rule
+\textsc{Lt-Origin} gives $u \YjsLt a_j$ once we have
+$u \YjsLeq a_j.\mathit{origin}$.  When the scanning flag is set we have
+$\mathit{arr}[\mathit{dest}].\mathit{origin} = u.\mathit{origin}$, so
+$\mathit{arr}[\mathit{dest}] \YjsLt a_j$ by the sorted invariant, and
+no-cross-origin (Lemma~\ref{lem:no-cross-origin}) upgrades this to
+$\mathit{arr}[\mathit{dest}] \YjsLeq a_j.\mathit{origin}$, hence
+$u.\mathit{origin} \YjsLt a_j.\mathit{origin}$ yields
+$u \YjsLt a_j.\mathit{origin}$ by \textsc{Lt-Origin}.  The non-scanning
+sub-case is similar, using the fact that $\mathit{dest}$ has already
+absorbed the scan progress.
 
 \smallskip
 \noindent
-Combining these three steps, pending propagation gives
-$u \YjsLt \mathit{arr}[d]$, and the confirmed prefix gives
-$\mathit{arr}[d{-}1] \YjsLt u$.  Thus $d$ is the unique insertion
-position maintaining pairwise sortedness
-(\leanref{YjsArrInvariant\_insert\-Idx\-If\-In\-Bounds}).
+With Lemma~\ref{lem:pending-prop}, insert preservation follows: at
+termination the confirmed prefix gives $\mathit{arr}[d-1] \YjsLt u$,
+pending propagation gives $u \YjsLt \mathit{arr}[d]$, so $d$ is the
+unique position at which inserting $u$ preserves pairwise sortedness
+(\leanref{YjsArrInvariant\_insert\-Idx\-If\-In\-Bounds}).  The other
+three parts of the invariant transfer by routine calculation.
 
 %% P7: Insert-Insert Commutativity
-\begin{theorem}[Insert-Insert Commutativity, \leanref{integrate\_ok\_commutative}]
+\begin{corollary}[Insert-insert commutativity, \leanref{integrate\_ok\_commutative}]
 \label{thm:ins-ins}
-Let $s$ be a state satisfying the Yjs array invariant.  Let $a$, $b$ be two
-insert inputs with $a.\mathit{clientId} \neq b.\mathit{clientId}$, with both
-induced items valid at $s$.  Then
-$\effect(\mathsf{Insert}(a), \effect(\mathsf{Insert}(b), s)) =
- \effect(\mathsf{Insert}(b), \effect(\mathsf{Insert}(a), s))$.
-\end{theorem}
-\noindent\textit{Proof sketch.}
-By Theorem~\ref{thm:ins-pres}, both orderings produce
-invariant-satisfying arrays.  Both arrays contain the
-same elements: the original items plus $a$-item and
-$b$-item.  Since the Yjs array invariant requires
-pairwise sortedness by $\YjsLt$ and
-$\YjsLt$ is a strict total order, any two sorted arrays
-with the same element set are identical
-(\leanref{same\_yjs\_set\_unique}).  This uniqueness lemma
-is proved by induction on the list length, using
-asymmetry to show the heads must match.
+Let $s$ satisfy the Yjs array invariant and let $a$, $b$ be two insert
+inputs with $a.\mathit{clientId} \neq b.\mathit{clientId}$, both valid at
+$s$.  Then $a$ remains valid after applying $b$ (and symmetrically), and
+\[
+  \effect(\mathsf{Insert}(a), \effect(\mathsf{Insert}(b), s)) =
+  \effect(\mathsf{Insert}(b), \effect(\mathsf{Insert}(a), s)).
+\]
+\end{corollary}
 
-%% P8: Conditional vs Unconditional Commutativity
-\begin{definition}[Unconditional Commutativity]
-\label{def:unconditional-comm}
-A pair of operations $(a, b)$ commutes \emph{unconditionally} if for every
-state~$s$,
-$\effect(a, \effect(b, s)) = \effect(b, \effect(a, s))$.
-\end{definition}
+\noindent\textit{Proof.}
+Distinct client identifiers combined with clock monotonicity~(Y2) ensure
+that the items induced by $a$ and $b$ have distinct identifiers, so
+inserting one into a state satisfying the invariant keeps the other's
+ancestors present and preserves the other's item validity.  By
+Theorem~\ref{thm:ins-pres}, both orders of insertion produce
+invariant-satisfying arrays, and those arrays contain the same underlying
+item set (the items of $s$ together with the $a$- and $b$-items).  The
+array invariant requires pairwise sortedness by $\YjsLt$ and $\YjsLt$ is a
+strict total order on invariant-satisfying item sets
+(Theorems~\ref{thm:totality}--\ref{thm:asymmetry}), so any two sorted
+arrays with the same element set are identical
+(\leanref{same\_yjs\_set\_unique}); this uniqueness is proved by induction
+on list length using asymmetry to force the heads to agree.
 
-\begin{definition}[Conditional Commutativity (\leanref{concurrent\_commutative})]
-\label{def:conditional-comm}
-A list of operations $L$ satisfies \emph{conditional commutativity} (with
-respect to an invariant $\Phi$ and validity predicate $\mathit{Valid}$) if, for
-every concurrent pair $(a, b) \in L \times L$, every state~$s$ satisfying
-$\Phi(s)$, and whenever $\mathit{Valid}(a, s)$ and $\mathit{Valid}(b, s)$:
-$\effect(a, \effect(b, s)) = \effect(b, \effect(a, s))$.
-\end{definition}
-
-As the counterexample in \S\ref{sec:overview} demonstrates, unconditional
-commutativity fails for Yjs.  Conditional commutativity with $\Phi$ being the
-Yjs array invariant suffices, however, because causal delivery maintains $\Phi$:
-any state reachable from $\init$ by causally delivered operations satisfies
-$\Phi$ (established in \S\ref{sec:convergence} via causal validity).
+\smallskip
+\noindent
+Corollary~\ref{thm:ins-ins} is precisely the concurrent-commutativity
+statement we need, but its hypothesis appeals to item validity at $s$ for
+both inserts, whereas the operation-network axiom~(V) only guarantees
+validity at the state at which each insert was \emph{broadcast}.
+Section~\ref{sec:convergence} closes this gap: causal delivery transports
+broadcast-time validity to any replay state containing the insert's causal
+predecessors.
 
 %%
 %% -------------------------------------------------------------------
@@ -969,34 +1073,33 @@ $\Phi$ (established in \S\ref{sec:convergence} via causal validity).
 %%
 
 %% P1: Generic argument abstract from network model
-The convergence proof is split into two layers:
-a \emph{generic} layer that reasons about abstract operation
-lists with a partial order $\hb$, and a \emph{Yjs-specific}
-layer that instantiates the generic theorem with the
-concrete causal network.
-The final theorem (Yjs Convergence,
-Theorem~\ref{thm:yjs-convergence}) applies the generic
-convergence theorem
-(Theorem~\ref{thm:generic-conv}) by verifying five
-premises: $\hb$-consistency, $\hb$-closure,
-duplicate-freedom, concurrent commutativity, and causal
-validity.  The first three are structural properties of the
-causal network; concurrent commutativity builds on the
-algorithm-level results of \S\ref{sec:algorithm}; causal
-validity transports broadcast-time item validity to any
-state reached by a causally compatible execution.
+The convergence proof proceeds in two layers.  The \emph{generic} layer of
+\S\ref{subsec:generic} works entirely with abstract operation lists carrying
+a happens-before relation~$\hb$; it culminates in a convergence theorem
+(Theorem~\ref{thm:generic-conv}) whose hypotheses are that the two delivery
+lists are $\hb$-consistent, $\hb$-closed, duplicate-free, satisfy a
+\emph{conditional commutativity} condition, and admit a \emph{causal
+validity} transport.  The \emph{Yjs} layer of \S\ref{subsec:yjs-inst}
+instantiates this theorem: the first three premises follow from the causal
+network axioms alone, while conditional commutativity and causal validity
+are the parts specific to Yjs and build directly on the results of
+\S\ref{sec:algorithm}.
 
-The generic layer is important because the convergence
-proof proceeds by reordering operations in a list
-(a ``bubble-sort'' argument); this reordering is much
-cleaner at the level of abstract lists than at the level of
-concrete event histories.
+\subsection{Generic Convergence}
+\label{subsec:generic}
 
-%% P2: hb-consistency, hb-closure
+We first fix the language in which the generic theorem is stated.  Two
+conditions on an operation list carry the causality information a
+convergence argument needs: the list must be consistent with the
+happens-before relation (no later element $\hb$-precedes an earlier one)
+and closed under $\hb$-predecessors (nothing causally necessary is
+missing).
+
 \begin{definition}[$\hb$-consistency]
 \label{def:hb-consistent}
-A list $L$ of operations is \emph{$\hb$-consistent} (written
-$\mathit{hbConsistent}(L)$) when it satisfies the following inductive predicate:
+A list $L$ of operations is \emph{$\hb$-consistent}
+($\mathit{hbConsistent}(L)$) when it satisfies the following inductive
+predicate:
 \begin{mathpar}
 \inferrule*[right=HbC-Nil]
   {}
@@ -1007,199 +1110,199 @@ $\mathit{hbConsistent}(L)$) when it satisfies the following inductive predicate:
    \forall b \in L.\; \neg(b \hble a)}
   {\mathit{hbConsistent}(a :: L)}
 \end{mathpar}
-That is, each element is not $\hb$-preceded by any later element in the list.
+Equivalently, no element is $\hb$-preceded by a later element in the list.
+A list $L$ is \emph{$\hb$-closed} when, for every $a \in L$ and every $b$
+with $b \hb a$, we have $b \in L$.
 \end{definition}
 
-A list $L$ is \emph{$\hb$-closed} when, for every $a \in L$ and $b \hb a$, we
-have $b \in L$.  The combination of $\hb$-consistency and $\hb$-closure ensures
-that the list contains all causal dependencies in an order consistent with $\hb$.
+The convergence argument reorders operations by adjacent swaps, so we need
+to know that swapping two concurrent operations preserves the conditions
+above.  This is the content of the swap lemmas below.
 
-%% P3: Swap Lemma
-\begin{lemma}[Swap, \leanref{hbClosed\_swap}]
+\begin{lemma}[Swap preserves consistency and closure,
+  \leanref{hbConsistent\_swap}, \leanref{hbClosed\_swap}]
 \label{lem:swap}
-If $L = L_0 \mathbin{+\!\!+} [a, b] \mathbin{+\!\!+} L_1$ is $\hb$-closed and
-$a, b$ are concurrent ($a \not\hble b$ and $b \not\hble a$), then
-$L_0 \mathbin{+\!\!+} [b, a] \mathbin{+\!\!+} L_1$ is also $\hb$-closed.
+Suppose $L = L_0 \mathbin{+\!\!+} [a, b] \mathbin{+\!\!+} L_1$ and $a$ and
+$b$ are concurrent ($a \not\hble b$ and $b \not\hble a$).  Then
+$L_0 \mathbin{+\!\!+} [b, a] \mathbin{+\!\!+} L_1$ is $\hb$-consistent whenever
+$L$ is, and likewise for $\hb$-closure.
 \end{lemma}
-\noindent\textit{Proof sketch.}
-The proof converts $\hb$-closure to an equivalent
-inductive characterization and performs induction on
-the list suffix.  Concurrency of $a$ and $b$ ensures
-that any element $\hb$-before $a$ is also $\hb$-before
-$b$ (or is already in $L_0$), and vice versa, so
-the swap preserves the closure property.
 
-%% P4: Causally Validatable Operation
-\begin{definition}[Causally validatable operation (\leanref{CausallyValidatableOperation})]
+\noindent\textit{Proof sketch.}
+Because $a$ and $b$ are concurrent, every element $\hb$-before $a$ is
+either $\hb$-before $b$ or already to the left of $[a,b]$, and
+symmetrically.  Thus neither condition on $L$ can be violated by swapping
+the adjacent pair.
+
+Commutativity of concurrent operations is what turns a swap into a
+state-preserving transformation.  We state it in the general,
+state-dependent form that our proof actually requires.
+
+\begin{definition}[Conditional concurrent commutativity
+  (\leanref{concurrent\_commutative})]
+\label{def:conditional-comm}
+A list of operations $L$ satisfies \emph{conditional concurrent
+commutativity} (with respect to a state invariant $\Phi$ and validity
+predicate $\mathit{isValid}$) when, for every concurrent pair $a, b \in L$
+and every state $s$ with $\Phi(s)$,
+$\mathit{isValid}(s, a)$, and $\mathit{isValid}(s, b)$,
+$\effect(a, \effect(b, s)) = \effect(b, \effect(a, s))$.
+\end{definition}
+
+Conditional commutativity lets us swap adjacent concurrent operations at a
+\emph{specific} state.  Reordering a delivery list by repeated adjacent
+swaps, on the other hand, applies each operation to many different states,
+none of which is the state at which the operation was originally broadcast.
+To justify these applications we need a \emph{causal validity} condition:
+the insert must remain valid at every state produced by an
+$\hb$-consistent, $\hb$-closed replay that already contains its
+$\hb$-predecessors.
+
+\begin{definition}[Causally validatable operation
+  (\leanref{CausallyValidatableOperation})]
 \label{def:causally-valid}
-Fix a causal order~$\hb$ on operations of type~$A$ and a source predicate
-$\mathit{Src} : A \to \mathit{Prop}$.
-A \emph{causal validity} on~$A$ consists of a state predicate
-$\mathit{ValidState}(a, s)$ and a state invariant $\Phi(s)$ subject to the
-following conditions:
+Let $(\mathit{St}, \init, \effect)$ be an operation structure on a message
+type~$A$ equipped with a happens-before relation~$\hb$ and a set
+$S \subseteq A$ of source messages.  The structure is \emph{causally
+validatable} with respect to $S$ when there exist a validity predicate
+$\mathit{isValid}(s, a)$ and a state invariant $\Phi(s)$ such that:
 \begin{enumerate}
-\item $\Phi(\init)$ holds, and $\Phi$ is preserved by every valid effect:
-  if $\Phi(s)$, $\mathit{ValidState}(a, s)$, and $\effect(a, s) =
-  \mathit{Ok}(s')$, then $\Phi(s')$.
+\item $\Phi(\init)$ holds, and whenever $\Phi(s)$,
+  $\mathit{isValid}(s, a)$, and $\effect(a, s) = s'$, we have $\Phi(s')$.
 \item \emph{Causal validity.}
-  For every source operation~$a$ (i.e.\ $\mathit{Src}(a)$), every
-  $\hb$-consistent, $\hb$-closed, duplicate-free list~$L$ that contains every
-  $\hb$-predecessor of~$a$, and every state~$s$ with $\interpOps(L, \init) =
-  \mathit{Ok}(s)$, $\mathit{ValidState}(a, s)$ holds.
+  For every $a \in S$, every $\hb$-consistent, $\hb$-closed, duplicate-free
+  list $L$ that contains every $\hb$-predecessor of $a$, and every state
+  $s$ with $\interpOps(L, \init) = s$, the predicate
+  $\mathit{isValid}(s, a)$ holds.
 \end{enumerate}
 \end{definition}
 
-The causal validity condition is much stronger than ``valid at broadcast
-implies valid at replay'': it makes no reference to the state in which~$a$ was
-originally broadcast.  Instead, it asserts that $a$'s validity is determined
-solely by the presence of its $\hb$-predecessors---any $\hb$-consistent
-execution containing them yields a state at which $a$ is valid.  This
-abstraction is what allows the convergence proof to reorder operations
-freely: each operation's validity survives any causally compatible context.
+\noindent
+Informally, causal validity says that the validity of $a$ depends only on
+the presence of its $\hb$-predecessors in the replay, not on the order in
+which they are applied or on the state at which $a$ was originally
+broadcast.  This \emph{downward-closed} character is exactly what lets us
+apply $a$ to any reordered state produced by the swap argument: so long as
+the replay has reached a state whose list contains the causal predecessors,
+$a$ is valid there.
 
-%% P5: Generic Convergence Theorem
-\begin{theorem}[Generic Convergence, \leanref{hb\_consistent\_effect\_convergent}]
+\begin{theorem}[Generic convergence,
+  \leanref{hb\_consistent\_effect\_convergent}]
 \label{thm:generic-conv}
-Suppose the operation semantics is causally validatable
-(Definition~\ref{def:causally-valid}) with respect to a source predicate
-$\mathit{Src}$.  Let $L_0, L_1$ be two lists with $\mathit{Src}(a)$ for all
-$a \in L_0 \cup L_1$, both $\hb$-consistent and $\hb$-closed, both
-duplicate-free, and with $L_0$ satisfying conditional commutativity.  If
-$L_0$ and $L_1$ contain the same elements, then
+Suppose the operation semantics is causally validatable with respect to a
+source set $S$ (Definition~\ref{def:causally-valid}), and let $L_0$ and
+$L_1$ be two lists with every element of $L_0 \cup L_1$ in $S$, both
+$\hb$-consistent, both $\hb$-closed, both duplicate-free, and with $L_0$
+satisfying conditional concurrent commutativity.  If $L_0$ and $L_1$
+contain the same elements, then
 $\interpOps(L_0, \init) = \interpOps(L_1, \init)$.
 \end{theorem}
 
 \noindent\textit{Proof sketch.}
-By reverse induction on $L_1$.  In the inductive step,
-$L_1 = L_1' \mathbin{+\!\!+} [b]$; we locate $b$ inside
-$L_0$ and use the Swap Lemma (Lemma~\ref{lem:swap}) to
-bubble $b$ to the end of $L_0$ by adjacent transpositions.
-Each transposition swaps two concurrent operations;
-conditional commutativity
-(Definition~\ref{def:conditional-comm}) justifies that the
-swap preserves the computed state.  Causal validity is
-needed because after reordering, an operation is applied
-to a different state than the one it was originally
-broadcast against; causal validity ensures it remains
-valid at that state.
+By reverse induction on $L_1$; write $L_1 = L_1' \mathbin{+\!\!+} [b]$.
+Locate $b$ in $L_0$ and, by repeated application of
+Lemma~\ref{lem:swap}, move $b$ to the end of $L_0$ by swapping it past
+adjacent concurrent operations one at a time.  Each swap preserves the
+computed state by conditional commutativity; causal validity is needed at
+each swap because the operation applied on the right of the pair sees a
+different state from the one at which it was originally broadcast, and
+Definition~\ref{def:causally-valid} guarantees that it is nevertheless
+valid there.
 
-%% P6: Yjs Instantiation
 \subsection{Yjs Instantiation}
 \label{subsec:yjs-inst}
-To instantiate Theorem~\ref{thm:generic-conv} for Yjs, we must verify five
-premises: concurrent commutativity, non-reachability of concurrent inserts,
-causal validity, and three structural properties of the causal network.
-We now describe each.
 
-\begin{theorem}[Yjs Concurrent Commutativity, \leanref{YjsOperationNetwork\_concurrentCommutative}]
-\label{thm:yjs-comm}
-For any Yjs operation network, the list of delivered operations at any node
-satisfies conditional commutativity with respect to the Yjs array invariant.
-\end{theorem}
-\noindent\textit{Proof.}
-Case analysis on the operation types.
-Insert-delete and delete-delete follow directly from
-Theorems~\ref{thm:ins-del} and~\ref{thm:del-del}.
-The insert-insert case requires showing that two concurrently inserted items
-are not origin-reachable from each other.  Intuitively, if item~$b$ were
-reachable from item~$a$ via origin chains, then $b$ would already exist in
-the state where $a$ was resolved---but $b$'s clock-safety check would then
-fail, contradicting the assumption that $b$'s insert succeeds.
+To apply Theorem~\ref{thm:generic-conv} to Yjs, we take $S$ to be the set
+of messages broadcast by some node, $\Phi$ to be the Yjs array invariant
+(Definition~\ref{def:state-inv}), and $\mathit{isValid}$ to be the
+broadcast-validity predicate of the operation network
+(Definition~\ref{def:item-valid}).  Under these choices, the
+state-invariant preservation clause of
+Definition~\ref{def:causally-valid} follows from
+Theorem~\ref{thm:ins-pres}, and the two substantial premises---causal
+validity and conditional concurrent commutativity---are established by the
+two lemmas below.
 
-\begin{lemma}[Concurrent Inserts Are Not Origin-Reachable (\leanref{concurrent\_insert\_not\_reachable})]
-\label{lem:not-reach}
-Let $a$, $b$ be two insert inputs resolved against the
-same invariant-satisfying state~$s$.  If applying $a$ then
-$b$ succeeds, then neither item is origin-reachable from
-the other:
-$\neg\mathit{Reach}(a, b) \land \neg\mathit{Reach}(b, a)$.
-\end{lemma}
-\noindent\textit{Proof.}
-Suppose for contradiction that the $b$-item is reachable
-from the $a$-item.
-Since the $a$-item's origin and right-origin already exist
-in~$s$ (resolved from~$s$), every origin-reachable step
-remains within~$s$
-(\leanref{toItem\_reachable\_mem}).
-Therefore the $b$-item is already in~$s$, and its
-identifier is present.
-But $b$'s insert succeeds only when the clock-safety check
-passes (\leanref{isClockSafe\_false\_of\_mem}),
-giving a contradiction.
-
-With this lemma, the insert-insert case invokes
-Theorem~\ref{thm:ins-ins} with the non-reachability,
-different-client-id, and validity hypotheses.
-
-\begin{lemma}[Yjs Causal Validity (\leanref{isValidState\_insert\_causally})]
+\begin{lemma}[Yjs causal validity (\leanref{isValidState\_insert\_causally})]
 \label{lem:yjs-causal-valid}
-The Yjs operation network is causally validatable with source predicate
-$\mathit{Src}(a) = (a \text{ is broadcast by some node})$.
+The Yjs operation network is causally validatable with source set the
+messages broadcast by some node.
 \end{lemma}
+
 \noindent\textit{Proof sketch.}
-The valid-message axiom of the operation network guarantees that each
-broadcast insert is valid at its own broadcast state.  We transport this
-validity to any state reached by an $\hb$-consistent execution containing
-$a$'s predecessors, in three steps:
-(1)~the broadcast state's invariant $\Phi$ is maintained by insert preservation
-(Theorem~\ref{thm:ins-pres});
-(2)~any item present in the broadcast state remains present in all later
-states (monotonicity of the items array);
-(3)~item validity at the broadcast state transports to any later state that
-contains the same items (validity depends only on membership, not ordering).
+Broadcast validity~(V) gives us, for each source $a$, a state $s^\star$ at
+which $a$'s item is valid: the local state at the broadcasting replica
+just before the broadcast.  Let $L$ be any $\hb$-consistent, $\hb$-closed,
+duplicate-free list containing every $\hb$-predecessor of $a$, and let $s
+= \interpOps(L, \init)$.  We transport item validity from $s^\star$ to $s$
+in two steps.  First, every item present at $s^\star$ is also present at
+$s$, because the $\hb$-predecessors of $a$ (which by broadcast validity
+populate $s^\star$) are all contained in $L$ by assumption, and the items
+array is monotone under insert/delete.  Second, item validity depends only
+on membership of the relevant origin chain in the item set, not on
+positions within the sorted array; it is therefore preserved by any
+superset that still satisfies the array invariant, and
+Theorem~\ref{thm:ins-pres} ensures that $s$ does satisfy the invariant.
 
-The remaining three premises are structural properties of
-the causal network:
-
-\begin{lemma}[$\hb$-Consistency of Delivered Messages (\leanref{hb\_consistent\_local\_history})]
-\label{lem:hb-consistent-delivered}
-For any Yjs operation network and any node $i$, the list
-$\mathit{Del}(i)$ is $\hb$-consistent.
+\begin{lemma}[Yjs concurrent commutativity,
+  \leanref{YjsOperationNetwork\_concurrentCommutative}]
+\label{thm:yjs-comm}
+For any Yjs operation network, the list of delivered operations at any
+node satisfies conditional concurrent commutativity with respect to the
+Yjs array invariant.
 \end{lemma}
 
-\begin{lemma}[$\hb$-Closure (\leanref{toDeliverMessages\_hbClosed})]
-\label{lem:hb-closed-delivered}
-$\mathit{Del}(i)$ is $\hb$-closed.
+\noindent\textit{Proof sketch.}
+A case analysis on the types of the concurrent pair.  The
+delete-delete and insert-delete cases are immediate from the structure of
+the state, as discussed at the start of \S\ref{sec:algorithm}.  The
+insert-insert case combines two ingredients: distinct client identifiers
+(from the distinct sources~(Y1)) and the fact that the two items are not
+origin-reachable from each other, which is derivable from causal validity
+(Lemma~\ref{lem:yjs-causal-valid}) by an argument that any item
+origin-reachable from the first one must already be present in the
+earlier broadcast state and so cannot be the second one; the argument is
+given in Appendix~\ref{app:not-reach}.  With these inputs,
+Corollary~\ref{thm:ins-ins} concludes.
+
+Finally, the three \emph{structural} premises---$\hb$-consistency,
+$\hb$-closure, and duplicate-freedom of
+$\Delivered{i}(H_i)$---are properties of any causal network and do not
+involve the Yjs-specific layer at all.
+
+\begin{lemma}[Structural properties of delivered messages
+  (\leanref{hb\_consistent\_local\_history},
+   \leanref{toDeliverMessages\_hbClosed},
+   \leanref{toDeliverMessages\_IdNoDup})]
+\label{lem:structural-delivered}
+For every node $i$ of a (causal) operation network,
+$\Delivered{i}(H_i)$ is $\hb$-consistent, $\hb$-closed, and duplicate-free.
 \end{lemma}
 
-\begin{lemma}[Duplicate-Freedom (\leanref{toDeliverMessages\_IdNoDup})]
-\label{lem:nodup-delivered}
-$\mathit{Del}(i)$ contains no duplicate identifiers.
-\end{lemma}
-$\hb$-consistency is proved by induction on the
-delivery list: for each new head~$a$, the causal
-delivery axiom guarantees that no later element
-$\hb$-precedes~$a$ (otherwise it would have been
-delivered first), and event distinctness rules out
-duplicates.
-$\hb$-closure follows because the causal delivery
-axiom requires all $\hb$-predecessors to be delivered
-before~$a$; combined with $\hb$-consistency of the
-suffix, each predecessor must appear earlier.
-Duplicate-freedom reduces to the network's message-ID
-uniqueness axiom: two operations with the same ID
-trace back to the same broadcast event.
+\noindent\textit{Proof sketch.}
+(1)~$\hb$-consistency holds because causal delivery forces any $\hb$-predecessor
+of a delivered message to be delivered before it, so no later element in
+the delivery list $\hb$-precedes an earlier one.
+(2)~$\hb$-closure holds because the same axiom ensures every
+$\hb$-predecessor of a delivered message is itself delivered at the same
+node.
+(3)~Duplicate-freedom follows from the network's message-ID uniqueness
+axiom~(N3).  Further details are in Appendix~\ref{app:structural-delivered}.
 
 %% P7: Yjs Convergence
 \begin{theorem}[Yjs Convergence (\leanref{YjsOperationNetwork\_converge'})]
 \label{thm:yjs-convergence}
 For any Yjs operation network, if nodes $i$ and $j$
 deliver the same set of operations
-($\mathit{Del}(i) = \mathit{Del}(j)$ as sets), then
-$\interpOps(\mathit{Del}(i), \init) =
- \interpOps(\mathit{Del}(j), \init)$.
+($\Delivered{i}(H_i) \approx \Delivered{j}(H_j)$), then
+$\interpOps(\Delivered{i}(H_i), \init) =
+ \interpOps(\Delivered{j}(H_j), \init)$.
 \end{theorem}
 
 \noindent\textit{Proof.}
 Apply Theorem~\ref{thm:generic-conv} with
-$L_0 = \mathit{Del}(i)$ and $L_1 = \mathit{Del}(j)$.
-The five required hypotheses are:
-$\hb$-consistency (Lemma~\ref{lem:hb-consistent-delivered}),
-$\hb$-closure (Lemma~\ref{lem:hb-closed-delivered}),
-duplicate-freedom (Lemma~\ref{lem:nodup-delivered}),
-concurrent commutativity
-(Theorem~\ref{thm:yjs-comm}), and
-causal validity (Lemma~\ref{lem:yjs-causal-valid}).
+$L_0 = \Delivered{i}(H_i)$ and $L_1 = \Delivered{j}(H_j)$; the required
+hypotheses are discharged by the lemmas of this subsection.
 
 %%
 %% -------------------------------------------------------------------
@@ -1229,6 +1332,20 @@ Lim and Kim~\cite{Lim2019} develop a mechanized CRDT theory; neither addresses
 the Yjs/YATA family.  Other sequence CRDTs have been verified
 in restricted settings~\cite{Netzell2020}.
 
+Weidner et al.~\cite{Weidner2023} design the \emph{Fugue} sequence CRDT and,
+in its appendix, provide a by-hand proof for a variant of the Yjs
+integration algorithm.  Their development does not isolate conditional
+commutativity as an explicit property, nor does it formulate a causal
+validity condition; instead, the proof implicitly relies on the fact that
+concurrent operations originating at causally adjacent states preserve an
+invariant analogous to ours, which is precisely the content of conditional
+commutativity.  To the best of our understanding of the by-hand
+appendix, that reliance surfaces in the step showing that the integration
+scan lands at the unique sorted position, where the argument appeals to
+well-formedness of the current document---a property that holds only for
+reachable states.  Making this reliance explicit and machine-checked is one
+of the contributions of the present paper.
+
 %% P2: YATA paper and the bug
 The YATA paper~\cite{Nicolaescu2016} introduces the algorithm that Yjs
 implements, with proofs sketched for a subset of the required properties.
@@ -1256,7 +1373,7 @@ requirements for sequence CRDTs but does not mechanize proofs.
 We have introduced a conditional commutativity convergence framework that
 generalizes the standard unconditional commutativity approach, and instantiated
 it for Yjs to obtain the first complete machine-checked proof of strong
-eventual consistency for the Yjs integration algorithm.
+eventual consistency for the Yjs core CRDT algorithm.
 The main theorem (\leanref{YjsOperationNetwork\_converge'}) is fully
 machine-checked in Lean~4 with no axioms beyond those of its type theory.
 
@@ -1265,15 +1382,17 @@ The conditional commutativity framework is independent of Yjs: any CRDT whose
 operations commute on invariant-satisfying reachable states---rather than on
 all states---fits naturally into our generic theorem
 (Theorem~\ref{thm:generic-conv}).  We expect this framework to be applicable
-to other CRDTs with state-dependent conflict resolution.
+to other CRDTs with state-dependent conflict resolution.  Whether there is
+a CRDT other than Yjs that genuinely needs the \emph{causal validity}
+condition (as opposed to conditional commutativity alone) is an open
+question we leave for future work.
 
 %% P3: Limitations and future work
-The present formalization models the core integration algorithm with insert
-and delete operations.
-We do not model garbage collection, undo/redo, subdocuments, or the awareness
-protocol.  The artifact contains an incomplete indirect variant where items
-reference origins by identifier.  Extending the proof to these features is
-future work.
+The present formalization models the core CRDT algorithm with insert and
+delete operations.  We do not model garbage collection, undo/redo,
+subdocuments, or the awareness protocol.  The artifact contains an
+incomplete indirect variant where items reference origins by identifier.
+Extending the proof to these features is future work.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{refs}
@@ -1519,18 +1638,62 @@ Let $u = \mathit{newItem}$ and $o = \mathit{arr}[i]$ be the scanned element.
   $\mathit{scanning}$} ---
   continue; extend pending region.
   Obligation: \textbf{scannedRegion},
-  condition~(2b).  Let $a_d = \mathit{arr}[\mathit{dest}]$.
-  We must show
-  $a_d.\mathit{origin} \YjsLeq o.\mathit{origin}$.
-  By \emph{scanningOrigin},
-  $a_d.\mathit{origin} = u.\mathit{origin}$,
-  and $a_d \YjsLt o$ by sorted order.
-  No-cross-origin
-  (Lemma~\ref{lem:no-cross-origin}) then
-  gives the required inequality
-  (the other disjunct places~$o$ at
-  or before $u.\mathit{origin}$,
-  a contradiction).
+  condition~(2b), which asks for
+  $u.\mathit{origin} \YjsLt o.\mathit{origin}$.
+  This is the scan hypothesis directly.
 \end{itemize}
+
+%%
+%% -------------------------------------------------------------------
+\section{Concurrent Inserts Are Not Origin-Reachable}
+\label{app:not-reach}
+%%
+
+\begin{lemma}[Concurrent inserts are not origin-reachable
+  (\leanref{concurrent\_insert\_not\_reachable})]
+\label{lem:not-reach}
+Let $a$, $b$ be two insert inputs, both valid at a state~$s$ satisfying
+the array invariant.  Then neither of the induced items is
+origin-reachable from the other.
+\end{lemma}
+
+\noindent\textit{Proof sketch.}
+Suppose for contradiction that the item induced by $b$ were
+origin-reachable from the item induced by $a$.  Because $a$'s origin and
+right-origin already exist in~$s$ (they resolve against
+$s.\mathit{items}$), every origin-reachable step from $a$'s item stays
+inside $\mathit{ArrSet}(s.\mathit{arr})$
+(\leanref{toItem\_reachable\_mem}).  Hence the item induced by~$b$
+already sits in~$s$, so its identifier is present.  But $b$'s insert
+only succeeds when the clock-safety check rules out an identifier clash
+(\leanref{isClockSafe\_false\_of\_mem}), contradicting the assumption
+that applying $b$ at the state in which $b$ was broadcast succeeded.
+
+%%
+%% -------------------------------------------------------------------
+\section{Structural Properties of Delivered Messages}
+\label{app:structural-delivered}
+%%
+
+\noindent\textit{Proof of Lemma~\ref{lem:structural-delivered}.}
+Fix a node~$i$ and write $L = \Delivered{i}(H_i)$.
+
+\smallskip\noindent\textbf{$\hb$-consistency.}
+By induction on $L$.  Suppose $L = a :: L'$ and, for contradiction, some
+later $b \in L'$ satisfies $b \hble a$.  By definition of~$\hb$ this
+means $b \hb a$ or $b = a$; the latter is excluded because events in
+$H_i$ are duplicate-free.  The causal delivery axiom then forces
+$\Deliver(b) <_i \Deliver(a)$ in~$H_i$, hence $b$ appears before $a$ in
+$L$---contradicting $b \in L'$.
+
+\smallskip\noindent\textbf{$\hb$-closure.}
+For $a \in L$ and any $b \hb a$, the causal delivery axiom requires
+$\Deliver(b) <_i \Deliver(a)$ in~$H_i$, so $b \in L$.
+
+\smallskip\noindent\textbf{Duplicate-freedom.}
+Two distinct occurrences of the same message in~$L$ would correspond to
+two distinct $\Deliver$ events in~$H_i$ carrying the same $\mathit{msgId}$;
+by axiom~(N3) together with (N1)/(N2) both trace back to the same
+broadcast event, contradicting event duplicate-freedom within~$H_i$.
 
 \end{document}
