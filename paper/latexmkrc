@@ -1,0 +1,3 @@
+$ENV{'TEXINPUTS'} = 'acmart-primary//:' . ($ENV{'TEXINPUTS'} // '');
+$ENV{'BSTINPUTS'} = 'acmart-primary//:' . ($ENV{'BSTINPUTS'} // '');
+$ENV{'BIBINPUTS'} = 'acmart-primary//:' . ($ENV{'BIBINPUTS'} // '');
