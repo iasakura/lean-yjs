@@ -38,6 +38,8 @@
 \newcommand{\Deliver}{\mathsf{Deliver}}
 \newcommand{\Broadcast}{\mathsf{Broadcast}}
 \newcommand{\Delivered}[1]{\mathit{delivered}_{#1}}
+%% Kleisli composition of partial functions (used for Gomes commutativity)
+\newcommand{\kleisli}{\mathbin{\triangleright}}
 
 \copyrightyear{2025}
 \acmYear{2025}
@@ -64,7 +66,7 @@ convergence theorem that requires commutativity only on invariant-satisfying
 states and combines it with a prefix-level causal validity transport
 condition.  The latter is a mechanized refinement of the
 delivery-precondition obligation already implicit in the Shapiro-style
-CmRDT theorem.  We instantiate the framework for Yjs, obtaining the first
+op-based CRDT theorem.  We instantiate the framework for Yjs, obtaining the first
 complete machine-checked proof that the Yjs core CRDT algorithm achieves
 strong eventual consistency.  The entire development is formalized in
 Lean~4 with no axioms beyond those of its type theory.
@@ -79,78 +81,80 @@ Lean~4 with no axioms beyond those of its type theory.
 %%
 
 %% P1: Motivation
-Collaborative editors must reconcile insertions and deletions performed at
-different replicas without requiring a single global order of user actions.
-Yjs~\cite{Yjs2023} is one of the most widely deployed CRDT implementations
-for this setting, powering collaborative editors such as
-Tiptap~\cite{TipTap2024}.  Its core algorithm, however, is intricate, and
-reasoning about its correctness by hand is error-prone: while developing
-the present formalization we discovered a non-convergent case in the
-pseudocode published in the YATA paper of Nicolaescu et
-al.~\cite{Nicolaescu2016} on which Yjs is based.  The original author
-confirmed our finding---``Nine years later, you are actually the first to
-point out the issue in the pseudocode in the
-paper''~\cite{YjsBugDiscussion2024}---which itself illustrates why
-machine-checked correctness proofs are valuable for CRDTs of this
-complexity.
+Collaborative editors must reconcile edits like insertions and deletions
+of characters performed at different replicas without requiring a single
+global order of user actions.  Conflict-free replicated data types
+(CRDTs)~\cite{Shapiro2011} are a class of data structures designed for
+this style of replication, in which each replica processes operations
+locally and replicas converge to the same state once they have exchanged
+all updates.  Yjs~\cite{Yjs2023} is one of the most widely deployed CRDT
+implementations for sequence data, powering collaborative editors such as
+Tiptap~\cite{TipTap2024}.  Its core algorithm is intricate, however, and
+reasoning about its correctness by hand is error-prone.  Indeed, we
+discovered a non-convergent case in the pseudocode published in the YATA
+paper of Nicolaescu et al.~\cite{Nicolaescu2016} on which Yjs is based.  The original author
+confirmed our finding, remarking that ``Nine years later, you are
+actually the first to point out the issue in the pseudocode in the
+paper''~\cite{YjsBugDiscussion2024}.  The fact that the issue went
+unnoticed for nine years illustrates why machine-checked correctness
+proofs are valuable for CRDTs of this complexity.
 
-%% P2: Yjs algorithm intuition
-Yjs represents each inserted character as an item whose identifier is unique
-and whose \emph{origin} and \emph{right origin} record the neighboring items
-seen when the character was created.  When two replicas insert into the same
-interval concurrently, the integration procedure scans the items between
-these two recorded neighbors and uses a deterministic tiebreaker to choose a
-single position.  This design differs from sequence CRDTs such as
-RGA~\cite{Roh2011} and Logoot~\cite{Weiss2010}, where globally unique
-timestamps or dense position identifiers make the ordering of concurrent
-insertions independent of the current document state.  In Yjs, the
-correctness argument must instead explain why each insertion is applied only
-to states in which its recorded neighbors still form a structurally valid
-interval.
+%% P2: Prior work on Yjs correctness
+To the best of our knowledge, no complete machine-checked convergence
+proof has been published for the Yjs core algorithm.  Among prior work
+formally arguing the correctness of Yjs, Nicolaescu et
+al.~\cite{Nicolaescu2016} introduced YATA together with hand proofs of
+selected properties, and Weidner et al.'s Fugue~\cite{Weidner2023}, a
+closely related sequence CRDT, includes a by-hand proof for a variant
+of the Yjs insertion procedure in its appendix.  Both efforts
+remain at the level of proof sketches and leave significant gaps to a
+complete formalization.
 
-%% P3: Prior work and the gap
-No complete machine-checked convergence proof has been published for the
-Yjs core algorithm.  Among Yjs-specific developments, Nicolaescu et
-al.~\cite{Nicolaescu2016} introduced YATA with hand proofs for selected
-properties only, and Weidner et al.'s Fugue~\cite{Weidner2023}---a closely
-related sequence CRDT---accompanies its design with a by-hand argument for
-a variant of the Yjs insertion procedure.  Generic CRDT frameworks
-naturally raise the question whether one of them already subsumes Yjs.
-Shapiro et al.~\cite{Shapiro2011} formulate CmRDTs in a way that
-accommodates state-dependent effectors: an effector is enabled only when a
-delivery precondition holds.  Existing \emph{mechanized} convergence
-frameworks, however, have typically avoided this enabledness obligation by
-proving convergence from \emph{unconditional} commutativity.  In the
-Isabelle/HOL framework of Gomes et al.~\cite{Gomes2017}, for example,
-validity appears at the network level, but the convergence theorem itself
-does not need to transport validity across the intermediate states
-encountered by an adjacent-swap proof.
+%% P3: Gomes framework
+Gomes et al.~\cite{Gomes2017} proposed a formal verification framework
+for operation-based CRDTs.  They give a network model of op-based CRDT,
+a commutativity-based convergence theorem, and instantiate them to
+verify several CRDT algorithms including RGA~\cite{Roh2011}, a simpler list CRDT than Yjs.
+Deriving convergence (strong eventual consistency) from commutativity of concurrent
+operations is the standard verification method for op-based CRDTs.
+The Gomes framework formalizes this method by providing a convergence
+theorem that says commutativity of all concurrent operation pairs on
+arbitrary state suffices to obtain convergence.
 
-%% P4: Why it fails for Yjs
-Yjs exposes exactly the gap between these two styles of reasoning.  We
-exhibit a mechanized counterexample (\S\ref{sec:overview}) showing that two
-Yjs insert operations need not commute when they are applied to an arbitrary
-state.  The counterexample is unreachable under causal delivery, but
-unconditional commutativity quantifies over all states, including states in
-which an operation's origin and right origin no longer describe a valid
-interval.  The failure is therefore not a convergence bug in the corrected
-Yjs algorithm; it shows that the usual mechanized proof principle is too
-strong for this state-dependent insertion procedure.
+%% P4: Why Gomes does not apply to Yjs
+However, as we show in \S\ref{sec:overview}, the Gomes framework cannot
+be applied to Yjs, because Yjs is not commutative in the sense the
+framework requires.  In that definition, commutativity is
+$\effect(a, \effect(b, s)) = \effect(b, \effect(a, s))$ for every
+concurrent pair of operations $a$, $b$ and every state $s$, where
+$\effect$ applies an operation (e.g., an insert) to a state (e.g., a
+list).  Yjs
+operations commute only when the operations and the state satisfy a
+specific structural condition.  Since Gomes's definition gives the
+operations and the state independently, such a relational constraint
+cannot be expressed.  In this work we prove a convergence theorem under
+a relaxed commutativity, which we call \emph{conditional commutativity},
+and use it to obtain the first complete machine-checked proof of strong
+eventual consistency for the Yjs core CRDT algorithm
+(Theorem~\ref{thm:yjs-convergence}).
 
-%% P5: Our solution — prefix-level conditional commutativity + causal validity
-Our proof follows the Shapiro-style idea of restricting commutativity to
-enabled states, but makes the corresponding delivery obligation precise
-enough for mechanization.  The generic convergence theorem
-(Theorem~\ref{thm:generic-conv}) requires conditional commutativity on
-states satisfying an invariant, together with a prefix-level causal
-validity condition: whenever a $\hb$-consistent, $\hb$-closed,
-duplicate-free prefix already contains the $\hb$-predecessors of an
-operation, that operation is valid at the state obtained by applying
-the prefix.  This condition is what lets an adjacent-swap proof apply
-an operation at intermediate states other than the one at which it was
-originally broadcast.  Instantiating the theorem for Yjs gives the first
-complete machine-checked proof of strong eventual consistency for the
-Yjs core CRDT algorithm (Theorem~\ref{thm:yjs-convergence}).
+%% P5: Our solution — proving commutativity for Yjs
+We prove commutativity by defining a strict total order on Yjs items
+and showing that every Yjs operation preserves the invariant that the
+array is sorted under this order; since a strict total order admits at
+most one sorted arrangement of any item set, two delivery orders
+producing the same item set produce identical arrays.  The overall
+strategy is the same as Nicolaescu et al.~\cite{Nicolaescu2016}, but
+the order definition and the preservation proof are new.  Our order is
+derived from the conditions intuitively required of any Yjs-compatible
+order, yet strong enough to be a strict total order.  Insert
+preservation is proved by a loop invariant with intricate conditions,
+and its preservation step reasons about six independent cases
+determined by the algorithm's branch and the loop's scanning state.
+The order definition, the loop invariant, and the six-case
+preservation analysis are all machine-checked in Lean~4, ruling out
+the case omissions to which informal correctness proofs of such
+intricate algorithms are prone.
 
 %% P6: Contributions
 This work makes two contributions.
@@ -163,7 +167,7 @@ This work makes two contributions.
   validity transport condition ensuring that broadcast-time validity
   survives any causally compatible reordering of the delivery list.
   This may be viewed as a mechanized, prefix-level refinement of the
-  delivery-precondition obligation implicit in Shapiro-style CmRDTs,
+  delivery-precondition obligation implicit in Shapiro-style op-based CRDTs,
   while generalizing the unconditional-commutativity convergence theorem
   used by Gomes et al.  We accompany the framework with a mechanized
   counterexample showing that unconditional commutativity is genuinely
@@ -175,9 +179,9 @@ This work makes two contributions.
   items by the Yjs insert and delete operations.  The insert operation,
   in particular, is defined by a non-trivial procedural loop, and proving
   that it preserves the order required discovering a four-part loop
-  invariant.  We also mechanize a strict total order on Yjs items---with
-  totality, transitivity, and asymmetry---together with a no-cross-origin
-  lemma that drives the preservation proof; the inference rules of the
+  invariant.  We also mechanize a strict total order on Yjs items, satisfying
+  totality, transitivity, and asymmetry, together with a no-cross-origin
+  lemma that drives the preservation proof.  The inference rules of the
   order are carefully balanced so that transitivity and asymmetry can be
   recovered via size-based induction.
 \end{enumerate}
@@ -200,8 +204,8 @@ Appendix~\ref{app:order-proofs}.
 %%
 
 This section presents the network model and its instantiation to Yjs.  We
-first introduce a generic operation network model---a mild reformulation of
-the OOPSLA'17 framework of Gomes et al.~\cite{Gomes2017}---parameterized by
+first introduce a generic operation network model, a mild reformulation of
+the OOPSLA'17 framework of Gomes et al.~\cite{Gomes2017}, parameterized by
 a message type, an operation structure (state space, initial state, and
 effect function), and a validity predicate.  We then define the Yjs
 execution model by instantiating each parameter with Yjs-specific data
@@ -285,8 +289,8 @@ $m_2$ is delivered at node~$i$ and $m_1 \hb m_2$, then $\Deliver(m_1) <_i
 
 %% P3: Operation, Operation Network, Delivered Messages, Interpretation
 So far, the message type~$A$ only carries an identifier.
-An \emph{operation network} equips messages with additional structure---a
-state-transition semantics and a validity predicate---so that messages can be
+An \emph{operation network} equips messages with additional structure: a
+state-transition semantics and a validity predicate, so that messages can be
 interpreted as state-transforming operations.  We first define the
 state-transition structure, then introduce the delivered-message projection
 that turns a history into the sequence of operations that actually affect
@@ -332,7 +336,7 @@ Condition~(V) is intentionally weaker than the prefix-level causal validity
 condition introduced in \S\ref{sec:convergence}: it records that a message
 was well-formed when it was issued, but it does not by itself imply that
 the same message remains valid at the intermediate states encountered by a
-swap-based commutativity argument.
+swap-based commutativity proof.
 
 %%
 \subsection{Yjs Data Model}
@@ -517,7 +521,7 @@ set of operations converge to equal states.
 This section presents the high-level structure of our convergence proof.
 We first recall the convergence framework of Gomes et al.~\cite{Gomes2017}
 and exhibit a Yjs counterexample showing that one of its
-hypotheses---unconditional concurrent commutativity---is too strong for
+hypotheses, namely unconditional concurrent commutativity, is too strong for
 Yjs (\S\ref{subsec:why-gomes}).  We then describe the generalization that
 underlies our proof: conditional commutativity together with a causal
 validity transport condition (\S\ref{subsec:our-approach}).
@@ -528,10 +532,13 @@ validity transport condition (\S\ref{subsec:our-approach}).
 The Gomes et al.\ Isabelle/HOL framework~\cite{Gomes2017} establishes
 strong eventual consistency for an operation-based CRDT under the
 following \emph{unconditional} commutativity premise: for every pair of
-concurrent operations $a$ and $b$ and every state $s$,
+concurrent operations $a$ and $b$,
 \[
-  \effect(a, \effect(b, s)) = \effect(b, \effect(a, s)).
+  \hat{a} \kleisli \hat{b} \;=\; \hat{b} \kleisli \hat{a},
 \]
+where $\hat{x} \triangleq \lambda s.\,\effect(x, s)$ and $\kleisli$
+denotes Kleisli composition of partial functions
+($f \kleisli g \triangleq \lambda s.\, f(s) \mathbin{>\!\!>\!=} g$).
 Once this property is verified for the CRDT under study, the framework
 combines it with the causal-network axioms of \S\ref{subsec:network} to
 conclude that any two nodes that have delivered the same set of
@@ -575,11 +582,11 @@ $[a, n, o, b]$.
 
 The root cause is that $o$ was generated with origin $\First$ and
 right-origin $\langle b \rangle$ at a replica where these two pointers
-were adjacent---no other item lay between them.  In the counterexample
+were adjacent: no other item lay between them.  In the counterexample
 state $s$, however, $a$ sits between them, so $o$ no longer accurately
 records its insertion position.  Such an $s$ cannot arise under causal
 delivery, since $o$ would never have been delivered into a state already
-containing $a$ in this configuration; the counterexample is unreachable.
+containing $a$ in this configuration.  The counterexample is therefore unreachable.
 The Gomes commutativity premise nonetheless quantifies over \emph{all}
 states, including unreachable ones, and is therefore falsified.  Worse,
 no invariant on $s$ alone can rule out instances like this one: whether
@@ -589,7 +596,7 @@ at which it is applied.
 \subsection{Our approach: a generic convergence framework}
 \label{subsec:our-approach}
 
-Following the Shapiro-style CmRDT~\cite{Shapiro2011} idea of restricting
+Following the Shapiro-style op-based CRDT~\cite{Shapiro2011} idea of restricting
 commutativity to states satisfying a delivery precondition, we generalize
 Gomes's commutativity premise to a state-dependent one and add a
 companion transport property that lets the swap proof carry validity
@@ -599,7 +606,7 @@ convergence theorem (Theorem~\ref{thm:generic-conv}) that
 \S\ref{sec:convergence} will instantiate for Yjs.
 
 We begin with two structural conditions on an operation list that the
-convergence argument relies on.  The list must be consistent with the
+convergence proof relies on.  The list must be consistent with the
 happens-before relation (no later element $\hb$-precedes an earlier
 one) and closed under $\hb$-predecessors (nothing causally necessary
 is missing).
@@ -624,7 +631,7 @@ list.  The list $L$ is \emph{$\hb$-closed} when, for every $a \in L$
 and every $b$ with $b \hb a$, we also have $b \in L$.
 \end{definition}
 
-The convergence argument reorders operations by adjacent swaps, so we
+The convergence proof reorders operations by adjacent swaps, so we
 need to know that swapping two concurrent operations preserves the
 conditions above.
 
@@ -698,7 +705,7 @@ $\mathit{isValid}(s, a)$ and a state invariant $\Phi(s)$ such that:
 Informally, prefix-level causal validity says that the validity of an
 operation $a$ depends only on the presence of its $\hb$-predecessors in
 the prefix, not on the order in which those predecessors are applied.
-This $\hb$-monotone character is exactly what the swap argument needs:
+This $\hb$-monotone character is exactly what the swap-based proof needs:
 every intermediate state arising during reordering is the result of
 some $\hb$-consistent, $\hb$-closed prefix that contains $a$'s causal
 predecessors, so $a$ is valid there.  The same shape of property arises
@@ -729,7 +736,7 @@ $\interpOps(L_0, \init) = \interpOps(L_1, \init)$.
 \end{theorem}
 
 \noindent\textit{Proof sketch.}
-By reverse induction on $L_1$; write $L_1 = L_1' \mathbin{+\!\!+} [b]$.
+By reverse induction on $L_1$.  Write $L_1 = L_1' \mathbin{+\!\!+} [b]$.
 Locate $b$ in $L_0$ and, by repeated application of
 Lemma~\ref{lem:swap}, move $b$ to the end of $L_0$ by swapping it past
 adjacent concurrent operations one at a time.  Each swap preserves the
@@ -744,14 +751,14 @@ operation's $\hb$-predecessors.
 \noindent
 The remaining sections instantiate Theorem~\ref{thm:generic-conv} for
 Yjs.  Section~\ref{sec:order} introduces the strict total order
-$\YjsLt$ on items that underlies the rest of the argument;
+$\YjsLt$ on items that underlies the rest of the proof;
 Section~\ref{sec:algorithm} proves that Yjs insert and delete preserve
 a state invariant including pairwise sortedness, from which conditional
 concurrent commutativity follows; and Section~\ref{sec:convergence}
 establishes Yjs causal validity and discharges the generic convergence
 theorem.  The structural premises of
-Theorem~\ref{thm:generic-conv}---$\hb$-consistency, $\hb$-closedness,
-and duplicate-freedom of each delivery list---follow from the
+Theorem~\ref{thm:generic-conv} ($\hb$-consistency, $\hb$-closedness,
+and duplicate-freedom of each delivery list) follow from the
 causal-network axioms of \S\ref{subsec:network} alone.
 
 %%
@@ -761,11 +768,11 @@ causal-network axioms of \S\ref{subsec:network} alone.
 %%
 
 This section defines the strict total order $\YjsLt$ on Yjs items that
-underpins every subsequent argument.  The order is only well-behaved on item
+underpins every subsequent proof.  The order is only well-behaved on item
 sets that are structurally closed and satisfy a small invariant.  We
 therefore begin by fixing those conditions, then define $\YjsLt$, and
 finally establish totality, transitivity, and asymmetry.  We close the
-section with a key auxiliary lemma---the \emph{no-cross-origin lemma}---that
+section with a key auxiliary lemma, the \emph{no-cross-origin lemma}, that
 will be used in Section~\ref{sec:algorithm} to show that the Yjs insert
 algorithm terminates in the correct position.
 
@@ -807,10 +814,10 @@ following hold:
 
 The three conditions support the three properties of a strict total order
 proved below: I1 powers asymmetry (Theorem~\ref{thm:asymmetry}), I2 powers
-totality (Theorem~\ref{thm:totality}), and I3---the structural property
-violated in the counterexample of \S\ref{sec:overview}---powers the
+totality (Theorem~\ref{thm:totality}), and I3, the structural property
+violated in the counterexample of \S\ref{sec:overview}, powers the
 no-cross-origin lemma (Lemma~\ref{lem:no-cross-origin}) on which transitivity
-and the algorithmic argument rely.  In the counterexample, item~$o$ has
+and the insert preservation proof rely.  In the counterexample, item~$o$ has
 origin $\First$ and right-origin $\langle b \rangle$; yet $\langle a \rangle$
 is origin-reachable from $\langle o \rangle$ via $b$'s origin, and
 $\First \YjsLt \langle a \rangle \YjsLt \langle b \rangle$, so
@@ -877,7 +884,7 @@ boundaries.
 
 We now show that on any closed item set $P$ satisfying the item-set
 invariant, $\YjsLt$ is a strict total order on $P$.  This is the content
-of the next three theorems---totality, transitivity, and asymmetry.
+of the next three theorems: totality, transitivity, and asymmetry.
 
 \begin{theorem}[Totality (\leanref{yjs\_lt\_total})]
 \label{thm:totality}
@@ -969,8 +976,8 @@ the two cases.
   indicate the $\mathit{origin}$ field of each item; positions on the line
   reflect the order $\YjsLt$.  Assuming $x \YjsLt y$, either (a)~$y$'s
   origin lies at or left of $x$'s origin or (b)~$x$ itself lies at or left
-  of $y$'s origin; the ``forbidden'' configuration---$y_o$ strictly between
-  $x_o$ and $x$---cannot arise.}
+  of $y$'s origin; the ``forbidden'' configuration ($y_o$ strictly between
+  $x_o$ and $x$) cannot arise.}
 \label{fig:no-cross-origin}
 \end{figure}
 
@@ -1030,15 +1037,15 @@ containing $\First$, $\Last$, and each item in $\mathit{arr}$.
 %% P5: Item Validity
 We next define the validity predicate that serves both as the
 operation-network instantiation of broadcast validity~(V) and as the
-precondition under which the commutativity argument operates.  The
+precondition under which the commutativity proof operates.  The
 definition has two layers.  Item validity, defined first, applies to
 fully formed Yjs items and asks for the per-item analogues of conditions
 I1 and I3 of the item-set invariant.  Insert-input validity, defined
 second, applies to the actual operation payloads.  The two layers differ
 because an insert input only carries the \emph{identifiers} of its origin
 and right-origin neighbors, not the items themselves; we must first
-resolve those identifiers against the current array---producing the
-pointer-embedded item the input would create---before the structural
+resolve those identifiers against the current array, producing the
+pointer-embedded item the input would create, before the structural
 conditions on origins make sense.
 
 \begin{definition}[Item and input validity (\leanref{IsItemValid})]
@@ -1069,8 +1076,8 @@ Item validity is state-dependent: the same item may be valid at one state
 but invalid at another.  Broadcast validity~(V) speaks of the state at
 which the item is \emph{issued}, whereas the preservation and
 commutativity theorems below need validity at the state to which the
-insert is \emph{applied}.  The bridge between the two---sufficient under
-causal delivery---is the \emph{causal validity} property of
+insert is \emph{applied}.  The bridge between the two (sufficient under
+causal delivery) is the \emph{causal validity} property of
 \S\ref{sec:convergence}.
 
 %% P6: Insert Preservation
@@ -1086,7 +1093,7 @@ $\effect(\mathsf{Insert}(\mathit{inp}), s)$ also satisfies the invariant.
 \noindent
 The analogous preservation for deletes is trivial: deletion only modifies
 $\mathit{deletedIds}$ and leaves $\mathit{arr}$ unchanged.  The proof of
-insert preservation is a loop-invariant argument on
+insert preservation proceeds by a loop invariant on
 Algorithm~\ref{alg:integrate}: we give a four-part invariant for the loop,
 show that each iteration preserves it, and show that at termination the
 invariant pins down the unique sorted insertion position.
@@ -1315,8 +1322,8 @@ sortedness (\leanref{YjsArrInvariant\_insertIdxIfInBounds}).  The
 other three parts of the invariant transfer by routine calculation.
 
 %% P7: Insert-Insert Commutativity
-We isolate the structural argument that two concurrent inserts do not
-disturb each other's validity as a separate lemma, since it is the only
+We isolate as a separate lemma the structural fact that two concurrent
+inserts do not disturb each other's validity, since it is the only
 place where the network-level assumption~(Y1) on distinct broadcasters
 enters the commutativity proof.
 
@@ -1340,8 +1347,8 @@ $\mathit{inp}_b.\mathit{toItem}(s)$ have distinct identifiers.  By
 Theorem~\ref{thm:ins-pres}, inserting the $a$-item leaves the array
 invariant intact, and the resulting array contains every item of
 $s.\mathit{arr}$ together with the $a$-item.  All ancestors of
-$\mathit{inp}_b.\mathit{toItem}$---in particular those that resolve its
-$\mathit{originId}$ and $\mathit{rightOriginId}$---remain present, so
+$\mathit{inp}_b.\mathit{toItem}$, in particular those that resolve its
+$\mathit{originId}$ and $\mathit{rightOriginId}$, remain present, so
 $\mathit{inp}_b.\mathit{toItem}$ resolves to the same item against the
 larger array, and the per-item validity conditions of
 Definition~\ref{def:item-valid} continue to hold.
@@ -1362,8 +1369,8 @@ Then
 By Lemma~\ref{lem:conc-valid} applied symmetrically, the operation
 applied second is still valid at the post-state of the first, so
 Theorem~\ref{thm:ins-pres} produces invariant-satisfying arrays in both
-orders.  These arrays contain the same underlying item set---the items
-of $s$ together with the items induced by $a$ and $b$---and the
+orders.  These arrays contain the same underlying item set (the items
+of $s$ together with the items induced by $a$ and $b$) and the
 invariant requires pairwise sortedness by $\YjsLt$.  Since $\YjsLt$ is
 a strict total order on invariant-satisfying item sets
 (Theorems~\ref{thm:totality}--\ref{thm:asymmetry}), the two sorted
@@ -1396,8 +1403,8 @@ $\mathit{inp}.\mathit{isValid}(s)$ of
 Definition~\ref{def:item-valid}.  With these definitions, the
 state-invariant preservation clause of
 Definition~\ref{def:causally-valid} is exactly
-Theorem~\ref{thm:ins-pres}, and the two substantial premises---causal
-validity and conditional concurrent commutativity---are established by
+Theorem~\ref{thm:ins-pres}, and the two substantial premises, causal
+validity and conditional concurrent commutativity, are established by
 the two lemmas below.
 
 \begin{lemma}[Yjs causal validity (\leanref{isValidState\_insert\_causally})]
@@ -1450,7 +1457,7 @@ which by~(Y1) means different client identifiers.  The second follows
 from causal validity (Lemma~\ref{lem:yjs-causal-valid}): any item
 origin-reachable from $a$'s would have to be present already at the
 broadcast state of $a$, but a concurrent operation $b$ is by
-definition not in $a$'s broadcast prefix; the detailed argument is
+definition not in $a$'s broadcast prefix; the detailed proof is
 deferred to Appendix~\ref{app:not-reach}.
 
 %% P7: Yjs Convergence
@@ -1482,13 +1489,13 @@ together with the order-preservation of causal delivery.
 \label{sec:related}
 %%
 
-%% P1: Shapiro-style CmRDTs
+%% P1: Shapiro-style op-based CRDTs
 Shapiro et al.~\cite{Shapiro2011} formulate operation-based CRDTs in terms
 of \emph{enabled} effectors: an effector is enabled only on states for
 which a delivery precondition $P$ holds, and concurrent commutativity is
 required only between effectors enabled at a common reachable state, with
 the additional obligation that applying one effector preserves the
-enabledness of the other.  The CmRDT theorem then asks that causal
+enabledness of the other.  The op-based CRDT theorem then asks that causal
 delivery satisfy~$P$, allowing the system to delay delivery until the
 precondition is met.  Our work should not be read as introducing
 delivery preconditions to CRDT theory; rather, we give a prefix-level
@@ -1500,7 +1507,7 @@ swap-based convergence theorem.
 Jacob et al.~\cite{MatrixEventGraph2022} analyse the Matrix Event Graph as
 a CRDT in the Shapiro framework and give a concrete proof of its delivery
 precondition: they prove that $P$ is preserved by the application of
-later operations, use that preservation in their commutativity argument,
+later operations, use that preservation in their commutativity proof,
 and observe that causal delivery immediately satisfies $P$ on reception
 because the parent vertices of an event are never removed.  This is close
 in spirit to the prefix-level causal validity condition of
@@ -1520,7 +1527,7 @@ Definition~\ref{def:operation-network}.  Their convergence theorem,
 however, is based on \emph{unconditional} commutativity of concurrent
 operations, so the proof does not require showing that an operation
 remains valid at each intermediate reordered state.  Validity is therefore not
-absent from the Gomes framework---it is present at the network level---but
+absent from the Gomes framework (it is present at the network level) but
 their proof has no need for a prefix-level validity transport condition
 because the CRDTs they verify (notably RGA, which orders concurrent
 insertions via globally unique timestamps without reference to the
@@ -1549,8 +1556,8 @@ adjacent states preserve an invariant analogous to ours, which is
 precisely the content of conditional commutativity.  To the best of our
 understanding of the by-hand appendix, that reliance surfaces in the
 step showing that the insert procedure lands at the unique sorted position,
-where the argument appeals to well-formedness of the current
-document---a property that holds only on reachable states.  Making this
+where the reasoning appeals to well-formedness of the current
+document, a property that holds only on reachable states.  Making this
 reliance explicit and machine-checked is one of the contributions of the
 present paper.
 
@@ -1589,7 +1596,7 @@ Lean~4 with no axioms beyond those of its type theory.
 
 %% P2: Conditional commutativity as a reusable framework
 The framework is independent of Yjs: any CRDT whose effectors commute on
-invariant-satisfying reachable states---rather than on all states---fits
+invariant-satisfying reachable states, rather than on all states, which fits
 naturally into our generic theorem (Theorem~\ref{thm:generic-conv}).
 Other CRDTs, such as the Matrix Event Graph~\cite{MatrixEventGraph2022},
 already require reasoning about delivery preconditions and their
@@ -1865,7 +1872,7 @@ Let $u = \mathit{newItem}$ and $o = \mathit{arr}[i]$ be the scanned element.
 \label{app:not-reach}
 %%
 
-This appendix supplies the omitted argument from the proof sketch of
+This appendix supplies the proof omitted from the sketch of
 Lemma~\ref{thm:yjs-comm}: in a Yjs operation network, two concurrent
 insert inputs $a$ and $b$ that are both valid at a state $s$
 satisfying the array invariant cannot be origin-reachable from each
@@ -1880,8 +1887,8 @@ $s_a^\star.\mathit{arr}$ (origin reachability would otherwise leave the
 closed item set).  Since $a$ and $b$ are concurrent, $b$ is not in
 the broadcast prefix of $a$ at $s_a^\star$, so $b$'s item does not
 appear in $s_a^\star.\mathit{arr}$ and is therefore not
-origin-reachable from $a$'s item.  The symmetric argument shows that
-$a$'s item is not origin-reachable from $b$'s item.  These are exactly
+origin-reachable from $a$'s item.  By symmetry, $a$'s item is not
+origin-reachable from $b$'s item.  These are exactly
 the additional preconditions required by Corollary~\ref{thm:ins-ins}
 for the items induced by $a$ and $b$ at $s$.
 
