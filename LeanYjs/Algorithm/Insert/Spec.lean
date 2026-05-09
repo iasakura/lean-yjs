@@ -1894,6 +1894,61 @@ theorem findIntegratedIndex_loopInv_spec
       ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool), rfl, h_new_inv, ?_ ⟩
     left
     refine ⟨ trivial, Or.inl ⟨ ⟨b.fst, b.snd⟩, rfl ⟩ ⟩
+  case vc4.step.success.success.success.isFalse.isTrue.isFalse.isTrue =>
+    -- Body: pure (.done b) (oLeftIdx = leftIdx ∧ ¬newItem.id > other.id ∧ oRightIdx = rightIdx).
+    rename_i _ pref cur suff hlist b _ _ _ hex other h_other_full oLeftIdx h_oLeftFull oRightIdx _ h_oLeft_ge h_oLeft_eq h_id_ge h_oRight_eq h_oRightFull
+    obtain ⟨ h_other_eq', h_i_lt ⟩ := h_other_full
+    obtain ⟨ hoLeftIdx, _, _ ⟩ := h_oLeftFull
+    obtain ⟨ hoRightIdx, _, _ ⟩ := h_oRightFull
+    obtain ⟨ offset_old, resState_old, hres_eq_old, hloopInv_old, hcond_old ⟩ := hex
+    rcases hcond_old with ⟨ hcontra, _ ⟩ | ⟨ h_off_eq, h_res_eq ⟩
+    · simp at hcontra
+    subst h_res_eq
+    have h_cur_pos : 0 < cur ∧ (cur : ℤ) < ↑rightIdx.toNat - leftIdx := by
+      obtain ⟨ hidx, _ ⟩ := hloopInv_old
+      rw [h_off_eq] at hidx
+      simpa using hidx
+    have hcur : 1 + (cur - 1) = cur := by omega
+    have h_cur_lt_len : cur - 1 < (List.range' 1 ((rightIdx - leftIdx).toNat - 1)).length := by
+      rw [List.length_range']
+      have h_eq : (↑rightIdx.toNat : ℤ) = rightIdx := Int.toNat_of_nonneg hrightIdx_nonneg
+      have hcr : (cur : ℤ) < (rightIdx - leftIdx) := by rw [← h_eq]; exact h_cur_pos.2
+      have h_le : 0 ≤ (rightIdx - leftIdx) := by have := hleftIdxrightIdx; omega
+      have : cur < (rightIdx - leftIdx).toNat := by omega
+      omega
+    have h_oLeft_eq' : oLeftIdx = leftIdx := by
+      have := h_oLeft_eq; simp at this; omega
+    have h_oRight_eq' : oRightIdx = rightIdx := by
+      have := h_oRight_eq; simp at this; omega
+    have h_id_ge' : ¬ other.id.clientId < newItem.id.clientId := by
+      rw [h_input_id] at h_id_ge; exact h_id_ge
+    have hbody_eq : (if oLeftIdx < leftIdx then ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool)
+        else
+          if oLeftIdx = leftIdx then
+            if other.id.clientId < newItem.id.clientId then ForInStep.yield (⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, false⟩ : MProd ℤ Bool)
+            else
+              if oRightIdx = rightIdx then ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool)
+              else ForInStep.yield (⟨b.fst, true⟩ : MProd ℤ Bool)
+          else
+            if b.snd = false then ForInStep.yield (⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, b.snd⟩ : MProd ℤ Bool)
+            else ForInStep.yield (⟨b.fst, b.snd⟩ : MProd ℤ Bool)) = ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool) := by
+      simp [h_oLeft_ge, h_oLeft_eq', h_oRight_eq', h_id_ge']
+    have hinv_old' : loopInv arr newItem leftIdx (↑rightIdx.toNat) (some (1 + (cur - 1))) (ForInStep.yield b) := by
+      rw [hcur]
+      rw [h_off_eq] at hloopInv_old
+      simpa using hloopInv_old
+    have h_other_eq : getElemExcept arr (leftIdx + ↑(1 + (cur - 1))).toNat = Except.ok other := by
+      rw [hcur]; exact h_other_eq'
+    have h_new_inv := loopInv_preserve1
+      newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
+      harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
+      b (ForInStep.done ⟨b.fst, b.snd⟩) (cur - 1) h_cur_lt_len (by
+        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
+    refine ⟨ (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[(cur - 1) + 1]?,
+      ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool), rfl, h_new_inv, ?_ ⟩
+    left
+    refine ⟨ trivial, Or.inl ⟨ ⟨b.fst, b.snd⟩, rfl ⟩ ⟩
   all_goals sorry
 
 theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array (YjsItem A)) :
