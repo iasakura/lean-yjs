@@ -1666,6 +1666,32 @@ def maximalId (newItem : YjsItem A) (arr : Array (YjsItem A)) :=
     ArrSet arr.toList (YjsPtr.itemPtr x) →
     x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock
 
+-- For the integration loop's offset list, the next-iteration offset
+-- following `cur` (when the list is split as `pref ++ cur :: suff`) coincides
+-- with `suff.head?`.
+theorem loopInv_next_offset_eq
+  (k : ℕ) (pref : List ℕ) (cur : ℕ) (suff : List ℕ)
+  (hlist : (List.range' 1 (k - 1)) = pref ++ cur :: suff) :
+  (List.range' 1 (k - 1))[(cur - 1) + 1]? = suff.head? := by
+  -- pref.length + 1 + suff.length = list length = k - 1
+  have h_len : pref.length + 1 + suff.length = k - 1 := by
+    have h := congrArg List.length hlist
+    simp at h
+    omega
+  -- Show pref.length = cur - 1.
+  have h_pref_lt : pref.length < (List.range' 1 (k - 1)).length := by
+    rw [List.length_range']; omega
+  have h_at : (List.range' 1 (k - 1))[pref.length]? = some cur := by
+    rw [hlist, List.getElem?_append_right (Nat.le_refl _)]
+    simp
+  rw [List.getElem?_eq_getElem h_pref_lt, List.getElem_range'] at h_at
+  simp at h_at
+  have h_pref_len : pref.length = cur - 1 := by omega
+  -- Now prove the goal.
+  rw [show (cur - 1) + 1 = pref.length + 1 from by omega]
+  rw [hlist, List.getElem?_append_right (by omega)]
+  simp [List.head?_eq_getElem?]
+
 /-- The `loopInv` holds at the entry of the integration loop. Used to discharge
 the `vc12.pre` VC of `findIntegratedIndex_loopInv_spec`. -/
 theorem loopInv_init
@@ -1894,6 +1920,81 @@ theorem findIntegratedIndex_loopInv_spec
       ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool), rfl, h_new_inv, ?_ ⟩
     left
     refine ⟨ trivial, Or.inl ⟨ ⟨b.fst, b.snd⟩, rfl ⟩ ⟩
+  case vc2.step.success.success.success.isFalse.isTrue.isTrue.isTrue =>
+    -- Body: pure (.yield ⟨↑i + 1, false⟩) (oLeftIdx = leftIdx ∧ newItem.id > other.id).
+    -- New invariant takes right disjunct (xs.suffix = suff).
+    rename_i _ pref cur suff hlist b _ _ _ hex other h_other_full oLeftIdx h_oLeftFull oRightIdx _ h_oLeft_ge h_oLeft_eq h_id_lt h_oRightFull _
+    obtain ⟨ h_other_eq', h_i_lt ⟩ := h_other_full
+    obtain ⟨ hoLeftIdx, _, _ ⟩ := h_oLeftFull
+    obtain ⟨ hoRightIdx, _, _ ⟩ := h_oRightFull
+    obtain ⟨ offset_old, resState_old, hres_eq_old, hloopInv_old, hcond_old ⟩ := hex
+    rcases hcond_old with ⟨ hcontra, _ ⟩ | ⟨ h_off_eq, h_res_eq ⟩
+    · simp at hcontra
+    subst h_res_eq
+    have h_cur_pos : 0 < cur ∧ (cur : ℤ) < ↑rightIdx.toNat - leftIdx := by
+      obtain ⟨ hidx, _ ⟩ := hloopInv_old
+      rw [h_off_eq] at hidx
+      simpa using hidx
+    have hcur : 1 + (cur - 1) = cur := by omega
+    have h_cur_lt_len : cur - 1 < (List.range' 1 ((rightIdx - leftIdx).toNat - 1)).length := by
+      rw [List.length_range']
+      have h_eq : (↑rightIdx.toNat : ℤ) = rightIdx := Int.toNat_of_nonneg hrightIdx_nonneg
+      have hcr : (cur : ℤ) < (rightIdx - leftIdx) := by rw [← h_eq]; exact h_cur_pos.2
+      have h_le : 0 ≤ (rightIdx - leftIdx) := by have := hleftIdxrightIdx; omega
+      have : cur < (rightIdx - leftIdx).toNat := by omega
+      omega
+    have h_oLeft_eq' : oLeftIdx = leftIdx := by
+      have := h_oLeft_eq; simp at this; omega
+    have h_id_lt' : other.id.clientId < newItem.id.clientId := by
+      rw [h_input_id] at h_id_lt; exact h_id_lt
+    -- Body output is .yield ⟨leftIdx + (1 + (cur - 1)) ⊔ 0 + 1, false⟩
+    -- which equals .yield ⟨leftIdx + cur + 1, false⟩ (since leftIdx + cur ≥ 0).
+    let new_st : MProd ℤ Bool := ⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, false⟩
+    have hbody_eq : (if oLeftIdx < leftIdx then ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool)
+        else
+          if oLeftIdx = leftIdx then
+            if other.id.clientId < newItem.id.clientId then ForInStep.yield new_st
+            else
+              if oRightIdx = rightIdx then ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool)
+              else ForInStep.yield (⟨b.fst, true⟩ : MProd ℤ Bool)
+          else
+            if b.snd = false then ForInStep.yield (⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, b.snd⟩ : MProd ℤ Bool)
+            else ForInStep.yield (⟨b.fst, b.snd⟩ : MProd ℤ Bool)) = ForInStep.yield new_st := by
+      simp [h_oLeft_ge, h_oLeft_eq', h_id_lt', new_st]
+    have hinv_old' : loopInv arr newItem leftIdx (↑rightIdx.toNat) (some (1 + (cur - 1))) (ForInStep.yield b) := by
+      rw [hcur]; rw [h_off_eq] at hloopInv_old; simpa using hloopInv_old
+    have h_other_eq : getElemExcept arr (leftIdx + ↑(1 + (cur - 1))).toNat = Except.ok other := by
+      rw [hcur]; exact h_other_eq'
+    have h_new_inv := loopInv_preserve1
+      newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
+      harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
+      b (ForInStep.yield new_st) (cur - 1) h_cur_lt_len (by
+        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
+    -- The new state's first component should match what mvcgen generates: ↑(leftIdx + ↑cur).toNat + 1
+    -- vs (leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1. These are equal.
+    have h_st_eq : new_st = (⟨↑((leftIdx + ↑cur).toNat) + 1, false⟩ : MProd ℤ Bool) := by
+      simp only [new_st]
+      have h_pos : leftIdx + ↑cur ≥ 0 := by have := h_cur_pos.1; omega
+      congr 1
+      rw [Int.max_eq_left (by omega)]
+      have : (↑(leftIdx + ↑cur).toNat : ℤ) = leftIdx + ↑cur := Int.toNat_of_nonneg h_pos
+      omega
+    have h_hlist_range' : (List.range' 1 ((rightIdx - leftIdx).toNat - 1)) = pref ++ cur :: suff := by
+      have := hlist; simp [Std.Range.toList] at this; exact this
+    have h_pos : 0 ≤ leftIdx + ↑cur := by have := h_cur_pos.1; omega
+    refine ⟨ suff.head?, ForInStep.yield new_st, ?_, ?_, ?_ ⟩
+    · show (⟨max (leftIdx + ↑(1 + (cur - 1))) 0 + 1, false⟩ : MProd ℤ Bool) =
+        (⟨↑((leftIdx + ↑cur).toNat) + 1, false⟩ : MProd ℤ Bool)
+      congr 1
+    · have := loopInv_next_offset_eq (rightIdx - leftIdx).toNat pref cur suff h_hlist_range'
+      rw [← this]
+      exact h_new_inv
+    · right
+      refine ⟨ rfl, ?_ ⟩
+      show ForInStep.yield (⟨max (leftIdx + ↑(1 + (cur - 1))) 0 + 1, false⟩ : MProd ℤ Bool) =
+        ForInStep.yield (⟨↑((leftIdx + ↑cur).toNat) + 1, false⟩ : MProd ℤ Bool)
+      congr 2
   case vc4.step.success.success.success.isFalse.isTrue.isFalse.isTrue =>
     -- Body: pure (.done b) (oLeftIdx = leftIdx ∧ ¬newItem.id > other.id ∧ oRightIdx = rightIdx).
     rename_i _ pref cur suff hlist b _ _ _ hex other h_other_full oLeftIdx h_oLeftFull oRightIdx _ h_oLeft_ge h_oLeft_eq h_id_ge h_oRight_eq h_oRightFull
