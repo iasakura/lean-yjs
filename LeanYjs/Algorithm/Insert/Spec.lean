@@ -381,7 +381,21 @@ theorem offsetToIndex_range'_getElem {leftIdx rightIdx : ℤ} {offset : ℕ} :
     rw [List.length_range'] at h_length
     omega
 
-theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
+/-- Preservation of `IntegrationInvariant.prefixLt`: every position before the
+new candidate destination is still strictly less than `newItem`.
+
+Case structure (paper §"Preservation"):
+* breakLeftOrigin (`oLeftIdx < leftIdx`, Lines 9–10): `nDest = dest` ⇒ trivial.
+* advanceSameOrigin (`oLeftIdx = leftIdx`, `other.id < newItem.id`, Lines 12–13):
+  `nDest = i+1`. Real obligation: show `arr[i] < newItem` via `ConflictLt.ltOriginSame`.
+* breakSameRight (`oLeftIdx = leftIdx`, `oRightIdx = rightIdx`, Lines 14–15):
+  `nDest = dest` ⇒ trivial.
+* pendingSameOrigin (`oLeftIdx = leftIdx`, `oRightIdx ≠ rightIdx`, Lines 16–17):
+  `nDest = dest` ⇒ trivial.
+* advanceOtherOrigin (`oLeftIdx > leftIdx`, `¬scanning`):
+  `nDest = i+1`. Real obligation: show `arr[i] < newItem` via origin transitivity
+  through `arr[dest]` (no_cross_origin then prefixLt of old). -/
+theorem loopInv_prefixLt_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
   (horigin : ArrSet arr.toList newItem.origin) (hrorigin : ArrSet arr.toList newItem.rightOrigin)
   (horigin_consistent : YjsLt' (A := A) newItem.origin newItem.rightOrigin)
   (hreachable_consistent :
@@ -473,10 +487,15 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
     apply findPtrIdx_lt_YjsLt' (i := (leftIdx + (1 + ↑i)).toNat) (j := rightIdx) <;> try assumption
     . subst other; rw [findPtrIdx_getElem]; assumption
     . omega
+  -- Discharge cases where j is in the OLD prefix region (nDest = dest):
+  --   breakLeftOrigin / breakSameRight / pendingSameOrigin / pendingOtherOrigin.
   split at h_j_lt <;> try (apply h_j_dest (by omega))
   split at h_j_lt
-  . split at h_j_lt
+  . -- oLeftIdx = leftIdx branch
+    split at h_j_lt
     on_goal 2 => apply h_j_dest (by omega)
+    -- ► Case advanceSameOrigin (Lines 12–13): nDest = i+1.
+    -- Show arr[i] < newItem via ConflictLt.ltOriginSame (same origin, newItem.id wins).
     apply yjs_leq'_p_trans1 (inv := harrsetinv) (y := other) <;> try assumption
     . simp [ArrSet]
     . subst other; simp [ArrSet]
@@ -497,9 +516,11 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
       exists 0; apply YjsLeq.leqSame
     . intros; simp; right; assumption
     . simp
-  . -- leftIdx < oLeftIdx cases
+  . -- oLeftIdx > leftIdx branch
     split at h_j_lt
-    . apply yjs_leq'_p_trans1 (inv := harrsetinv) (y := other) <;> try assumption
+    . -- ► Case advanceOtherOrigin (Otherwise, ¬scanning): nDest = i+1.
+      -- Show arr[i] < newItem via origin transitivity (no_cross_origin then old prefix).
+      apply yjs_leq'_p_trans1 (inv := harrsetinv) (y := other) <;> try assumption
       . simp [ArrSet]
       . simp [ArrSet]
       . subst other
@@ -554,6 +575,7 @@ theorem dest_lt_YjsLt'_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
             omega
         . intros; simp; right; assumption
         . simp
+    -- ► Case pendingOtherOrigin (Otherwise, scanning): nDest = dest, fall through.
     apply h_j_dest (by omega)
 
 
@@ -570,7 +592,22 @@ omit [DecidableEq A] in theorem idx_between_id_neq {i : ℕ} {newItem other : Yj
   have h := h (by simp)
   omega
 
-theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin {A : Type}
+/-- Preservation of `IntegrationInvariant.scannedRegion`: every position in the
+new pending region `[nDest, newCurrent)` either shares origin with `newItem`
+(losing the ID tiebreak) or has an origin reachable from `arr[nDest]`.
+
+Case structure (paper §"Preservation"):
+* breakLeftOrigin / breakSameRight: the current cursor steps back by 1 due to
+  `break`; the pending region stays the same as before. Inherit from old `h_tbd`.
+* advanceSameOrigin / advanceOtherOrigin: `nDest = i+1 = newCurrent`. The
+  pending region is empty. Discharged by omega.
+* pendingSameOrigin (Lines 16–17): nDest = dest. The new pending position is
+  `arr[i]` itself. Show clause (a): `arr[i].origin = newItem.origin` (since
+  `oLeftIdx = leftIdx`) and `newItem.id < arr[i].id` (from id_total + sameid_consistent).
+* pendingOtherOrigin (Otherwise, scanning): nDest = dest. The new pending
+  position is `arr[i]`. Show clause (b): `arr[dest] ≤ arr[i].origin` via
+  `no_cross_origin` applied to the comparison `arr[dest] < arr[i]` (from sortedness). -/
+theorem loopInv_scannedRegion_preserve {A : Type}
   [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
   (hsameid_consistent : ∀ (x : YjsItem A),
     ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
@@ -653,7 +690,8 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
   exists h_j_lt_arr_size, nDest_lt_arr_size
   rw [offsetToIndex_range'_getElem (by assumption) (by assumption) (by omega)] at h_i_c
   split at hbody
-  . -- break case (oLeftIdx < leftIdx)
+  . -- ► Case breakLeftOrigin (Lines 9–10): nDest = dest, nScanning = scanning.
+    -- The pending region is unchanged (current shifts back by 1 due to break).
     have ⟨ heq1, heq2 ⟩ : nDest = dest ∧ nScanning = scanning := by
       subst next; cases hnexteq; simp
     subst next heq1 heq2
@@ -662,17 +700,17 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
     obtain ⟨ _, _, h_tbd ⟩ := h_tbd j (by assumption) (by omega)
     apply h_tbd
   . split at hbody
-    . -- oLeftIdx = leftIdx case
+    . -- oLeftIdx = leftIdx branch
       split at hbody
-      . -- other.id < newItem.id case
+      . -- ► Case advanceSameOrigin (Lines 12–13): nDest = i+1 = newCurrent.
+        -- Pending region is empty; goal closed by omega.
         have ⟨ heq1, heq2 ⟩ : nDest = leftIdx + (1 + ↑i) + 1 ∧ nScanning = false := by
           subst next; cases hnexteq; simp
         subst next heq1 heq2
         simp [isBreak] at h_i_c
         omega
-      . -- other.id >= newItem.id case
-        split at hbody
-        . -- oRightIdx = rightIdx case
+      . split at hbody
+        . -- ► Case breakSameRight (Lines 14–15): nDest = dest, nScanning = scanning.
           have ⟨ heq1, heq2 ⟩ : nDest = dest ∧ nScanning = scanning := by
             subst next; cases hnexteq; simp
           subst next heq1 heq2
@@ -680,7 +718,10 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
           simp [offsetToIndex, isBreak] at h_tbd
           obtain ⟨ _, _, h_tbd ⟩ := h_tbd j (by omega) (by omega)
           apply h_tbd
-        . -- oRightIdx ≠ rightIdx case
+        . -- ► Case pendingSameOrigin (Lines 16–17): nDest = dest, nScanning := true.
+          -- New pending position is `arr[i]`; show clause (a):
+          --   `arr[i].origin = newItem.origin` (oLeftIdx = leftIdx)
+          --   ∧ `newItem.id < arr[i].id` (id_total + sameid_consistent).
           have ⟨ heq1, heq2 ⟩ : nDest = dest ∧ nScanning = true := by
             subst next; cases hnexteq; simp
           subst next heq1 heq2
@@ -723,15 +764,18 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
                 | inr heq_id =>
                   rw [heq_id] at hneq
                   contradiction
-    . -- oLeftIdx > leftIdx case
+    . -- oLeftIdx > leftIdx branch
       split at hbody
-      . -- scanning = false case
+      . -- ► Case advanceOtherOrigin (Otherwise, ¬scanning): nDest = i+1.
+        -- Pending region is empty.
         have ⟨ heq1, heq2 ⟩ : nDest = leftIdx + (1 + ↑i) + 1 ∧ nScanning = scanning := by
           subst next; cases hnexteq; simp
         subst next heq1 heq2
         simp [isBreak] at h_i_c
         omega
-      . -- scanning = true case
+      . -- ► Case pendingOtherOrigin (Otherwise, scanning): nDest = dest, nScanning = true.
+        -- New pending position is `arr[i]`; show clause (b):
+        --   `arr[dest] ≤ arr[i].origin` via `no_cross_origin` on `arr[dest] < arr[i]`.
         have ⟨ heq1, heq2 ⟩ : nDest = dest ∧ nScanning = true := by
             subst next; cases hnexteq; simp
             cases scanning
@@ -812,7 +856,17 @@ theorem nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_ar
 
             omega
 
-theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A)
+/-- Preservation of `IntegrationInvariant.scanningOrigin`: when the new
+`scanning` flag is true, `arr[nDest]` shares its origin with `newItem`.
+
+Case structure:
+* breakLeftOrigin / breakSameRight / advanceOtherOrigin / pendingOtherOrigin:
+  scanning unchanged ⇒ inherit from `h_cand`.
+* advanceSameOrigin: nScanning = false ⇒ vacuous.
+* pendingSameOrigin (Lines 16–17): only this case can SET scanning from false
+  to true. New `arr[nDest] = arr[dest] = arr[i]` (since `dest = i` when not
+  scanning), and `arr[i].origin = newItem.origin` (oLeftIdx = leftIdx). -/
+theorem loopInv_scanningOrigin_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A)
   (arr : Array (YjsItem A))
   (leftIdx : ℤ)
   (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx) (rightIdx : ℤ) (next : ForInStep (MProd ℤ Bool))
@@ -874,16 +928,23 @@ theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : Decid
   nScanning = true → ∃ (h_dest_lt : nDest.toNat < arr.size), arr[nDest.toNat].origin = newItem.origin := by
   intros h_scanning
   split at hbody; rw [hbody] at hnexteq; cases hnexteq
-  . apply h_cand h_scanning
+  . -- ► Case breakLeftOrigin: nScanning = scanning, inherit.
+    apply h_cand h_scanning
   split at hbody
   . split at hbody; rw [hbody] at hnexteq; cases hnexteq
-    . contradiction
+    . -- ► Case advanceSameOrigin: nScanning = false, contradicts h_scanning.
+      contradiction
     . split at hbody <;> (rw [hbody] at hnexteq; cases hnexteq)
-      . apply h_cand h_scanning
+      . -- ► Case breakSameRight: nScanning = scanning, inherit.
+        apply h_cand h_scanning
       . cases scanning with
         | true =>
+          -- ► Case pendingSameOrigin (was already scanning): inherit.
           apply h_cand h_scanning
         | false =>
+          -- ► Case pendingSameOrigin (newly entered scanning):
+          -- arr[nDest] = arr[dest] = arr[i] (since dest = i when not scanning),
+          -- and arr[i].origin = newItem.origin (oLeftIdx = leftIdx).
           have h_dest_eq : dest = ↑(offsetToIndex leftIdx (rightIdx ⊔ 0) (some (1 + i)) false) := by
             apply h_not_scanning (by simp)
             simp [isDone]
@@ -896,11 +957,31 @@ theorem scanning_dest_origin_eq_newItem_origin_preserve {A : Type} [inst : Decid
           rw [heq]
           apply findPtrIdx_eq_ok_inj _ _ hoLeftIdx heqleft
   split at hbody <;> (rw [hbody] at hnexteq; cases hnexteq)
-  . subst scanning
+  . -- ► Case advanceOtherOrigin: nScanning = scanning = false, contradicts.
+    subst scanning
     contradiction
-  . apply h_cand h_scanning
+  . -- ► Case pendingOtherOrigin: nScanning = scanning, inherit.
+    apply h_cand h_scanning
 
-theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
+/-- Preservation of `IntegrationInvariant.doneLt`: when the new state is done
+(either by `break` or by reaching `rightIdx`), `newItem` is strictly less than
+the boundary item.
+
+Case structure:
+* breakLeftOrigin (Lines 9–10): `next = .done` because `oLeftIdx < leftIdx`.
+  Boundary item is `arr[i] = other`. Show `newItem < other` via `no_cross_origin`
+  (other.origin must be ≤ newItem.origin or ≥ newItem.rightOrigin; combined with
+  `oLeftIdx < leftIdx`, only `other ≤ newItem.origin < newItem` is consistent —
+  but that gives the desired comparison).
+* advanceSameOrigin / pendingSameOrigin / advanceOtherOrigin: `next = .yield`,
+  so done remains determined by the offset; vacuous unless `offset = none`.
+* breakSameRight (Lines 14–15): `next = .done`. Boundary item is `other`.
+  Show via `ConflictLt.ltOriginSame` (same origin and same right-origin
+  ⇒ id_total + sameid_consistent gives `newItem.id < other.id`).
+* pendingOtherOrigin (Otherwise, scanning): `next = .yield`. Done only if
+  loop has reached `rightIdx` (`offset = none` after this iteration). Boundary
+  item is `newItem.rightOrigin`. -/
+theorem loopInv_doneLt_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
   (horigin : ArrSet arr.toList newItem.origin) (hrorigin : ArrSet arr.toList newItem.rightOrigin)
   (horigin_consistent : YjsLt' (A := A) newItem.origin newItem.rightOrigin)
   (hreachable_consistent :
@@ -992,24 +1073,22 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
     apply harrinv.closed.closedLeft o r id c
     rw [<-heq]
     simp [ArrSet]
-  -- cases Nat.lt_or_ge (i + 1) ((rightIdx - leftIdx).toNat - 1) with
+  -- next is either ForInStep.done (a `break` happened) or ForInStep.yield with offset = none
+  -- (the loop reached rightIdx without breaking).
   cases next with
   | done next  =>
-    -- rw [List.getElem?_range' (by omega)] at hdone
-    -- simp at hdone
-    -- cases next with
-    -- | yield next =>
-    --   cases hdone
-    -- | done next =>
+    -- ► break path: only breakLeftOrigin or breakSameRight reached this point.
     simp [isBreak] at hitem
     have hor : oLeftIdx < leftIdx ∨ (oLeftIdx = leftIdx ∧ oRightIdx = rightIdx ∧ !(newItem.id > other.id)) := by
       split at hbody
-      . left; assumption
+      . -- breakLeftOrigin
+        left; assumption
       . split at hbody
         . split at hbody
           . cases hbody
           . split at hbody
-            . right; constructor; assumption
+            . -- breakSameRight
+              right; constructor; assumption
               constructor; assumption
               simp
               simp only [LT.lt] at |-
@@ -1043,6 +1122,8 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
       subst heq; omega
     cases hor with
     | inl hlt =>
+      -- ► Case breakLeftOrigin: oLeftIdx < leftIdx.
+      -- newItem < other: by totality/no_cross_origin contradicts oLeftIdx < leftIdx if other ≤ newItem.
       cases YjsLeq'_or_YjsLt' (x := other) (y := newItem) harrsetinv hclosed (by assumption) (by simp [ArrSet]) with
       | inr hlt =>
         apply hlt
@@ -1075,6 +1156,8 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
               simp; omega
           omega
     | inr hcond =>
+      -- ► Case breakSameRight: oLeftIdx = leftIdx ∧ oRightIdx = rightIdx ∧ ¬(newItem.id > other.id).
+      -- newItem < other via ConflictLt.ltOriginSame (same origin, same right-origin, newItem.id < other.id).
       obtain ⟨ h_oLeftIdx_eq_leftIdx, h_oRightIdx_eq_rightIdx, h_other_id_lt_newItem_id ⟩ := hcond
       have h_id_lt_id' : newItem.id < other.id := by
         simp at h_other_id_lt_newItem_id
@@ -1110,6 +1193,9 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
         . apply YjsLeq'.leqSame
       . assumption
   | yield h =>
+    -- ► yield path: done is true only because offset reached `none`
+    -- (the loop exhausted the range without breaking).
+    -- The boundary item is `newItem.rightOrigin` (i.e., arr[rightIdx] or YjsPtr.last).
     simp [isBreak] at hitem
     rw [Int.max_eq_left  (by omega)] at hitem
     simp at hdone
@@ -1164,6 +1250,20 @@ theorem isDone_true_newItem_lt_item {A : Type} [inst : DecidableEq A] (newItem :
     apply YjsLt'.ltRightOrigin
     apply YjsLeq'.leqSame
 
+/-- One iteration of `findIntegratedIndex`'s loop preserves `loopInv`.
+
+The proof refines `loopInv` (a 7-conjunct):
+1. **Bookkeeping** (3 conjuncts): offset bound, dest ≤ current, and
+   "¬scanning ∧ ¬done ⇒ dest = current".
+2. **Paper-aligned invariant** (4 conjuncts):
+   - `prefixLt` — preserved by `loopInv_prefixLt_preserve`.
+   - `scannedRegion` — preserved by `loopInv_scannedRegion_preserve`.
+   - `scanningOrigin` — preserved by `loopInv_scanningOrigin_preserve`.
+   - `doneLt` — preserved by `loopInv_doneLt_preserve`.
+
+Each preservation sub-lemma case-analyses the algorithm body's six branches
+(breakLeftOrigin, advanceSameOrigin, breakSameRight, pendingSameOrigin,
+advanceOtherOrigin, pendingOtherOrigin); see each sub-lemma's docstring. -/
 theorem loopInv_preserve1
   (newItem : YjsItem A)
   (arr : Array (YjsItem A))
@@ -1377,8 +1477,8 @@ theorem loopInv_preserve1
           cases hnexteq
           contradiction
   constructor
-  . -- extract_goal using dest_lt_YjsLt'_preserve
-    apply dest_lt_YjsLt'_preserve
+  . -- prefixLt: every j < nDest is still confirmed less than newItem
+    apply loopInv_prefixLt_preserve
       newItem arr horigin hrorigin horigin_consistent
       hreachable_consistent hsameid_consistent harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright
       hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx dest scanning
@@ -1386,22 +1486,22 @@ theorem loopInv_preserve1
       h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq hlt_current heq h_in_other h_in_other_origin h_other_origin_lt
       nDest_lt_size
   constructor
-  . -- extract_goal using nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin
-    apply nDest_geq_i_lt_current_arr_i_origin_eq_newItem_origin_or_arr_nDest_lt_arr_i_origin
+  . -- scannedRegion: pending region [nDest, newCurrent) all satisfies clause (a) or (b)
+    apply loopInv_scannedRegion_preserve
       newItem arr hsameid_consistent harrinv
       leftIdx heqleft rightIdx hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx
       oRightIdx hoRightIdx dest scanning h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hrightIdx hlt hinv
       hbody hidx hdest_current h_not_scanning h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq
       hlt_current heq h_in_other h_in_other_origin h_other_origin_lt nDest_lt_size
   constructor
-  . -- extract_goal using scanning_dest_origin_eq_newItem_origin_preserve
-    apply scanning_dest_origin_eq_newItem_origin_preserve
+  . -- scanningOrigin: nScanning ⇒ arr[nDest].origin = newItem.origin
+    apply loopInv_scanningOrigin_preserve
       newItem arr leftIdx heqleft rightIdx next i other oLeftIdx hoLeftIdx oRightIdx dest scanning
       h_cand h_leftIdx nDest nScanning hnexteq hinv hbody hdest_current h_not_scanning
       h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq hlt_current heq nDest_lt_size
   . intros hdone item hitem
-    -- extract_goal using isDone_true_newItem_lt_item
-    apply isDone_true_newItem_lt_item
+    -- doneLt: when next state is done, newItem < boundary item
+    apply loopInv_doneLt_preserve
       newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent harrinv
       hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx
       oRightIdx hoRightIdx dest scanning h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hrightIdx hlt hinv
