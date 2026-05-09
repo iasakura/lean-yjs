@@ -103,6 +103,31 @@ def extGetElemExcept (arr : Array (YjsItem A)) (idx : Int) : Except IntegrateErr
       | some item => return item
       | none => Except.error IntegrateError.error
 
+/-- Paper-aligned integration loop invariant for `findIntegratedIndex`.
+Parameters:
+- `d`: candidate destination index. Items before `d` are confirmed less than `u`.
+- `i`: current scan position. Items in `[d, i)` are pending (their order against
+  `u` is not yet resolved).
+- `scanning`: in same-origin competition mode (extending the pending region for
+  the same-origin case).
+- `done`: scan has terminated (either by `break` or by reaching `rightIdx`).
+
+Mirrors the paper's Definition (\\S Insert Algorithm and Commutativity). -/
+structure IntegrationInvariant (arr : Array (YjsItem A)) (u : YjsItem A)
+    (d i : ℕ) (scanning done : Bool) : Prop where
+  /-- All items before the candidate destination are strictly smaller than `u`. -/
+  prefixLt : ∀ j, j < d → (hj : j < arr.size) → YjsLt' (A := A) arr[j] u
+  /-- Each pending item in `[d, i)` either shares origin with `u` (and lost the
+  ID tiebreak) or has an origin reachable above `arr[d]`. -/
+  scannedRegion : ∀ j, d ≤ j → j < i →
+    ∃ (hj : j < arr.size) (hd : d < arr.size),
+      (arr[j].origin = u.origin ∧ u.id < arr[j].id) ∨
+      YjsLeq' (A := A) (YjsPtr.itemPtr arr[d]) arr[j].origin
+  /-- Same-origin competition mode: `arr[d]` shares its origin with `u`. -/
+  scanningOrigin : scanning → ∃ (hd : d < arr.size), arr[d].origin = u.origin
+  /-- On termination, `u` is strictly smaller than the boundary item `arr[i]`. -/
+  doneLt : done → (hi : i < arr.size) → YjsLt' (A := A) u arr[i]
+
 def loopInv (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx : ℤ) (rightIdx : ℤ) (x : Option ℕ) (state : ForInStep (MProd ℤ Bool)) :=
   -- when x is none, we are done so current is rightIdx
   -- when break from loop, current goes back by 1
@@ -138,55 +163,73 @@ omit [DecidableEq A] in theorem not_rightOrigin_first (P : YjsPtr A -> Prop) (it
   rw [heq] at hlt
   apply not_ptr_lt_first hclosed hinv _ _ hin at hlt; assumption
 
--- 補題: itemとの大小関係が保留の区間 [dest, i) newItem < arr[i]なら∀j ∈ [dest, i) でnewItem < arr[j]が成り立つ。
--- つまりループの終了条件が満たされたら[dest, i)のすべてでnewItem < arr[j]
-theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : YjsItem A) (leftIdx rightIdx : ℤ) (state : ForInStep (MProd ℤ Bool)) :
-  IsClosedItemSet (ArrSet (newItem :: arr.toList)) ->
-  ItemSetInvariant (ArrSet (newItem :: arr.toList)) ->
-  YjsArrInvariant arr.toList ->
-  loopInv arr newItem leftIdx rightIdx offset state ->
+-- Bridge from the internal `loopInv` encoding to the paper-aligned `IntegrationInvariant`.
+theorem loopInv_to_IntegrationInvariant
+    {arr : Array (YjsItem A)} {newItem : YjsItem A}
+    {leftIdx rightIdx : ℤ} {x : Option ℕ} {state : ForInStep (MProd ℤ Bool)}
+    (h : loopInv arr newItem leftIdx rightIdx x state)
+    (hright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
+    (hrightIdx : 0 ≤ rightIdx) :
+    IntegrationInvariant arr newItem
+      state.value.fst.toNat
+      (offsetToIndex leftIdx rightIdx x (isBreak state))
+      state.value.snd
+      (isDone state x) := by
+  unfold loopInv at h
+  obtain ⟨ _, _, _, hprefix, hscanned, hscanOrigin, hdoneLt ⟩ := h
+  exact {
+    prefixLt := by simpa using hprefix
+    scannedRegion := by simpa using hscanned
+    scanningOrigin := by simpa using hscanOrigin
+    doneLt := by
+      intro hdone hi
+      refine hdoneLt hdone _ ?_
+      simp [extGetElemExcept]
+      rw [Array.getElem?_eq_getElem (by omega)]
+      simp
+      split <;> [omega; skip]
+      split <;> [omega; skip]
+      rfl
+  }
 
-  findPtrIdx newItem.origin arr = Except.ok leftIdx ->
-  findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx ->
-
-  current = offsetToIndex leftIdx rightIdx offset (isBreak state) ->
-  (hcurrentlt : current ≤ arr.size) ->
-  ((hlt : current < arr.size) -> YjsLt' (A := A) newItem arr[current]) ->
-  ∀ j : ℕ, (h_j_dest : state.value.fst ≤ j) ->
-    (h_j_i : j ≤ current) -> (h_j_size : j < arr.size) ->
-    YjsLt' (A := A) newItem arr[j] := by
-
-  intros hclosed hinv harrinv hloopinv hleftIdx hrightIdx hcurrent hcurrent_lt hi_lt j h_j_dest h_j_i h_j_size
+/-- Pending propagation (paper Lemma): if at scan position `i` the
+`IntegrationInvariant` holds and `u <_Y arr[i]`, then `u <_Y arr[j]`
+for every pending position `j ∈ [d, i]`. -/
+theorem pending_propagation
+  (arr : Array (YjsItem A)) (u : YjsItem A)
+  (leftIdx rightIdx : ℤ) (d i : ℕ)
+  (hclosed : IsClosedItemSet (ArrSet (u :: arr.toList)))
+  (hinv : ItemSetInvariant (ArrSet (u :: arr.toList)))
+  (harrinv : YjsArrInvariant arr.toList)
+  (hleftIdx : findPtrIdx u.origin arr = Except.ok leftIdx)
+  (hrightIdx : findPtrIdx u.rightOrigin arr = Except.ok rightIdx)
+  (hi_le_ri : ↑i ≤ rightIdx)
+  (hscanned : ∀ j, d ≤ j → j < i →
+    ∃ (hj : j < arr.size) (hd : d < arr.size),
+      (arr[j].origin = u.origin ∧ u.id < arr[j].id) ∨
+      YjsLeq' (A := A) (YjsPtr.itemPtr arr[d]) arr[j].origin)
+  (hi_le : i ≤ arr.size)
+  (hi_lt : (h : i < arr.size) → YjsLt' (A := A) u arr[i]) :
+  ∀ j : ℕ, d ≤ j → j ≤ i → (h_j_size : j < arr.size) →
+    YjsLt' (A := A) u arr[j] := by
+  intros j h_j_d h_j_i h_j_size
   generalize hsize : arr[j].size = size
   revert j
-  generalize h_dest_def : state.value.fst = dest
-  generalize h_scanning : state.value.snd = scanning
-  apply Nat.strongRec' (p := fun size => ∀ (j : ℕ), dest ≤ j → (h_j_i : j ≤ current) -> (h_j_size : j < arr.size) -> arr[j].size = size → YjsLt' (A := A) newItem (YjsPtr.itemPtr arr[j]))
-  intros n ih j h_j_dest h_j_i h_j_size heq_n
-  wlog h_j_i : j < current
+  apply Nat.strongRec' (p := fun size => ∀ (j : ℕ),
+    d ≤ j → (h_j_i : j ≤ i) → (h_j_size : j < arr.size) →
+    arr[j].size = size → YjsLt' (A := A) u (YjsPtr.itemPtr arr[j]))
+  intros n ih j h_j_d h_j_i h_j_size heq_n
+  wlog h_j_i : j < i
   case inr =>
-    have h_j_eq : j = current := by
-      omega
-    subst j
-    apply hi_lt
-
+    have h_j_eq : j = i := by omega
+    subst j; exact hi_lt h_j_size
   subst heq_n
-  unfold loopInv at hloopinv
-  have heq : state.value = ⟨dest, scanning⟩ := by
-    subst h_dest_def
-    subst h_scanning
-    cases state <;> eq_refl
-  rw [heq] at hloopinv
-  obtain ⟨ hsize, hdest_current, h_not_scanning, h_lt_item, h_tbd, h_cand, h_done ⟩ := hloopinv
-  -- simp [offsetToIndex] at h_tbd hcurrent
-  subst hcurrent
-  obtain ⟨ h_j_lt_size, h_dest_lt_size, h_tbd ⟩ := h_tbd j (by omega) h_j_i
+  obtain ⟨ h_j_lt_size, h_d_lt_size, h_tbd ⟩ := hscanned j (by omega) h_j_i
   cases h_tbd with
   | inl h_origin =>
     obtain ⟨ h_origin_eq, h_id_lt ⟩ := h_origin
-
-    have ⟨ _, hlt_ro ⟩ : YjsLt' (A := A) newItem arr[j].rightOrigin := by
-      generalize h_ro_eq : arr[j].rightOrigin = ro at heq
+    have ⟨ _, hlt_ro ⟩ : YjsLt' (A := A) u arr[j].rightOrigin := by
+      generalize h_ro_eq : arr[j].rightOrigin = ro
       cases ro with
       | first =>
         apply not_rightOrigin_first _ arr[j] hclosed hinv at h_ro_eq
@@ -199,162 +242,106 @@ theorem loopInv_YjsLt' {current} offset (arr : Array (YjsItem A)) (newItem : Yjs
       | itemPtr ro =>
         have ⟨ roIdx, h_ro_in ⟩ : ∃ k : Fin arr.size, arr[k] = ro := by
           cases arr_set_closed_exists_index_for_right_origin arr.toList arr[j] (harrinv.closed) (by simp [ArrSet]) with
-          | inl h1 =>
-            rw [h_ro_eq] at h1
-            cases h1
+          | inl h1 => rw [h_ro_eq] at h1; cases h1
           | inr h =>
             cases h with
-            | inl h1 =>
-              rw [h_ro_eq] at h1
-              cases h1
+            | inl h1 => rw [h_ro_eq] at h1; cases h1
             | inr h1 =>
               rw [h_ro_eq] at h1
-              obtain ⟨ k, h1 ⟩ := h1
-              cases h1
-              exists k
-
+              obtain ⟨ k, h1 ⟩ := h1; cases h1; exists k
         have hsize : ro.size < arr[j].size := by
           revert h_ro_eq
-          obtain ⟨ o, r, id, c ⟩ := arr[j]
-          simp
-          intros h_ro_eq
-          subst h_ro_eq
-          simp [YjsItem.size, YjsPtr.size]
-          omega
-
-        have h_dest_k : dest.toNat ≤ roIdx := by
-          obtain ⟨ roIdx, _ ⟩ := roIdx
-          simp at *
+          obtain ⟨ o, r, id, c ⟩ := arr[j]; simp
+          intros h_ro_eq; subst h_ro_eq
+          simp [YjsItem.size, YjsPtr.size]; omega
+        have h_d_k : d ≤ roIdx := by
+          obtain ⟨ roIdx, _ ⟩ := roIdx; simp at *
           have hlt : j < roIdx := by
             have hlt : YjsLt' (A := A) arr[j] arr[roIdx] := by
               rw [h_ro_in]
               generalize heq : arr[j] = arrj at *
               obtain ⟨ o, r, id, c ⟩ := arrj
-              simp at h_ro_eq
-              subst h_ro_eq
+              simp at h_ro_eq; subst h_ro_eq
               exists 1
-              have harrin : ArrSet arr.toList (YjsItem.mk o (YjsPtr.itemPtr ro) id c) := by
-                rw [<-heq]
-                simp [ArrSet]
-              apply YjsLt.ltRightOrigin
-              apply YjsLeq.leqSame
-
-            have hltj : j < arr.size := by
-              omega
-            have hltk : roIdx < arr.size := by
-              omega
-            apply getElem_YjsLt'_index_lt arr j roIdx harrinv hltj hltk hlt
+              apply YjsLt.ltRightOrigin; apply YjsLeq.leqSame
+            apply getElem_YjsLt'_index_lt arr j roIdx harrinv (by omega) (by omega) hlt
           omega
-
-        cases Nat.lt_or_ge roIdx (offsetToIndex leftIdx rightIdx offset (isBreak state)) with
-        | inl h_k_current =>
-          obtain x := ih (ro.size) hsize roIdx (by omega) (by omega) (by omega) (by rw [<-h_ro_in]; simp)
-          simp at h_ro_in x
-          rw [h_ro_in] at x
-          assumption
-        | inr h_k_current =>
-          -- newItem < arr[current] <= arr[k]
-          have hlt : YjsLeq' (A := A) arr[offsetToIndex leftIdx rightIdx offset (isBreak state)] ro := by
+        cases Nat.lt_or_ge roIdx i with
+        | inl h_k_i =>
+          obtain x := ih (ro.size) hsize roIdx (by omega) (by omega) (by omega) (by rw [←h_ro_in]; simp)
+          simp at h_ro_in x; rw [h_ro_in] at x; assumption
+        | inr h_k_i =>
+          have h_roIdx_lt : (roIdx : ℕ) < arr.size := roIdx.isLt
+          have hlt : YjsLeq' (A := A) arr[i] ro := by
             subst h_ro_in
-            apply getElem_leq_YjsLeq' arr (offsetToIndex leftIdx rightIdx offset (isBreak state)) roIdx harrinv (by omega) (by omega)
+            apply getElem_leq_YjsLeq' arr i roIdx harrinv (by omega) (by omega)
           apply yjs_leq'_p_trans2 hinv _ _ _ _ _ _ hclosed (hi_lt (by omega)) hlt
-          . simp [ArrSet]
-          . simp [ArrSet]
-          . subst ro; simp [ArrSet]
-
-    have ⟨ _, hlt_ro' ⟩ : YjsLt' (A := A) arr[j] newItem.rightOrigin := by
-      have hlt : j < rightIdx := by
-        cases offset <;> simp [offsetToIndex] at h_j_i <;> omega
-      have heq : findPtrIdx arr[j] arr = Except.ok j := by
+          · simp [ArrSet]
+          · simp [ArrSet]
+          · subst ro; simp [ArrSet]
+    have ⟨ _, hlt_ro' ⟩ : YjsLt' (A := A) arr[j] u.rightOrigin := by
+      have hlt : ↑j < rightIdx := by omega
+      have heq : findPtrIdx (A := A) arr[j] arr = Except.ok ↑j := by
         apply findPtrIdx_getElem; assumption
       apply findPtrIdx_lt_YjsLt' _ _ _ harrinv heq hrightIdx hlt
-
-    obtain ⟨ o, r, id, c ⟩ := newItem
+    obtain ⟨ o, r, id, c ⟩ := u
     generalize arr[j] = item at *
     obtain ⟨ oo, or, oid, oc ⟩ := item
     simp at h_origin_eq hlt_ro hlt_ro'
-    rw [h_origin_eq]
-    rw [h_origin_eq] at hlt_ro'
+    rw [h_origin_eq]; rw [h_origin_eq] at hlt_ro'
     constructor
     apply YjsLt.ltConflict
     apply ConflictLt.ltOriginSame <;> try assumption
   | inr hleq =>
-    have hlt_ro : YjsLt' (A := A) newItem arr[j].origin := by
-      generalize h_o_eq : arr[j].origin = o at heq
+    have hlt_ro : YjsLt' (A := A) u arr[j].origin := by
+      generalize h_o_eq : arr[j].origin = o
       cases o with
       | first =>
         rw [h_o_eq] at hleq
         apply yjs_leq'_imp_eq_or_yjs_lt' at hleq
         cases hleq with
-        | inl heq =>
-          cases heq
+        | inl heq => cases heq
         | inr hlt =>
           by_contra
           apply not_ptr_lt'_first hclosed hinv at hlt; assumption
           simp [ArrSet]
-
       | last =>
-        constructor
-        apply YjsLt.ltOriginOrder
-        apply OriginLt.lt_last
+        constructor; apply YjsLt.ltOriginOrder; apply OriginLt.lt_last
       | itemPtr o =>
-        have ⟨ ⟨ oIdx, _ ⟩ , h_o_in ⟩ : ∃ k : Fin arr.size, arr[k] = o := by
+        have ⟨ ⟨ oIdx, h_oIdx_lt ⟩, h_o_in ⟩ : ∃ k : Fin arr.size, arr[k] = o := by
           cases arr_set_closed_exists_index_for_origin arr.toList arr[j] (harrinv.closed) (by simp [ArrSet]) with
-          | inl h1 =>
-            rw [h_o_eq] at h1
-            cases h1
+          | inl h1 => rw [h_o_eq] at h1; cases h1
           | inr h =>
             cases h with
-            | inl h1 =>
-              rw [h_o_eq] at h1
-              cases h1
+            | inl h1 => rw [h_o_eq] at h1; cases h1
             | inr h1 =>
               rw [h_o_eq] at h1
-              obtain ⟨ k, h1 ⟩ := h1
-              cases h1
-              exists k
-
+              obtain ⟨ k, h1 ⟩ := h1; cases h1; exists k
         have hsize : o.size < arr[j].size := by
           revert h_o_eq
-          obtain ⟨ o, r, id, c ⟩ := arr[j]
-          simp
-          intros h_o_eq
-          subst h_o_eq
-          simp [YjsItem.size, YjsPtr.size]
-          omega
-
-        have h_dest_k : dest ≤ oIdx := by
-          simp at *
-          rw [h_o_eq] at hleq
+          obtain ⟨ o, r, id, c ⟩ := arr[j]; simp
+          intros h_o_eq; subst h_o_eq
+          simp [YjsItem.size, YjsPtr.size]; omega
+        have h_d_k : d ≤ oIdx := by
+          suffices h : (↑d : ℤ) ≤ ↑oIdx by omega
           subst h_o_in
-
-          have hor : dest < 0 ∨ 0 ≤ dest := by
-            apply Int.lt_or_le
-          cases hor with
-          | inl _ => omega
-          | inr _ =>
-            apply YjsLeq'_findPtrIdx_leq _ _ _ _ _ harrinv _ _ hleq
-            . rw [findPtrIdx_getElem _ _ harrinv]
-              simp
-              omega
-            . rw [findPtrIdx_getElem _ _ harrinv]
-            . simp [ArrSet]
-            . simp [ArrSet]
-
-        simp at h_o_in
-        subst h_o_in
-        apply ih arr[oIdx].size hsize _ h_dest_k
-        . simp
-        . have hlt : oIdx < j := by
+          rw [h_o_eq] at hleq
+          have hleq' : YjsLeq' (A := A) (YjsPtr.itemPtr arr[d]) (YjsPtr.itemPtr arr[oIdx]) := hleq
+          apply YjsLeq'_findPtrIdx_leq _ _ _ _ _ harrinv _ _ hleq'
+          · rw [findPtrIdx_getElem _ _ harrinv]
+          · rw [findPtrIdx_getElem _ _ harrinv]
+          · simp [ArrSet]
+          · simp [ArrSet]
+        simp at h_o_in; subst h_o_in
+        apply ih arr[oIdx].size hsize _ (by omega)
+        · simp
+        · have hlt : oIdx < j := by
             apply getElem_YjsLt'_index_lt arr oIdx j harrinv (by omega) (by omega)
-            rw [<-h_o_eq]
+            rw [←h_o_eq]
             generalize heq : arr[j] = arrj at *
-            obtain ⟨ o, r, id, c ⟩ := arrj
-            simp
-            apply YjsLt'.ltOrigin
-            apply YjsLeq'.leqSame
+            obtain ⟨ o, r, id, c ⟩ := arrj; simp
+            apply YjsLt'.ltOrigin; apply YjsLeq'.leqSame
           omega
-
     generalize heq : arr[j] = arrj at *
     obtain ⟨ o, r, id, c ⟩ := arrj
     apply YjsLt'.ltOrigin (A := A)
@@ -1706,38 +1693,38 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
           obtain ⟨ hidx, dest, hdest, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
           apply findPtrIdx_le_size at heqright'
           cases offset <;> simp [offsetToIndex] <;> omega
+        have h_i_le_ri : (↑(offsetToIndex leftIdx rightIdx offset (isBreak res')) : ℤ) ≤ rightIdx := by
+          obtain ⟨ hidx, _, _, _, _, _, _ ⟩ := hloopInv
+          cases offset <;> simp [offsetToIndex, isBreak] at * <;> omega
+        have h_done_flag : isDone res' offset = true := by
+          cases hdone with
+          | inl h => subst h; simp [isDone]
+          | inr h => subst h; simp [isDone]
+        have hii := loopInv_to_IntegrationInvariant
+          (rightIdx := ↑rightIdx.toNat) hloopInv
+          (by simpa [Int.max_eq_left hrightIdx] using heqright')
+          (by exact_mod_cast Nat.zero_le _)
         intros hisize
-        apply loopInv_YjsLt' (current := offsetToIndex leftIdx rightIdx offset (isBreak res')) <;> try assumption
-        . simp
-          rw [max_eq_left hrightIdx]
-          assumption
-        . simp
-          rw [max_eq_left hrightIdx]
-        . intros hlt
-          simp [loopInv] at hloopInv
-          obtain ⟨ hidx, hdest_current, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
-          apply hdone'
-          . cases hdone with
-            | inl hdone =>
-              subst hdone
-              simp [isDone]
-            | inr hdone =>
-              subst hdone
-              simp [isDone]
-          . rw [max_eq_left hrightIdx]
-            simp [extGetElemExcept]
-            rw [Array.getElem?_eq_getElem (by omega)]
-            simp
-            split; omega
-            split; omega
-            eq_refl
-        . subst hres'
-          simp
-        . subst hres'
+        have h_dest_le_current : resState.fst.toNat ≤
+            offsetToIndex leftIdx rightIdx offset (isBreak res') := by
+          subst hres'
           obtain ⟨ hidx, hdest_current, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
           simp at *
           rw [Int.max_eq_left hrightIdx] at hdest_current
           obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
+        apply pending_propagation arr newItem leftIdx rightIdx
+          resState.fst.toNat (offsetToIndex leftIdx rightIdx offset (isBreak res'))
+          hclosed harrsetinv harrinv heqleft' heqright'
+          h_i_le_ri
+          (by simpa [Int.max_eq_left hrightIdx, hres'] using hii.scannedRegion)
+          current_lt
+          (fun hlt => by
+            simpa [Int.max_eq_left hrightIdx] using
+              hii.doneLt (by simpa [Int.max_eq_left hrightIdx] using h_done_flag) hlt)
+          resState.fst.toNat
+          (le_refl _)
+          h_dest_le_current
+          hisize
       . intros a hmem heq
         have h := h_maximalId a (by simp [ArrSet]; assumption) (by rw [heq])
         rw [heq] at h
