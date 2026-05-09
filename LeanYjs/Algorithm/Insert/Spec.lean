@@ -1794,35 +1794,54 @@ theorem findIntegratedIndex_loopInv_spec
   unfold findIntegratedIndex
   mvcgen [findPtrIdx_spec, getElemExcept_spec]
   case inv1 =>
+    -- The invariant carries (offset, resState) consistent with the loop's
+    -- ForInStep semantics. When xs.suffix is empty (loop done), we also
+    -- know either resState was a break (`.done _`) or offset reached `none`.
     exact post⟨fun ⟨xs, st⟩ => ⌜
       ∃ (offset : Option ℕ) (resState : ForInStep (MProd ℤ Bool)),
         resState.value = st ∧
         loopInv arr newItem leftIdx ↑rightIdx.toNat offset resState ∧
-        (xs.suffix = [] ∨ (offset = xs.suffix.head? ∧ resState = ForInStep.yield st))
+        ((xs.suffix = [] ∧ ((∃ s, resState = ForInStep.done s) ∨ offset = none)) ∨
+         (offset = xs.suffix.head? ∧ resState = ForInStep.yield st))
     ⌝, fun _ => ⌜True⌝⟩
   all_goals mleave
   case vc11.step.except.handle => intros; trivial
   case vc12.pre =>
-    refine ⟨ if (rightIdx - leftIdx).toNat - 1 = 0 then none else some 1,
-      ForInStep.yield ⟨leftIdx + 1, false⟩, rfl, ?_, ?_⟩
-    · exact loopInv_init newItem arr leftIdx rightIdx heqleft heqright harrinv hleftIdxrightIdx hrightIdx_nonneg
-    · right
-      refine ⟨?_, rfl⟩
-      simp only [Std.Range.toList, List.head?_range']
-      split <;> simp <;> omega
+    by_cases hlist_empty : (rightIdx - leftIdx).toNat - 1 = 0
+    · -- list empty: provide offset = none
+      refine ⟨ none, ForInStep.yield ⟨leftIdx + 1, false⟩, rfl, ?_, ?_⟩
+      · have h := loopInv_init newItem arr leftIdx rightIdx heqleft heqright harrinv hleftIdxrightIdx hrightIdx_nonneg
+        rw [if_pos hlist_empty] at h
+        exact h
+      · left
+        refine ⟨?_, by right; rfl⟩
+        simp only [Std.Range.toList, List.range'_eq_nil_iff]; omega
+    · -- list non-empty: provide offset = some 1
+      refine ⟨ some 1, ForInStep.yield ⟨leftIdx + 1, false⟩, rfl, ?_, ?_⟩
+      · have h := loopInv_init newItem arr leftIdx rightIdx heqleft heqright harrinv hleftIdxrightIdx hrightIdx_nonneg
+        rw [if_neg hlist_empty] at h
+        exact h
+      · right
+        refine ⟨?_, rfl⟩
+        simp only [Std.Range.toList, List.head?_range']
+        rw [if_neg]
+        simp; omega
   case vc13.post.success =>
     rename_i hP
     obtain ⟨ offset, resState, hres_eq, hloopInv, hcond ⟩ := hP
     refine ⟨ offset, resState, ?_, hloopInv, ?_ ⟩
     · rw [hres_eq]
     · cases hcond with
-      | inl _ =>
-        -- when xs.suffix = [], we need (∃ s, resState = .done s) ∨ offset = none.
-        -- This requires more info than we have. Defer.
-        sorry
+      | inl h => exact h.2
       | inr h =>
         obtain ⟨ h_off, _ ⟩ := h
         right; simp at h_off; exact h_off
+  case vc1.step.success.success.success.isTrue =>
+    -- Body: pure (.done b) (because oLeftIdx < leftIdx).
+    -- New invariant takes left disjunct (xs.suffix = []).
+    -- Currently incomplete due to complexity of constructing all
+    -- `loopInv_preserve1` arguments (especially length bounds from `hlist`).
+    sorry
   all_goals sorry
 
 theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array (YjsItem A)) :
