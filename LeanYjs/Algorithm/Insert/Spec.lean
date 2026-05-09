@@ -1,5 +1,6 @@
 import Mathlib.Tactic.WLOG
 import Mathlib.Tactic.ExtractGoal
+import Std.Tactic.Do
 
 import LeanYjs.ListLemmas
 import LeanYjs.Item
@@ -21,6 +22,8 @@ variable {A : Type}
 variable [DecidableEq A]
 
 set_option maxHeartbeats 0
+
+open Std.Do
 
 theorem ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
   (do
@@ -1662,6 +1665,165 @@ def maximalId (newItem : YjsItem A) (arr : Array (YjsItem A)) :=
   ∀ (x : YjsItem A),
     ArrSet arr.toList (YjsPtr.itemPtr x) →
     x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock
+
+/-- The `loopInv` holds at the entry of the integration loop. Used to discharge
+the `vc12.pre` VC of `findIntegratedIndex_loopInv_spec`. -/
+theorem loopInv_init
+  (newItem : YjsItem A) (arr : Array (YjsItem A))
+  (leftIdx rightIdx : ℤ)
+  (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx)
+  (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
+  (harrinv : YjsArrInvariant arr.toList)
+  (hleftIdx_lt : leftIdx < rightIdx)
+  (hrightIdx_nonneg : 0 ≤ rightIdx) :
+  loopInv arr newItem leftIdx ↑rightIdx.toNat
+    (if (rightIdx - leftIdx).toNat - 1 = 0 then none else some 1)
+    (ForInStep.yield ⟨leftIdx + 1, false⟩) := by
+  simp only [loopInv]
+  generalize heq : (if (rightIdx - leftIdx).toNat - 1 = 0 then none else some 1) = offset0
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · cases offset0 with
+    | none => simp
+    | some x =>
+      simp
+      split at heq <;> cases heq
+      refine ⟨by simp, ?_⟩
+      omega
+  · simp [offsetToIndex]
+    cases offset0 with
+    | none => simp [isBreak]; omega
+    | some offset0 =>
+      split at heq <;> cases heq
+      simp [isBreak]
+  · simp [offsetToIndex]
+    cases offset0 with
+    | none =>
+      split at heq <;> cases heq
+      simp [isBreak]
+      have rightIdx_leftIdx : rightIdx = leftIdx + 1 := by omega
+      subst rightIdx
+      intros _
+      rw [Int.max_eq_left (by omega)]
+    | some offset0 =>
+      split at heq <;> cases heq
+      simp [isBreak]
+      have hlt : -1 ≤ leftIdx := by
+        apply findPtrIdx_ge_minus_1 at heqleft; assumption
+      omega
+  · simp
+    intros i h_i_lt h_i_lt_size
+    obtain ⟨ o, r, id, c ⟩ := newItem
+    apply YjsLt'.ltOrigin
+    simp at *
+    apply findPtrIdx_leq_YjsLeq' (i := i) _ _ _ harrinv _ heqleft _
+    · apply findPtrIdx_getElem _ _ harrinv
+    · omega
+  · simp [offsetToIndex]
+    intros i h_i_lt h_i_lt_size
+    cases offset0 with
+    | none =>
+      simp at h_i_lt_size
+      split at heq <;> cases heq
+      omega
+    | some offset0 =>
+      simp at h_i_lt_size
+      split at heq <;> cases heq
+      omega
+  · -- scanningOrigin: scanning = false, vacuous
+    simp
+  · -- doneLt
+    simp [isDone]
+    intros hdone item h_item_eq
+    cases offset0 with
+    | none =>
+      split at heq <;> cases heq
+      rw [Int.max_eq_left (by assumption)] at h_item_eq
+      simp [offsetToIndex, extGetElemExcept, isBreak] at h_item_eq
+      simp [Int.max_eq_left (by omega)] at h_item_eq
+      generalize h_getElem_eq : arr[rightIdx.toNat]? = rItem at h_item_eq
+      split at h_item_eq; omega
+      split at h_item_eq
+      cases h_item_eq
+      · apply YjsLt'.ltOriginOrder; apply OriginLt.lt_last
+      · split at h_item_eq
+        · simp at *
+        · cases rItem <;> cases h_item_eq
+          rw [Array.getElem?_eq_some_iff] at h_getElem_eq
+          obtain ⟨ _, h_getElem_eq ⟩ := h_getElem_eq
+          subst h_getElem_eq
+          have heq : arr[rightIdx.toNat] = newItem.rightOrigin := by
+            apply findPtrIdx_lt_size_getElem heqright (by omega)
+          rw [heq]
+          obtain ⟨ o, r, id, c ⟩ := newItem
+          apply YjsLt'.ltRightOrigin
+          apply YjsLeq'.leqSame
+    | some offset0 =>
+      simp at hdone
+
+/-- mvcgen-based spec for `findIntegratedIndex` exposing the final `loopInv`.
+
+Carries enough context (item validity + array invariants + leftIdx/rightIdx
+witnesses) so that `loopInv_preserve1` can discharge the per-iteration step
+VCs. The post-condition matches `for_in_list_loop_invariant`'s output shape. -/
+theorem findIntegratedIndex_loopInv_spec
+  (newItem : YjsItem A) (input : IntegrateInput A) (arr : Array (YjsItem A))
+  (h_input_id : input.id = newItem.id)
+  (leftIdx : ℤ) (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx)
+  (rightIdx : ℤ) (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
+  (hleftIdxrightIdx : leftIdx < rightIdx)
+  (hrightIdx_nonneg : 0 ≤ rightIdx)
+  (horigin : ArrSet arr.toList newItem.origin)
+  (hrorigin : ArrSet arr.toList newItem.rightOrigin)
+  (horigin_consistent : YjsLt' (A := A) newItem.origin newItem.rightOrigin)
+  (hreachable_consistent : ∀ (x : YjsPtr A),
+    OriginReachable (YjsPtr.itemPtr newItem) x →
+    YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
+  (hsameid_consistent : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
+  (harrinv : YjsArrInvariant arr.toList)
+  (hclosed : IsClosedItemSet (ArrSet (newItem :: arr.toList)))
+  (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList))) :
+  ⦃⌜(-1 : Int) ≤ leftIdx ∧ leftIdx < arr.size ∧ rightIdx ≤ arr.size⌝⦄
+    findIntegratedIndex leftIdx rightIdx input arr
+  ⦃post⟨fun destIdx => ⌜
+    ∃ (offset : Option ℕ) (resState : ForInStep (MProd ℤ Bool)),
+      resState.value.fst.toNat = destIdx ∧
+      loopInv arr newItem leftIdx ↑rightIdx.toNat offset resState ∧
+      ((∃ s, resState = ForInStep.done s) ∨ offset = none)
+  ⌝, fun _ => ⌜True⌝⟩⦄ := by
+  unfold findIntegratedIndex
+  mvcgen [findPtrIdx_spec, getElemExcept_spec]
+  case inv1 =>
+    exact post⟨fun ⟨xs, st⟩ => ⌜
+      ∃ (offset : Option ℕ) (resState : ForInStep (MProd ℤ Bool)),
+        resState.value = st ∧
+        loopInv arr newItem leftIdx ↑rightIdx.toNat offset resState ∧
+        (xs.suffix = [] ∨ (offset = xs.suffix.head? ∧ resState = ForInStep.yield st))
+    ⌝, fun _ => ⌜True⌝⟩
+  all_goals mleave
+  case vc11.step.except.handle => intros; trivial
+  case vc12.pre =>
+    refine ⟨ if (rightIdx - leftIdx).toNat - 1 = 0 then none else some 1,
+      ForInStep.yield ⟨leftIdx + 1, false⟩, rfl, ?_, ?_⟩
+    · exact loopInv_init newItem arr leftIdx rightIdx heqleft heqright harrinv hleftIdxrightIdx hrightIdx_nonneg
+    · right
+      refine ⟨?_, rfl⟩
+      simp only [Std.Range.toList, List.head?_range']
+      split <;> simp <;> omega
+  case vc13.post.success =>
+    rename_i hP
+    obtain ⟨ offset, resState, hres_eq, hloopInv, hcond ⟩ := hP
+    refine ⟨ offset, resState, ?_, hloopInv, ?_ ⟩
+    · rw [hres_eq]
+    · cases hcond with
+      | inl _ =>
+        -- when xs.suffix = [], we need (∃ s, resState = .done s) ∨ offset = none.
+        -- This requires more info than we have. Defer.
+        sorry
+      | inr h =>
+        obtain ⟨ h_off, _ ⟩ := h
+        right; simp at h_off; exact h_off
+  all_goals sorry
 
 theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array (YjsItem A)) :
   YjsArrInvariant arr.toList
