@@ -1837,11 +1837,63 @@ theorem findIntegratedIndex_loopInv_spec
         obtain ⟨ h_off, _ ⟩ := h
         right; simp at h_off; exact h_off
   case vc1.step.success.success.success.isTrue =>
-    -- Body: pure (.done b) (because oLeftIdx < leftIdx).
-    -- New invariant takes left disjunct (xs.suffix = []).
-    -- Currently incomplete due to complexity of constructing all
-    -- `loopInv_preserve1` arguments (especially length bounds from `hlist`).
-    sorry
+    -- Body: pure (.done b). New invariant: left disjunct (xs.suffix = []).
+    rename_i _ pref cur suff hlist b _ _ _ hex other h_other_full oLeftIdx h_oLeftFull oRightIdx _ h_oLeft_lt h_oRightFull
+    obtain ⟨ h_other_eq', h_i_lt ⟩ := h_other_full
+    obtain ⟨ hoLeftIdx, _, _ ⟩ := h_oLeftFull
+    obtain ⟨ hoRightIdx, _, _ ⟩ := h_oRightFull
+    obtain ⟨ offset_old, resState_old, hres_eq_old, hloopInv_old, hcond_old ⟩ := hex
+    rcases hcond_old with ⟨ hcontra, _ ⟩ | ⟨ h_off_eq, h_res_eq ⟩
+    · simp at hcontra
+    -- Right disjunct: offset_old = some cur, resState_old = .yield b
+    subst h_res_eq
+    have h_cur_pos : 0 < cur ∧ (cur : ℤ) < ↑rightIdx.toNat - leftIdx := by
+      obtain ⟨ hidx, _ ⟩ := hloopInv_old
+      rw [h_off_eq] at hidx
+      simpa using hidx
+    have hcur : 1 + (cur - 1) = cur := by omega
+    have h_cur_lt_len : cur - 1 < (List.range' 1 ((rightIdx - leftIdx).toNat - 1)).length := by
+      rw [List.length_range']
+      have : (cur : ℤ) < (rightIdx - leftIdx) := by
+        have := h_cur_pos.2
+        have h_eq : (↑rightIdx.toNat : ℤ) = rightIdx := Int.toNat_of_nonneg hrightIdx_nonneg
+        rw [h_eq] at this
+        exact this
+      have : cur < (rightIdx - leftIdx).toNat := by
+        have h_le : 0 ≤ (rightIdx - leftIdx) := by
+          have := hleftIdxrightIdx
+          omega
+        have := this
+        omega
+      omega
+    have hbody_eq : (if oLeftIdx < leftIdx then ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool)
+        else
+          if oLeftIdx = leftIdx then
+            if other.id.clientId < newItem.id.clientId then ForInStep.yield (⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, false⟩ : MProd ℤ Bool)
+            else
+              if oRightIdx = rightIdx then ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool)
+              else ForInStep.yield (⟨b.fst, true⟩ : MProd ℤ Bool)
+          else
+            if b.snd = false then ForInStep.yield (⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, b.snd⟩ : MProd ℤ Bool)
+            else ForInStep.yield (⟨b.fst, b.snd⟩ : MProd ℤ Bool)) = ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool) := by
+      simp [h_oLeft_lt]
+    have hinv_old' : loopInv arr newItem leftIdx (↑rightIdx.toNat) (some (1 + (cur - 1))) (ForInStep.yield b) := by
+      rw [hcur]
+      rw [h_off_eq] at hloopInv_old
+      simpa using hloopInv_old
+    have h_other_eq : getElemExcept arr (leftIdx + ↑(1 + (cur - 1))).toNat = Except.ok other := by
+      rw [hcur]
+      exact h_other_eq'
+    have h_new_inv := loopInv_preserve1
+      newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
+      harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
+      b (ForInStep.done ⟨b.fst, b.snd⟩) (cur - 1) h_cur_lt_len (by
+        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
+    refine ⟨ (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[(cur - 1) + 1]?,
+      ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool), rfl, h_new_inv, ?_ ⟩
+    left
+    refine ⟨ trivial, Or.inl ⟨ ⟨b.fst, b.snd⟩, rfl ⟩ ⟩
   all_goals sorry
 
 theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array (YjsItem A)) :

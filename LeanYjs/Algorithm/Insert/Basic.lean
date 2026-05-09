@@ -168,13 +168,14 @@ theorem except_bind_eq_ok_exists {ε α β : Type} {x : Except ε α} {f : α �
 
 @[spec] theorem getElemExcept_spec (arr : Array (YjsItem A)) (idx : Nat) :
     ⦃⌜True⌝⦄ getElemExcept arr idx
-    ⦃post⟨fun _ => ⌜idx < arr.size⌝, fun _ => ⌜arr.size ≤ idx⌝⟩⦄ := by
+    ⦃post⟨fun item => ⌜getElemExcept arr idx = Except.ok item ∧ idx < arr.size⌝, fun _ => ⌜arr.size ≤ idx⌝⟩⦄ := by
   mvcgen [getElemExcept]
   all_goals mleave
   case vc1.h_1 =>
     rename_i item h_some
     obtain ⟨h_lt, _⟩ := (Array.getElem?_eq_some_iff.mp h_some)
-    exact h_lt
+    refine ⟨ ?_, h_lt ⟩
+    simp [getElemExcept, h_some, pure, Except.pure]
   case vc2.h_2 =>
     rename_i h_none
     simp [wp]
