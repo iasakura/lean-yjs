@@ -324,7 +324,7 @@ $\effect : A \to \mathit{St} \to \mathit{St}_\bot$ is a partial effect
 function; here $\mathit{St}_\bot = \mathit{St} \sqcup \{\bot\}$ is the
 disjoint sum of $\mathit{St}$ with a single failure value $\bot$.\footnote{In
 the Lean~4 artifact the failure value carries a string error message
-(\leanref{Err}); we omit this detail here because the error payload plays no
+(\leanref{IntegrateError}); we omit this detail here because the error payload plays no
 role in the proofs.}
 \end{definition}
 \noindent
@@ -655,7 +655,7 @@ need to know that swapping two concurrent operations preserves the
 conditions above.
 
 \begin{lemma}[Swap preserves consistency and closure,
-  \leanref{hbConsistent\_swap}, \leanref{hbClosed\_swap}]
+  \leanref{hb\_consistent\_swap}, \leanref{hbClosed\_swap}]
 \label{lem:swap}
 Suppose $L = L_0 \mathbin{+\!\!+} [a, b] \mathbin{+\!\!+} L_1$ and $a$ and
 $b$ are concurrent ($a \not\hble b$ and $b \not\hble a$).  Then
