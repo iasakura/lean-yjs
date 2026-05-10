@@ -366,14 +366,13 @@ theorem loopInv_prefixLt_preserve {A : Type} [inst : DecidableEq A] (newItem : Y
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList))) (leftIdx : ℤ)
   (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx) (rightIdx : ℤ)
   (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx) (hleftIdxrightIdx : leftIdx < rightIdx)
-  (next : ForInStep (MProd ℤ Bool)) (i : ℕ) (hlt2 : i < (rightIdx - leftIdx).toNat - 1) (other : YjsItem A)
+  (next : ForInStep (MProd ℤ Bool)) (i : ℕ) (other : YjsItem A)
   (hother : getElemExcept arr (leftIdx + (1 + ↑i)).toNat = Except.ok other) (oLeftIdx : ℤ)
   (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx) (oRightIdx : ℤ)
   (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx) (dest : ℤ) (scanning : Bool)
   (h_cand : scanning = true → ∃ (h_dest_lt : dest.toNat < arr.size), arr[dest.toNat].origin = newItem.origin)
   (h_leftIdx : -1 ≤ leftIdx) (nDest : ℤ) (nScanning : Bool)
   (hnexteq : next.value = ⟨nDest, nScanning⟩) (hrightIdx : 0 ≤ rightIdx) (hlt : i < (rightIdx - leftIdx).toNat - 1)
-  (hinv : loopInv arr newItem leftIdx (max rightIdx 0) (some (1 + i)) (ForInStep.yield ⟨dest, scanning⟩))
   (hbody :
     next =
       if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
@@ -384,9 +383,6 @@ theorem loopInv_prefixLt_preserve {A : Type} [inst : DecidableEq A] (newItem : Y
         else
           if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
           else ForInStep.yield ⟨dest, scanning⟩)
-  (hidx : 0 < 1 + i ∧ 1 + ↑i < max rightIdx 0 - leftIdx)
-  (hdest_current :
-    dest ≤ ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))))
   (h_not_scanning :
     scanning = false →
       isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = false →
@@ -396,37 +392,17 @@ theorem loopInv_prefixLt_preserve {A : Type} [inst : DecidableEq A] (newItem : Y
       ↑i < dest →
         ∀ (h_i_lt : i < arr.size),
           YjsLt' (A := A) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
-  (h_tbd :
-    ∀ (i_1 : ℕ),
-      dest ≤ ↑i_1 →
-        i_1 < offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩)) →
-          ∃ (i_lt_size : i_1 < arr.size) (h_dest_lt : dest.toNat < arr.size),
-            arr[i_1].origin = newItem.origin ∧ newItem.id < arr[i_1].id ∨
-              YjsLeq' (A := A) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
-  (h_done :
-    isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
-      ∀ (item : YjsPtr A),
-        extGetElemExcept arr
-              ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
-            Except.ok item →
-          YjsLt' (A := A) (YjsPtr.itemPtr newItem) item)
   (hnext_dest :
     nDest =
       if oLeftIdx < leftIdx then dest
       else
         if oLeftIdx = leftIdx then if other.id.clientId < newItem.id.clientId then leftIdx + (1 + ↑i) + 1 else dest
         else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
-  (hnext_scanning :
-    nScanning =
-      if oLeftIdx < leftIdx then scanning
-      else
-        if oLeftIdx = leftIdx then !decide (other.id.clientId < newItem.id.clientId) && (!decide (oRightIdx = rightIdx) || scanning)
-        else scanning)
-  (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
-  (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other) (h_in_other : ArrSet (newItem :: arr.toList) (YjsPtr.itemPtr other))
+  (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
+  (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other)
+  (h_in_other : ArrSet (newItem :: arr.toList) (YjsPtr.itemPtr other))
   (h_in_other_origin : ArrSet (newItem :: arr.toList) other.origin)
-  (h_other_origin_lt : YjsLt' (A := A) other.origin (YjsPtr.itemPtr other))
-  (nDest_lt_size : nDest.toNat ≤ arr.size) : ∀ (i : ℕ),
+  (h_other_origin_lt : YjsLt' (A := A) other.origin (YjsPtr.itemPtr other)) : ∀ (i : ℕ),
   ↑i < nDest →
     ∀ (h_i_lt : i < arr.size),
       YjsLt' (A := A) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem) := by
@@ -572,14 +548,13 @@ theorem loopInv_scannedRegion_preserve {A : Type}
   (leftIdx : ℤ)
   (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx) (rightIdx : ℤ)
   (hleftIdxrightIdx : leftIdx < rightIdx)
-  (next : ForInStep (MProd ℤ Bool)) (i : ℕ) (hlt2 : i < (rightIdx - leftIdx).toNat - 1) (other : YjsItem A)
+  (next : ForInStep (MProd ℤ Bool)) (i : ℕ) (other : YjsItem A)
   (hother : getElemExcept arr (leftIdx + (1 + ↑i)).toNat = Except.ok other) (oLeftIdx : ℤ)
   (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx) (oRightIdx : ℤ)
   (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx) (dest : ℤ) (scanning : Bool)
   (h_cand : scanning = true → ∃ (h_dest_lt : dest.toNat < arr.size), arr[dest.toNat].origin = newItem.origin)
   (h_leftIdx : -1 ≤ leftIdx) (h_rightIdx : rightIdx ≤ ↑arr.size) (nDest : ℤ) (nScanning : Bool)
   (hnexteq : next.value = ⟨nDest, nScanning⟩) (hrightIdx : 0 ≤ rightIdx) (hlt : i < (rightIdx - leftIdx).toNat - 1)
-  (hinv : loopInv arr newItem leftIdx (max rightIdx 0) (some (1 + i)) (ForInStep.yield ⟨dest, scanning⟩))
   (hbody :
     next =
       if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
@@ -590,18 +565,6 @@ theorem loopInv_scannedRegion_preserve {A : Type}
         else
           if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
           else ForInStep.yield ⟨dest, scanning⟩)
-  (hidx : 0 < 1 + i ∧ 1 + ↑i < max rightIdx 0 - leftIdx)
-  (hdest_current :
-    dest ≤ ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))))
-  (h_not_scanning :
-    scanning = false →
-      isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = false →
-        dest = ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))))
-  (h_lt_item :
-    ∀ (i : ℕ),
-      ↑i < dest →
-        ∀ (h_i_lt : i < arr.size),
-          YjsLt' (A := A) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
   (h_tbd :
     ∀ (i_1 : ℕ),
       dest ≤ ↑i_1 →
@@ -609,30 +572,8 @@ theorem loopInv_scannedRegion_preserve {A : Type}
           ∃ (i_lt_size : i_1 < arr.size) (h_dest_lt : dest.toNat < arr.size),
             arr[i_1].origin = newItem.origin ∧ newItem.id < arr[i_1].id ∨
               YjsLeq' (A := A) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
-  (h_done :
-    isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
-      ∀ (item : YjsPtr A),
-        extGetElemExcept arr
-              ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
-            Except.ok item →
-          YjsLt' (A := A) (YjsPtr.itemPtr newItem) item)
-  (hnext_dest :
-    nDest =
-      if oLeftIdx < leftIdx then dest
-      else
-        if oLeftIdx = leftIdx then if other.id.clientId < newItem.id.clientId then leftIdx + (1 + ↑i) + 1 else dest
-        else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
-  (hnext_scanning :
-    nScanning =
-      if oLeftIdx < leftIdx then scanning
-      else
-        if oLeftIdx = leftIdx then !decide (other.id.clientId < newItem.id.clientId) && (!decide (oRightIdx = rightIdx) || scanning)
-        else scanning)
-  (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
-  (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other) (h_in_other : ArrSet (newItem :: arr.toList) (YjsPtr.itemPtr other))
-  (h_in_other_origin : ArrSet (newItem :: arr.toList) other.origin)
-  (h_other_origin_lt : YjsLt' (A := A) other.origin (YjsPtr.itemPtr other))
-  (nDest_lt_size : nDest.toNat ≤ arr.size) (j : ℕ) (h_dest_i : nDest ≤ ↑j)
+  (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other)
+  (j : ℕ) (h_dest_i : nDest ≤ ↑j)
   (h_i_c :
     j <
       offsetToIndex leftIdx (max rightIdx 0) (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? (isBreak next)) :
@@ -831,7 +772,6 @@ theorem loopInv_scanningOrigin_preserve {A : Type} [inst : DecidableEq A] (newIt
   (oRightIdx : ℤ) (dest : ℤ) (scanning : Bool)
   (h_cand : scanning = true → ∃ (h_dest_lt : dest.toNat < arr.size), arr[dest.toNat].origin = newItem.origin)
   (h_leftIdx : -1 ≤ leftIdx) (nDest : ℤ) (nScanning : Bool) (hnexteq : next.value = ⟨nDest, nScanning⟩)
-  (hinv : loopInv arr newItem leftIdx (max rightIdx 0) (some (1 + i)) (ForInStep.yield ⟨dest, scanning⟩))
   (hbody :
     next =
       if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
@@ -842,44 +782,11 @@ theorem loopInv_scanningOrigin_preserve {A : Type} [inst : DecidableEq A] (newIt
         else
           if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
           else ForInStep.yield ⟨dest, scanning⟩)
-  (hdest_current :
-    dest ≤ ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))))
   (h_not_scanning :
     scanning = false →
       isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = false →
         dest = ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))))
-  (h_lt_item :
-    ∀ (i : ℕ),
-      ↑i < dest →
-        ∀ (h_i_lt : i < arr.size),
-          YjsLt' (A := A) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
-  (h_tbd :
-    ∀ (i_1 : ℕ),
-      dest ≤ ↑i_1 →
-        i_1 < offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩)) →
-          ∃ (i_lt_size : i_1 < arr.size) (h_dest_lt : dest.toNat < arr.size),
-            arr[i_1].origin = newItem.origin ∧ newItem.id < arr[i_1].id ∨
-              YjsLeq' (A := A) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
-  (h_done :
-    isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
-      ∀ (item : YjsPtr A),
-        extGetElemExcept arr
-              ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
-            Except.ok item →
-          YjsLt' (A := A) (YjsPtr.itemPtr newItem) item)
-  (hnext_dest :
-    nDest =
-      if oLeftIdx < leftIdx then dest
-      else
-        if oLeftIdx = leftIdx then if other.id.clientId < newItem.id.clientId then leftIdx + (1 + ↑i) + 1 else dest
-        else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
-  (hnext_scanning :
-    nScanning =
-      if oLeftIdx < leftIdx then scanning
-      else
-        if oLeftIdx = leftIdx then !decide (other.id.clientId < newItem.id.clientId) && (!decide (oRightIdx = rightIdx) || scanning)
-        else scanning)
-  (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
+  (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
   (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other)
   (nDest_lt_size : nDest.toNat ≤ arr.size) :
   nScanning = true → ∃ (h_dest_lt : nDest.toNat < arr.size), arr[nDest.toNat].origin = newItem.origin := by
@@ -941,10 +848,6 @@ Case structure:
 theorem loopInv_doneLt_preserve {A : Type} [inst : DecidableEq A] (newItem : YjsItem A) (arr : Array (YjsItem A))
   (horigin : ArrSet arr.toList newItem.origin) (hrorigin : ArrSet arr.toList newItem.rightOrigin)
   (horigin_consistent : YjsLt' (A := A) newItem.origin newItem.rightOrigin)
-  (hreachable_consistent :
-    ∀ (x : YjsPtr A),
-      OriginReachable (YjsPtr.itemPtr newItem) x →
-        YjsLeq' (A := A) x newItem.origin ∨ YjsLeq' (A := A) newItem.rightOrigin x)
   (hsameid_consistent : ∀ (x : YjsItem A),
     ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
   (harrinv : YjsArrInvariant arr.toList)
@@ -952,14 +855,12 @@ theorem loopInv_doneLt_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
   (harrsetinv : ItemSetInvariant (ArrSet (newItem :: arr.toList))) (leftIdx : ℤ)
   (heqleft : findPtrIdx newItem.origin arr = Except.ok leftIdx) (rightIdx : ℤ)
   (heqright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx) (hleftIdxrightIdx : leftIdx < rightIdx)
-  (next : ForInStep (MProd ℤ Bool)) (i : ℕ) (hlt2 : i < (rightIdx - leftIdx).toNat - 1) (other : YjsItem A)
+  (next : ForInStep (MProd ℤ Bool)) (i : ℕ) (other : YjsItem A)
   (hother : getElemExcept arr (leftIdx + (1 + ↑i)).toNat = Except.ok other) (oLeftIdx : ℤ)
   (hoLeftIdx : findPtrIdx other.origin arr = Except.ok oLeftIdx) (oRightIdx : ℤ)
   (hoRightIdx : findPtrIdx other.rightOrigin arr = Except.ok oRightIdx) (dest : ℤ) (scanning : Bool)
-  (h_cand : scanning = true → ∃ (h_dest_lt : dest.toNat < arr.size), arr[dest.toNat].origin = newItem.origin)
-  (h_leftIdx : -1 ≤ leftIdx) (h_rightIdx : rightIdx ≤ ↑arr.size) (nDest : ℤ) (nScanning : Bool)
-  (hnexteq : next.value = ⟨nDest, nScanning⟩) (hrightIdx : 0 ≤ rightIdx) (hlt : i < (rightIdx - leftIdx).toNat - 1)
-  (hinv : loopInv arr newItem leftIdx (max rightIdx 0) (some (1 + i)) (ForInStep.yield ⟨dest, scanning⟩))
+  (h_leftIdx : -1 ≤ leftIdx) (h_rightIdx : rightIdx ≤ ↑arr.size)
+  (hrightIdx : 0 ≤ rightIdx) (hlt : i < (rightIdx - leftIdx).toNat - 1)
   (hbody :
     next =
       if oLeftIdx < leftIdx then ForInStep.done ⟨dest, scanning⟩
@@ -970,48 +871,8 @@ theorem loopInv_doneLt_preserve {A : Type} [inst : DecidableEq A] (newItem : Yjs
         else
           if scanning = false then ForInStep.yield ⟨leftIdx + (1 + ↑i) + 1, scanning⟩
           else ForInStep.yield ⟨dest, scanning⟩)
-  (hidx : 0 < 1 + i ∧ 1 + ↑i < max rightIdx 0 - leftIdx)
-  (hdest_current :
-    dest ≤ ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))))
-  (h_not_scanning :
-    scanning = false →
-      isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = false →
-        dest = ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))))
-  (h_lt_item :
-    ∀ (i : ℕ),
-      ↑i < dest →
-        ∀ (h_i_lt : i < arr.size),
-          YjsLt' (A := A) (YjsPtr.itemPtr arr[i]) (YjsPtr.itemPtr newItem))
-  (h_tbd :
-    ∀ (i_1 : ℕ),
-      dest ≤ ↑i_1 →
-        i_1 < offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩)) →
-          ∃ (i_lt_size : i_1 < arr.size) (h_dest_lt : dest.toNat < arr.size),
-            arr[i_1].origin = newItem.origin ∧ newItem.id < arr[i_1].id ∨
-              YjsLeq' (A := A) (YjsPtr.itemPtr arr[dest.toNat]) arr[i_1].origin)
-  (h_done :
-    isDone (ForInStep.yield ⟨dest, scanning⟩) (some (1 + i)) = true →
-      ∀ (item : YjsPtr A),
-        extGetElemExcept arr
-              ↑(offsetToIndex leftIdx (max rightIdx 0) (some (1 + i)) (isBreak (ForInStep.yield ⟨dest, scanning⟩))) =
-            Except.ok item →
-          YjsLt' (A := A) (YjsPtr.itemPtr newItem) item)
-  (hnext_dest :
-    nDest =
-      if oLeftIdx < leftIdx then dest
-      else
-        if oLeftIdx = leftIdx then if other.id.clientId < newItem.id.clientId then leftIdx + (1 + ↑i) + 1 else dest
-        else if scanning = false then leftIdx + (1 + ↑i) + 1 else dest)
-  (hnext_scanning :
-    nScanning =
-      if oLeftIdx < leftIdx then scanning
-      else
-        if oLeftIdx = leftIdx then !decide (other.id.clientId < newItem.id.clientId) && (!decide (oRightIdx = rightIdx) || scanning)
-        else scanning)
-  (nDest_eq : nDest = dest ∨ nDest = leftIdx + ↑(1 + i) + 1) (hlt_current : (leftIdx + (1 + ↑i)).toNat < arr.size)
-  (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other) (h_in_other : ArrSet (newItem :: arr.toList) (YjsPtr.itemPtr other))
-  (h_in_other_origin : ArrSet (newItem :: arr.toList) other.origin)
-  (h_other_origin_lt : YjsLt' (A := A) other.origin (YjsPtr.itemPtr other))
+  (heq : arr[(leftIdx + (1 + ↑i)).toNat] = other)
+  (h_in_other : ArrSet (newItem :: arr.toList) (YjsPtr.itemPtr other))
   (hdone : isDone next (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[i + 1]? = true) (item : YjsPtr A)
   (hitem :
     extGetElemExcept arr
@@ -1245,7 +1106,6 @@ theorem loopInv_preserve1
   (next : ForInStep (MProd ℤ Bool))
   (i : ℕ)
   (hlt : i < (List.range' 1 ((rightIdx - leftIdx).toNat - 1)).length)
-  (hlt2 : i < (rightIdx - leftIdx).toNat - 1)
   (hinv : loopInv arr newItem leftIdx (↑rightIdx.toNat) (some (1 + i)) (ForInStep.yield state))
   (other : YjsItem A)
   (hother : getElemExcept arr (leftIdx + ↑(1 + i)).toNat = Except.ok other)
@@ -1438,32 +1298,30 @@ theorem loopInv_preserve1
     apply loopInv_prefixLt_preserve
       newItem arr horigin hrorigin horigin_consistent
       hreachable_consistent hsameid_consistent harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright
-      hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx dest scanning
-      h_cand h_leftIdx nDest nScanning hnexteq hrightIdx hlt hinv hbody hidx hdest_current h_not_scanning
-      h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq hlt_current heq h_in_other h_in_other_origin h_other_origin_lt
-      nDest_lt_size
+      hleftIdxrightIdx next i other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx dest scanning
+      h_cand h_leftIdx nDest nScanning hnexteq hrightIdx hlt hbody h_not_scanning
+      h_lt_item hnext_dest hlt_current heq h_in_other h_in_other_origin h_other_origin_lt
   constructor
   . -- scannedRegion: pending region [nDest, newCurrent) all satisfies clause (a) or (b)
     apply loopInv_scannedRegion_preserve
       newItem arr hsameid_consistent harrinv
-      leftIdx heqleft rightIdx hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx
-      oRightIdx hoRightIdx dest scanning h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hrightIdx hlt hinv
-      hbody hidx hdest_current h_not_scanning h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq
-      hlt_current heq h_in_other h_in_other_origin h_other_origin_lt nDest_lt_size
+      leftIdx heqleft rightIdx hleftIdxrightIdx next i other hother oLeftIdx hoLeftIdx
+      oRightIdx hoRightIdx dest scanning h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hrightIdx hlt
+      hbody h_tbd
+      heq
   constructor
   . -- scanningOrigin: nScanning ⇒ arr[nDest].origin = newItem.origin
     apply loopInv_scanningOrigin_preserve
       newItem arr leftIdx heqleft rightIdx next i other oLeftIdx hoLeftIdx oRightIdx dest scanning
-      h_cand h_leftIdx nDest nScanning hnexteq hinv hbody hdest_current h_not_scanning
-      h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq hlt_current heq nDest_lt_size
+      h_cand h_leftIdx nDest nScanning hnexteq hbody h_not_scanning
+      hlt_current heq nDest_lt_size
   . intros hdone item hitem
     -- doneLt: when next state is done, newItem < boundary item
     apply loopInv_doneLt_preserve
-      newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent harrinv
-      hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx next i hlt other hother oLeftIdx hoLeftIdx
-      oRightIdx hoRightIdx dest scanning h_cand h_leftIdx h_rightIdx nDest nScanning hnexteq hrightIdx hlt hinv
-      hbody hidx hdest_current h_not_scanning h_lt_item h_tbd h_done hnext_dest hnext_scanning nDest_eq
-      hlt_current heq h_in_other h_in_other_origin h_other_origin_lt hdone item hitem
+      newItem arr horigin hrorigin horigin_consistent hsameid_consistent harrinv
+      hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx next i other hother oLeftIdx hoLeftIdx
+      oRightIdx hoRightIdx dest scanning h_leftIdx h_rightIdx hrightIdx hlt
+      hbody heq h_in_other hdone item hitem
 
 theorem YjsArrInvariant_insertIdxIfInBounds (arr : Array (YjsItem A)) (newItem : YjsItem A) (i : ℕ) :
   IsClosedItemSet (ArrSet $ newItem :: arr.toList)
@@ -1870,8 +1728,7 @@ theorem findIntegratedIndex_loopInv_spec
     have h_new_inv := loopInv_preserve1
       newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
-      b (ForInStep.done ⟨b.fst, b.snd⟩) (cur - 1) h_cur_lt_len (by
-        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      b (ForInStep.done ⟨b.fst, b.snd⟩) (cur - 1) h_cur_lt_len
       hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
     refine ⟨ (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[(cur - 1) + 1]?,
       ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool), rfl, h_new_inv, ?_ ⟩
@@ -1925,8 +1782,7 @@ theorem findIntegratedIndex_loopInv_spec
     have h_new_inv := loopInv_preserve1
       newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
-      b (ForInStep.yield new_st) (cur - 1) h_cur_lt_len (by
-        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      b (ForInStep.yield new_st) (cur - 1) h_cur_lt_len
       hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
     -- The new state's first component should match what mvcgen generates: ↑(leftIdx + ↑cur).toNat + 1
     -- vs (leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1. These are equal.
@@ -1998,8 +1854,7 @@ theorem findIntegratedIndex_loopInv_spec
     have h_new_inv := loopInv_preserve1
       newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
-      b (ForInStep.yield ⟨b.fst, true⟩) (cur - 1) h_cur_lt_len (by
-        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      b (ForInStep.yield ⟨b.fst, true⟩) (cur - 1) h_cur_lt_len
       hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
     have h_hlist_range' : (List.range' 1 ((rightIdx - leftIdx).toNat - 1)) = pref ++ cur :: suff := by
       have := hlist; simp [Std.Range.toList] at this; exact this
@@ -2055,8 +1910,7 @@ theorem findIntegratedIndex_loopInv_spec
     have h_new_inv := loopInv_preserve1
       newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
-      b (ForInStep.done ⟨b.fst, b.snd⟩) (cur - 1) h_cur_lt_len (by
-        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      b (ForInStep.done ⟨b.fst, b.snd⟩) (cur - 1) h_cur_lt_len
       hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
     refine ⟨ (List.range' 1 ((rightIdx - leftIdx).toNat - 1))[(cur - 1) + 1]?,
       ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool), rfl, h_new_inv, ?_ ⟩
@@ -2107,8 +1961,7 @@ theorem findIntegratedIndex_loopInv_spec
     have h_new_inv := loopInv_preserve1
       newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
-      b (ForInStep.yield new_st) (cur - 1) h_cur_lt_len (by
-        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      b (ForInStep.yield new_st) (cur - 1) h_cur_lt_len
       hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
     have h_hlist_range' : (List.range' 1 ((rightIdx - leftIdx).toNat - 1)) = pref ++ cur :: suff := by
       have := hlist; simp [Std.Range.toList] at this; exact this
@@ -2173,8 +2026,7 @@ theorem findIntegratedIndex_loopInv_spec
     have h_new_inv := loopInv_preserve1
       newItem arr horigin hrorigin horigin_consistent hreachable_consistent hsameid_consistent
       harrinv hclosed harrsetinv leftIdx heqleft rightIdx heqright hleftIdxrightIdx hrightIdx_nonneg
-      b (ForInStep.yield ⟨b.fst, b.snd⟩) (cur - 1) h_cur_lt_len (by
-        rw [List.length_range'] at h_cur_lt_len; exact h_cur_lt_len)
+      b (ForInStep.yield ⟨b.fst, b.snd⟩) (cur - 1) h_cur_lt_len
       hinv_old' other h_other_eq oLeftIdx hoLeftIdx oRightIdx hoRightIdx hbody_eq.symm
     have h_hlist_range' : (List.range' 1 ((rightIdx - leftIdx).toNat - 1)) = pref ++ cur :: suff := by
       have := hlist; simp [Std.Range.toList] at this; exact this
