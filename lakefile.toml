@@ -1,5 +1,6 @@
 name = "lean-yjs"
 version = "0.1.0"
+defaultTargets = ["LeanYjs", "diff-test-runner"]
 
 [[lean_lib]]
 name = "LeanYjs"

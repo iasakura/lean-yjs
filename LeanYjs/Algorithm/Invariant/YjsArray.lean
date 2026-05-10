@@ -942,3 +942,16 @@ theorem findRightIdx_getElemExcept {arr : Array (YjsItem A)} {input : IntegrateI
         use idx
         constructor; grind
         grind
+
+theorem idx_between_id_neq {A} {i : ℕ} {newItem other : YjsItem A} {arr : Array (YjsItem A)}
+  (hsameid_consistent : ∀ (x : YjsItem A),
+    ArrSet arr.toList (YjsPtr.itemPtr x) → x.id.clientId = newItem.id.clientId → x.id.clock < newItem.id.clock)
+  (heq : arr[i]? = some other) :
+  other.id ≠ newItem.id := by
+  intros hcontra
+  rw [getElem?_eq_some_iff] at heq
+  obtain ⟨ _, heq ⟩ := heq
+  have h := hsameid_consistent other (by subst other; simp [ArrSet])
+  rw [hcontra] at h
+  have h := h (by simp)
+  omega

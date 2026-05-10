@@ -132,34 +132,50 @@ theorem except_bind_eq_ok_exists {ε α β : Type} {x : Except ε α} {f : α �
     exact ⟨ a, rfl, h ⟩
 
 @[spec] theorem findPtrIdx_spec (p : YjsPtr A) (arr : Array (YjsItem A)) :
-    ⦃⌜True⌝⦄ findPtrIdx p arr ⦃post⟨fun idx => ⌜(-1 : Int) ≤ idx ∧ idx ≤ arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
+    ⦃⌜True⌝⦄ findPtrIdx p arr
+    ⦃post⟨fun idx => ⌜findPtrIdx p arr = Except.ok idx ∧ (-1 : Int) ≤ idx ∧ idx ≤ arr.size⌝,
+      fun _ => ⌜True⌝⟩⦄ := by
   mvcgen [findPtrIdx]
   all_goals mleave
   case vc1.h_1.h_1 =>
-    rename_i _ h_find
-    rw [Array.findIdx?_eq_some_iff_getElem] at h_find
-    obtain ⟨ h_lt, _, _ ⟩ := h_find
-    omega
+    rename_i item h_p_eq idx h_find
+    subst h_p_eq
+    refine ⟨ ?_, ?_, ?_ ⟩
+    · simp [findPtrIdx, h_find, pure, Except.pure]
+    · rw [Array.findIdx?_eq_some_iff_getElem] at h_find
+      obtain ⟨ h_lt, _, _ ⟩ := h_find
+      omega
+    · rw [Array.findIdx?_eq_some_iff_getElem] at h_find
+      obtain ⟨ h_lt, _, _ ⟩ := h_find
+      have h_nonneg : (0 : Int) ≤ arr.size := by exact_mod_cast (Nat.zero_le arr.size)
+      omega
   case vc3.h_2 =>
-    constructor
+    rename_i h_p_eq
+    subst h_p_eq
+    refine ⟨ ?_, ?_, ?_ ⟩
+    · simp [findPtrIdx, pure, Except.pure]
     · omega
     · have h_nonneg : (0 : Int) ≤ arr.size := by exact_mod_cast (Nat.zero_le arr.size)
       omega
   case vc4.h_3 =>
-    constructor
+    rename_i h_p_eq
+    subst h_p_eq
+    refine ⟨ ?_, ?_, ?_ ⟩
+    · simp [findPtrIdx, pure, Except.pure]
     · have h_nonneg : (0 : Int) ≤ arr.size := by exact_mod_cast (Nat.zero_le arr.size)
       omega
     · omega
 
 @[spec] theorem getElemExcept_spec (arr : Array (YjsItem A)) (idx : Nat) :
     ⦃⌜True⌝⦄ getElemExcept arr idx
-    ⦃post⟨fun _ => ⌜idx < arr.size⌝, fun _ => ⌜arr.size ≤ idx⌝⟩⦄ := by
+    ⦃post⟨fun item => ⌜getElemExcept arr idx = Except.ok item ∧ idx < arr.size⌝, fun _ => ⌜arr.size ≤ idx⌝⟩⦄ := by
   mvcgen [getElemExcept]
   all_goals mleave
   case vc1.h_1 =>
     rename_i item h_some
     obtain ⟨h_lt, _⟩ := (Array.getElem?_eq_some_iff.mp h_some)
-    exact h_lt
+    refine ⟨ ?_, h_lt ⟩
+    simp [getElemExcept, h_some, pure, Except.pure]
   case vc2.h_2 =>
     rename_i h_none
     simp [wp]
