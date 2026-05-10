@@ -30,50 +30,6 @@ theorem ok_bind {α β ε : Type} (x : α) (f : α -> Except β ε) :
     let x <- Except.ok x
     f x) = f x := by eq_refl
 
-theorem for_in_list_loop_invariant {α β ε : Type} (ls : List α) (init : β) (body : α -> β -> Except ε (ForInStep β)) (I : Option α -> ForInStep β -> Prop) :
-  I ls.head? (ForInStep.yield init) ->
-  (∀ x (y : β) res i (hlt : i < ls.length),
-    x = ls[i] ->
-    I x (ForInStep.yield y) ->
-    body x y = Except.ok res ->
-    I ls[i + 1]? res) ->
-  ∀ res, forIn ls init body = Except.ok res ->
-  ∃ x res', res'.value = res ∧ I x res' ∧ (res' = ForInStep.done res ∨ x = none) := by
-  intros hinit hbody res hforin
-  induction ls generalizing init with
-  | nil =>
-    cases hforin
-    exists none, ForInStep.yield res
-    constructor; constructor; constructor <;> try assumption
-    simp
-  | cons x xs ih =>
-    simp at hforin
-    generalize heq : body x init = res at hforin
-    cases res with
-    | error e =>
-      cases hforin
-    | ok res =>
-      rw [ok_bind res] at hforin
-      cases res with
-      | yield y =>
-        apply ih y <;> try assumption
-        . apply hbody (i := 0) at heq <;> try first | simp | assumption
-          simp at *
-          rw [List.head?_eq_getElem?]
-          assumption
-        . intros x' y' res' xin' hy hbody'
-          apply hbody <;> try assumption
-          simp
-          assumption
-      | done y =>
-        simp at hforin
-        cases hforin
-        apply hbody (i := 0) at heq <;> try first | simp | assumption
-        simp at heq
-        exists xs[0]?, ForInStep.done res
-        constructor; constructor; constructor <;> try assumption
-        simp
-
 def offsetToIndex (leftIdx : ℤ) (rightIdx : ℤ) (offset : Option ℕ) (isBreak: Bool): ℕ :=
   let back := if isBreak then 1 else 0
   match offset with
@@ -1790,7 +1746,10 @@ theorem loopInv_init
 
 Carries enough context (item validity + array invariants + leftIdx/rightIdx
 witnesses) so that `loopInv_preserve1` can discharge the per-iteration step
-VCs. The post-condition matches `for_in_list_loop_invariant`'s output shape. -/
+VCs. The post-condition shape — `∃ offset resState, loopInv ... offset resState ∧
+((∃ s, resState = .done s) ∨ offset = none)` — gives the same data the
+old `for_in_list_loop_invariant`-based proof relied on. -/
+@[spec]
 theorem findIntegratedIndex_loopInv_spec
   (newItem : YjsItem A) (input : IntegrateInput A) (arr : Array (YjsItem A))
   (h_input_id : input.id = newItem.id)
@@ -2280,260 +2239,133 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
     apply findPtrIdx_ge_minus_1 at heqleft'
     omega
 
-  simp [findIntegratedIndex] at hintegrate
-
-  generalize hloop :
-   forIn (m := Except IntegrateError) (ρ := List ℕ) (α := ℕ) (β := MProd ℤ Bool) (List.range' 1 ((rightIdx - leftIdx).toNat - 1) 1) ⟨leftIdx + 1, false⟩ (fun offset r => do
-      let other ← getElemExcept arr (leftIdx + ↑offset).toNat
-      let oLeftIdx ← findPtrIdx other.origin arr
-      let oRightIdx ← findPtrIdx other.rightOrigin arr
-      if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
-        else
-          if oLeftIdx = leftIdx then
-            if other.id.clientId < input.id.clientId then
-              pure (ForInStep.yield ⟨max (leftIdx + ↑offset) 0 + 1, false⟩)
-            else
-              if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
-              else pure (ForInStep.yield ⟨r.fst, true⟩)
-          else
-            if r.snd = false then pure (ForInStep.yield ⟨max (leftIdx + ↑offset) 0 + 1, r.snd⟩)
-            else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = l at hintegrate
-
   have h_eq : input.id = newItem.id := by
     rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
     grind only
-  rw [h_eq] at hloop
 
-  obtain ⟨ _ ⟩ | ⟨ resState ⟩ := l; cases hintegrate
-  apply for_in_list_loop_invariant (I := fun x state => loopInv arr newItem leftIdx rightIdx.toNat x state) at hloop
-  . -- Here, we prove that the array is still pairwise ordered after the integration.
-    -- So, what we need is arr[res.first] < newItem < arr[res.first + 1] (and also, 0 <= res.first <= arr.size)
-    rw [ok_bind] at hintegrate
-    use resState.fst.toNat
-    have h : mkItemByIndex leftIdx rightIdx input arr = Except.ok newItem := by
-      rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
-      obtain ⟨ origin, rightOrigin, id, content, h_eq, horigin, hrightOrigin, hid, hcontent ⟩ := h_newItem_def
-      apply findLeftIdx_getElemExcept at heqleft
-      obtain ⟨ originPtr, horiginptr, hleftIdPtr ⟩ := heqleft
-      apply findRightIdx_getElemExcept at heqright
-      obtain ⟨ rightOriginPtr, hrightoriginptr, hrightIdPtr ⟩ := heqright
-      simp only [mkItemByIndex]
-      rw [horiginptr, hrightoriginptr]; simp [bind, Except.bind, pure, Except.pure]
-      have h := isLeftIdPtr_unique _ _ _ _ harrinv.unique hleftIdPtr horigin
-      have h' := isRightIdPtr_unique _ _ _ _ harrinv.unique hrightIdPtr hrightOrigin
-      grind only
-    rw [h] at hintegrate; simp at hintegrate
-    rw [<-hintegrate]
-    obtain ⟨ offset, res', hres', hloopInv, hdone ⟩ := hloop
-    have h_resState : resState.fst.toNat ≤ arr.size := by
-      obtain ⟨ hidx, hdest_current, _, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
-      simp at *
-      apply findPtrIdx_le_size at heqright'
-      subst resState
-      have h_dest_leq_size : res'.value.fst.toNat ≤ offsetToIndex leftIdx rightIdx offset (isBreak res') := by
-        cases res' <;> simp at *
-        all_goals rw [Int.max_eq_left hrightIdx] at *
-        all_goals omega
-      have h_current_leq_size : offsetToIndex leftIdx rightIdx offset (isBreak res') ≤ arr.size := by
-        cases offset with
-        | none =>
-          simp [offsetToIndex]; omega
-        | some offset =>
-          simp [offsetToIndex]; omega
+  -- Extract `findIntegratedIndex` result without unfolding its body.
+  generalize h_findInt : findIntegratedIndex leftIdx rightIdx input arr = d at hintegrate
+  obtain ⟨ _ ⟩ | ⟨ destIdx ⟩ := d; cases hintegrate
+  rw [ok_bind] at hintegrate
+
+  have h_right_le : rightIdx ≤ arr.size := by apply findPtrIdx_le_size at heqright'; assumption
+  have h_left_ge : (-1 : Int) ≤ leftIdx := by apply findPtrIdx_ge_minus_1 at heqleft'; assumption
+  have h_left_lt : leftIdx < arr.size := by omega
+
+  -- Apply the strong spec via `Except.of_wp`, deriving the post-loop invariant.
+  -- The post-condition uses `Except.casesOn` (rather than `match`) so the
+  -- iota-reduction `P (Except.ok a)` happens definitionally inside `Except.of_wp`.
+  have hP : Except.casesOn
+      (motive := fun _ => Prop)
+      (findIntegratedIndex leftIdx rightIdx input arr)
+      (fun _ => True)
+      (fun d => ∃ (offset : Option ℕ) (resState : ForInStep (MProd ℤ Bool)),
+        resState.value.fst.toNat = d ∧
+        loopInv arr newItem leftIdx ↑rightIdx.toNat offset resState ∧
+        ((∃ s, resState = ForInStep.done s) ∨ offset = none)) := by
+    apply (Except.of_wp (prog := findIntegratedIndex leftIdx rightIdx input arr)
+      (P := fun r => Except.casesOn (motive := fun _ => Prop) r
+        (fun _ => True)
+        (fun d => ∃ (offset : Option ℕ) (resState : ForInStep (MProd ℤ Bool)),
+          resState.value.fst.toNat = d ∧
+          loopInv arr newItem leftIdx ↑rightIdx.toNat offset resState ∧
+          ((∃ s, resState = ForInStep.done s) ∨ offset = none))))
+    have h_spec := findIntegratedIndex_loopInv_spec
+      newItem input arr h_eq leftIdx heqleft' rightIdx heqright'
+      hleftIdxrightIdx hrightIdx
+      horigin hrorigin horigin_consistent hreachable_consistent h_maximalId
+      harrinv hclosed harrsetinv
+      ⟨h_left_ge, h_left_lt, h_right_le⟩
+    -- Goal: ⊢ₛ wp⟦findIntegratedIndex⟧ (...) with `Except.casesOn (Except.ok/error a) ...` form.
+    -- h_spec gives the same wp triple but with reduced post (no casesOn).
+    -- Reduce casesOn in goal:
+    simp only [Except.casesOn]
+    exact fun _ => h_spec
+  rw [h_findInt] at hP
+  obtain ⟨ offset, res', hres', hloopInv, hdone ⟩ := hP
+
+  -- Continue with the existing post-loop reasoning.
+  use destIdx
+  have h : mkItemByIndex leftIdx rightIdx input arr = Except.ok newItem := by
+    rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
+    obtain ⟨ origin, rightOrigin, id, content, h_eq, horigin, hrightOrigin, hid, hcontent ⟩ := h_newItem_def
+    apply findLeftIdx_getElemExcept at heqleft
+    obtain ⟨ originPtr, horiginptr, hleftIdPtr ⟩ := heqleft
+    apply findRightIdx_getElemExcept at heqright
+    obtain ⟨ rightOriginPtr, hrightoriginptr, hrightIdPtr ⟩ := heqright
+    simp only [mkItemByIndex]
+    rw [horiginptr, hrightoriginptr]; simp [bind, Except.bind, pure, Except.pure]
+    have h := isLeftIdPtr_unique _ _ _ _ harrinv.unique hleftIdPtr horigin
+    have h' := isRightIdPtr_unique _ _ _ _ harrinv.unique hrightIdPtr hrightOrigin
+    grind only
+  rw [h] at hintegrate; simp at hintegrate
+  rw [<-hintegrate]
+  have h_destIdx_le : destIdx ≤ arr.size := by
+    obtain ⟨ hidx, hdest_current, _, hlt, htbd1, htbd2, hdone' ⟩ := hloopInv
+    simp at *
+    apply findPtrIdx_le_size at heqright'
+    rw [← hres']
+    have h_dest_leq_size : res'.value.fst.toNat ≤ offsetToIndex leftIdx rightIdx offset (isBreak res') := by
+      cases res' <;> simp at *
+      all_goals rw [Int.max_eq_left hrightIdx] at *
+      all_goals omega
+    have h_current_leq_size : offsetToIndex leftIdx rightIdx offset (isBreak res') ≤ arr.size := by
+      cases offset with
+      | none =>
+        simp [offsetToIndex]; omega
+      | some offset =>
+        simp [offsetToIndex]; omega
+    omega
+  refine ⟨h_destIdx_le, ?_, ?_⟩
+  · subst newArr; eq_refl
+  · apply YjsArrInvariant_insertIdxIfInBounds arr newItem destIdx hclosed harrsetinv harrinv h_destIdx_le
+    · intros hi0
+      simp [loopInv] at hloopInv
+      obtain ⟨ hidx, hdest_current, _, hlt, htbd1, htbd2, hdone' ⟩ := hloopInv
+      have h := hlt (destIdx - 1) (by rw [← hres']; omega) (by omega)
+      assumption
+    · have current_lt : offsetToIndex leftIdx rightIdx offset (isBreak res') ≤ arr.size := by
+        obtain ⟨ hidx, dest, hdest, hlt, htbd1, htbd2, hdone' ⟩ := hloopInv
+        apply findPtrIdx_le_size at heqright'
+        cases offset <;> simp [offsetToIndex] <;> omega
+      have h_i_le_ri : (↑(offsetToIndex leftIdx rightIdx offset (isBreak res')) : ℤ) ≤ rightIdx := by
+        obtain ⟨ hidx, _, _, _, _, _, _ ⟩ := hloopInv
+        cases offset <;> simp [offsetToIndex, isBreak] at * <;> omega
+      have h_done_flag : isDone res' offset = true := by
+        cases hdone with
+        | inl h => obtain ⟨s, hs⟩ := h; rw [hs]; simp [isDone]
+        | inr h => subst h; simp [isDone]
+      have hii := loopInv_to_IntegrationInvariant
+        (rightIdx := ↑rightIdx.toNat) hloopInv
+        (by simpa [Int.max_eq_left hrightIdx] using heqright')
+        (by exact_mod_cast Nat.zero_le _)
+      intros hisize
+      have h_dest_le_current : destIdx ≤ offsetToIndex leftIdx rightIdx offset (isBreak res') := by
+        rw [← hres']
+        obtain ⟨ hidx, hdest_current, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
+        simp at *
+        rw [Int.max_eq_left hrightIdx] at hdest_current
+        obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
+      apply pending_propagation arr newItem leftIdx rightIdx
+        destIdx (offsetToIndex leftIdx rightIdx offset (isBreak res'))
+        hclosed harrsetinv harrinv heqleft' heqright'
+        h_i_le_ri
+        (by
+          have hsr := hii.scannedRegion
+          rw [hres'] at hsr
+          simpa [Int.max_eq_left hrightIdx] using hsr)
+        current_lt
+        (fun hlt => by
+          simpa [Int.max_eq_left hrightIdx] using
+            hii.doneLt (by simpa [Int.max_eq_left hrightIdx] using h_done_flag) hlt)
+        destIdx
+        (le_refl _)
+        h_dest_le_current
+        hisize
+    · intros a hmem heq
+      have h := h_maximalId a (by simp [ArrSet]; assumption) (by rw [heq])
+      rw [heq] at h
       omega
-    constructor
-    . assumption
-    constructor
-    . subst newArr; eq_refl
-    . apply YjsArrInvariant_insertIdxIfInBounds arr newItem resState.fst.toNat hclosed harrsetinv harrinv h_resState
-      . intros hi0
-        simp [loopInv] at hloopInv
-        obtain ⟨ hidx, hdest_current, _, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
-        subst hres'
-        obtain hlt  := hlt (res'.value.fst.toNat - 1) (by omega) (by omega)
-        assumption
-      . have current_lt : offsetToIndex leftIdx rightIdx offset (isBreak res') ≤ arr.size := by
-          obtain ⟨ hidx, dest, hdest, hlt, htbd1, htbd2, hdone ⟩ := hloopInv
-          apply findPtrIdx_le_size at heqright'
-          cases offset <;> simp [offsetToIndex] <;> omega
-        have h_i_le_ri : (↑(offsetToIndex leftIdx rightIdx offset (isBreak res')) : ℤ) ≤ rightIdx := by
-          obtain ⟨ hidx, _, _, _, _, _, _ ⟩ := hloopInv
-          cases offset <;> simp [offsetToIndex, isBreak] at * <;> omega
-        have h_done_flag : isDone res' offset = true := by
-          cases hdone with
-          | inl h => subst h; simp [isDone]
-          | inr h => subst h; simp [isDone]
-        have hii := loopInv_to_IntegrationInvariant
-          (rightIdx := ↑rightIdx.toNat) hloopInv
-          (by simpa [Int.max_eq_left hrightIdx] using heqright')
-          (by exact_mod_cast Nat.zero_le _)
-        intros hisize
-        have h_dest_le_current : resState.fst.toNat ≤
-            offsetToIndex leftIdx rightIdx offset (isBreak res') := by
-          subst hres'
-          obtain ⟨ hidx, hdest_current, hdestLt, hlt', htbd1, htbd2, hdone' ⟩ := hloopInv
-          simp at *
-          rw [Int.max_eq_left hrightIdx] at hdest_current
-          obtain ⟨ _, _ ⟩ | ⟨ _, _ ⟩ := res' <;> simp at * <;> omega
-        apply pending_propagation arr newItem leftIdx rightIdx
-          resState.fst.toNat (offsetToIndex leftIdx rightIdx offset (isBreak res'))
-          hclosed harrsetinv harrinv heqleft' heqright'
-          h_i_le_ri
-          (by simpa [Int.max_eq_left hrightIdx, hres'] using hii.scannedRegion)
-          current_lt
-          (fun hlt => by
-            simpa [Int.max_eq_left hrightIdx] using
-              hii.doneLt (by simpa [Int.max_eq_left hrightIdx] using h_done_flag) hlt)
-          resState.fst.toNat
-          (le_refl _)
-          h_dest_le_current
-          hisize
-      . intros a hmem heq
-        have h := h_maximalId a (by simp [ArrSet]; assumption) (by rw [heq])
-        rw [heq] at h
-        omega
-  . -- initial
-    simp only [loopInv]
-    rw [List.head?_range']
-    generalize heq : (if (rightIdx - leftIdx).toNat - 1 = 0 then none else some 1) = offset0
-    constructor
-    . cases offset0 with
-      | none => simp
-      | some x =>
-        simp
-        split at heq <;> cases heq
-        constructor
-        . simp
-        . omega
-    constructor
-    . simp [offsetToIndex]
-      cases offset0 with
-      | none =>
-        simp [isBreak]
-        omega
-      | some offset0 =>
-        split at heq <;> cases heq
-        simp [isBreak]
-    constructor
-    . simp [offsetToIndex]
-      cases offset0 with
-      | none =>
-        split at heq <;> cases heq
-        simp [isBreak]
-        have rightIdx_leftIdx : rightIdx = leftIdx + 1 := by
-          omega
-        subst rightIdx
-        intros hdone
-        rw [Int.max_eq_left (by omega)]
-      | some offset0 =>
-        split at heq <;> cases heq
-        simp [isBreak]
-        have hlt : -1 ≤ leftIdx := by
-          apply findPtrIdx_ge_minus_1 at heqleft'
-          assumption
-        omega
-    constructor
-    . simp
-      intros i h_i_lt h_i_lt_size
-      obtain ⟨ o, r, id, c ⟩ := newItem
-      apply YjsLt'.ltOrigin
-      simp at *
-
-      apply findPtrIdx_leq_YjsLeq' (i := i) _ _ _ harrinv _ heqleft' _
-      . apply findPtrIdx_getElem _ _ harrinv
-      . omega
-    constructor
-    . simp [offsetToIndex]
-      intros i h_i_lt h_i_lt_size
-      cases offset0 with
-      | none =>
-        simp at h_i_lt_size
-        split at heq <;> cases heq
-        omega
-      | some offset0 =>
-        simp at h_i_lt_size
-        split at heq <;> cases heq
-        omega
-    constructor
-    . simp
-    . simp [isDone]
-      intros hdone item h_item_eq
-      cases offset0 with
-      | none =>
-        split at heq <;> cases heq
-        rw [Int.max_eq_left (by assumption)] at h_item_eq
-        simp [offsetToIndex, extGetElemExcept, isBreak] at h_item_eq
-        simp [Int.max_eq_left (by omega)] at h_item_eq
-        generalize h_getElem_eq : arr[rightIdx.toNat]? = rItem at h_item_eq
-        split at h_item_eq; omega
-        split at h_item_eq
-        cases h_item_eq
-        . apply YjsLt'.ltOriginOrder
-          . apply OriginLt.lt_last
-        . split at h_item_eq
-          . simp at *
-          . cases rItem <;> cases h_item_eq
-            rw [Array.getElem?_eq_some_iff] at h_getElem_eq
-            obtain ⟨ _, h_getElem_eq ⟩ := h_getElem_eq
-            subst h_getElem_eq
-            have heq : arr[rightIdx.toNat] = newItem.rightOrigin := by
-              apply findPtrIdx_lt_size_getElem heqright' (by omega)
-            rw [heq]
-            obtain ⟨ o, r, id, c ⟩ := newItem
-            apply YjsLt'.ltRightOrigin
-            apply YjsLeq'.leqSame
-      | some offset0 =>
-        simp at hdone
-  . intros x state hloop i hlt heq hinv hbody
-    rw [List.getElem_range'] at *; simp at heq
-    have hlt2: i < ((rightIdx - leftIdx).toNat - 1) := by
-      rw [List.length_range'] at hlt; assumption
-
-    subst heq
-    generalize hother : getElemExcept arr (leftIdx + ↑(1 + i)).toNat = other at hbody
-    obtain ⟨ _ ⟩ | ⟨ other ⟩ := other; cases hbody
-    rw [ok_bind] at hbody
-
-    generalize hoLeftIdx : findPtrIdx other.origin arr = oLeftIdx at hbody
-    obtain ⟨ _ ⟩ | ⟨ oLeftIdx ⟩ := oLeftIdx; (split at hbody <;> cases hbody)
-    rw [ok_bind] at hbody
-
-    generalize hoRightIdx : findPtrIdx other.rightOrigin arr = oRightIdx at hbody
-    obtain ⟨ _ ⟩ | ⟨ oRightIdx ⟩ := oRightIdx; (split at hbody <;> cases hbody)
-    rw [ok_bind] at hbody
-
-    let next : (ForInStep (MProd ℤ Bool)) :=
-      if oLeftIdx < leftIdx then ForInStep.done ⟨state.fst, state.snd⟩
-      else
-        if oLeftIdx = leftIdx then
-          if other.id.clientId < newItem.id.clientId then ForInStep.yield ⟨(leftIdx + ↑(1 + i)) ⊔ 0 + 1, false⟩
-          else
-            if oRightIdx = rightIdx then ForInStep.done ⟨state.fst, state.snd⟩
-            else ForInStep.yield ⟨state.fst, true⟩
-        else
-          if state.snd = false then ForInStep.yield ⟨(leftIdx + ↑(1 + i)) ⊔ 0 + 1, state.snd⟩
-          else ForInStep.yield ⟨state.fst, state.snd⟩
-    have hnext : hloop = next := by
-      suffices Except.ok (ε := IntegrateError) hloop = Except.ok next by
-        simp at this
-        assumption
-      rw [<-hbody]
-      unfold next
-      simp
-      obtain ⟨ dest, scanning ⟩ := state
-      simp
-      cases scanning with
-      | true =>
-        simp
-        (repeat' (split <;> try simp)) <;> try simp [pure, Except.pure]
-      | false =>
-        simp
-        (repeat' (split <;> try simp)) <;> try simp [pure, Except.pure]
-
-    apply loopInv_preserve1
-      newItem arr horigin hrorigin horigin_consistent hreachable_consistent h_maximalId
-      harrinv hclosed harrsetinv leftIdx heqleft' rightIdx heqright' hleftIdxrightIdx hrightIdx
-      state hloop i hlt hlt2 hinv other hother oLeftIdx hoLeftIdx oRightIdx hoRightIdx hnext
 
 omit [DecidableEq A] in theorem isClockSafe_maximalId {arr : Array (YjsItem A)} {input : IntegrateInput A} {newItem : YjsItem A} :
   uniqueId arr.toList →
