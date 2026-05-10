@@ -56,7 +56,7 @@ theorem effect_preserves_stateEquivalent {op : _root_.YjsOperation A}
 private theorem stateInv_of_prefix
     {hb : CausalOrder (_root_.YjsOperation A)}
     (StateSource : _root_.YjsOperation A → Prop)
-    [OperationReplayValidity (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
+    [CausallyValidatableOperation (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
     (preOps restOps : List (_root_.YjsOperation A))
     {direct : _root_.YjsState A}
     (h_source : ∀ x, x ∈ preOps ++ restOps → StateSource x)
@@ -82,7 +82,7 @@ private theorem stateInv_of_prefix
 private theorem direct_of_indirect_suffix
     {hb : CausalOrder (_root_.YjsOperation A)}
     (StateSource : _root_.YjsOperation A → Prop)
-    [OperationReplayValidity (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
+    [CausallyValidatableOperation (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
     (preOps restOps : List (_root_.YjsOperation A))
     {direct : _root_.YjsState A} {indirect indirect' : YjsState A}
     (h_source : ∀ x, x ∈ preOps ++ restOps → StateSource x)
@@ -112,8 +112,8 @@ private theorem direct_of_indirect_suffix
         exact hbClosed_prefix (hb := hb) (ops₀ := preOps) (ops₁ := op :: restOps) h_closed
       have h_nodup_prefix : IdNoDup preOps := by
         exact List.Pairwise.sublist (List.sublist_append_left preOps (op :: restOps)) h_nodup
-      have h_valid_op : OperationValidity.isValidState op direct := by
-        refine OperationReplayValidity.isValidState_of_history
+      have h_valid_op : ValidatableOperation.isValidState op direct := by
+        refine CausallyValidatableOperation.isValidState_of_history
           (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) (StateSource := StateSource)
           (a := op) (s := direct) (l := preOps) ?_ ?_ h_consistent_prefix h_closed_prefix
           h_preOps_direct h_nodup_prefix
@@ -162,7 +162,7 @@ private theorem direct_of_indirect_suffix
 private theorem direct_of_indirect_from_source
     {hb : CausalOrder (_root_.YjsOperation A)}
     (StateSource : _root_.YjsOperation A → Prop)
-    [OperationReplayValidity (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
+    [CausallyValidatableOperation (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource]
     (ops : List (_root_.YjsOperation A))
     {indirect' : YjsState A}
     (h_source : ∀ x, x ∈ ops → StateSource x)
@@ -229,15 +229,15 @@ theorem YjsOperationNetwork_converge {A} [DecidableEq A]
   let StateSource : _root_.YjsOperation A → Prop :=
     fun a => ∃ i, Event.Broadcast a ∈ network.toCausalNetwork.histories i
   haveI :
-      OperationReplayValidity (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource := {
+      CausallyValidatableOperation (A := _root_.YjsOperation A) (S := YjsId) (hb := hb) StateSource := {
     isValidState_of_history := by
       intro a s l h_source h_lt h_consistent h_closed h_effect h_nodup
       cases a with
       | delete _ _ =>
-          simp [OperationValidity.isValidState, IsValidMessage]
+          simp [ValidatableOperation.isValidState, IsValidMessage]
       | insert input =>
-          simpa [OperationValidity.isValidState, IsValidMessage] using
-            (isValidState_insert_from_source (network := network) (input := input) (s := s) (l := l)
+          simpa [ValidatableOperation.isValidState, IsValidMessage] using
+            (isValidState_insert_causally (network := network) (input := input) (s := s) (l := l)
               h_source h_lt h_consistent h_closed h_effect h_nodup)
   }
   have h_source_i :

@@ -3,3 +3,11 @@
 **/texmf-var
 **/acmart-primary
 .agents/skills/lean4*
+**/*.aux
+**/*.bbl
+**/*.blg
+**/*.fls
+**/*.out
+paper/*.log
+paper/*.fdb_latexmk
+.amafa
