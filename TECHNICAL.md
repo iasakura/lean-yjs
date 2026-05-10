@@ -238,7 +238,28 @@ How the final step works:
 - `YjsOperationNetwork_concurrentCommutative` is proved by case analysis on concurrent operation pairs (insert/insert, insert/delete, delete/delete), using the commutativity theorems from Section 6.
 - `YjsOperationNetwork_converge'` then applies the generic convergence machinery for hb-consistent executions (from the network/order layer) together with the Yjs commutativity and validity/invariant lemmas, yielding equal final states when delivered operation sets are equal.
 
-## 8. Indirect Reference Variant
+## 8. Progress (no-failure)
+
+File: `LeanYjs/Network/Yjs/Progress.lean`
+
+Convergence (`YjsOperationNetwork_converge'`) is conditional on both clients' delivery histories successfully replaying — i.e. `interpOps hist Operation.init = Except.ok _`. Progress shows that this assumption is non-vacuous: every locally delivered prefix of a `YjsOperationNetwork` does replay successfully.
+
+```lean
+theorem YjsOperationNetwork_progress (network : YjsOperationNetwork A) (i : ClientId) :
+  ∃ res, interpOps (network.toCausalNetwork.toDeliverMessages i) Operation.init = Except.ok res
+```
+
+This is the Yjs analogue of `apply-operations-never-fails` (`sec-progress`) in Gomes et al.'s OOPSLA 2017 paper.
+
+The proof has three layers:
+
+- algorithm-level progress for `integrate` / `integrateSafe` / `YjsState.insert` (`integrate_progress`, `integrateSafe_progress`, `YjsState_insert_progress`): under `YjsArrInvariant`/`YjsStateInvariant`, `IsValidMessage`, and `YjsOperation.UniqueId` (the new clock is strictly larger than any existing clock from the same client), the executable `integrate` cannot return `Except.error`.
+- network-level uniqueness at delivery (`uniqueId_at_delivery`): when `op` is the next operation to be delivered at `j`, every item already in `j`'s state with the same client id as `op` came from an earlier delivered insert; together with `histories_clock_mono`, this gives the strict clock inequality demanded by `isClockSafe`.
+- inductive lift to whole histories (`YjsOperationNetwork_progress`): induct over the prefix of `toDeliverMessages i`. Each step combines `uniqueId_at_delivery`, `IsValidMessage` (via the existing `isValidState_insert_from_source`), and the algorithm-level progress lemma; the state invariant is propagated by `OperationValidity.stateInv_effect`.
+
+`YjsOperationNetwork` carries a `histories_clock_mono` field (newly required for progress): in any client's history, broadcasts are strictly monotonic in their `id.clock`. This is the standard Yjs assumption that each client uses a strictly increasing local clock, and is needed because `isClockSafe` rejects ids whose clock is not strictly larger than every existing item from the same client.
+
+## 9. Indirect Reference Variant
 
 Files:
 
@@ -251,7 +272,7 @@ Files:
 
 The direct model stores `origin` and `rightOrigin` as recursive pointers (`YjsPtr`). For the indirect variant, the project keeps the original direct-reference development unchanged and adds a separate `Indirect` namespace. The purpose is to replace direct recursive pointers with id-based references while preserving the same executable behavior and convergence theorem.
 
-### 8.1 Indirect Item Representation
+### 9.1 Indirect Item Representation
 
 `LeanYjs/Indirect/Item.lean` introduces:
 
@@ -278,7 +299,7 @@ The bridge from the direct model is:
 
 These collapse direct pointers to ids without changing item order, item ids, or payloads.
 
-### 8.2 Indirect Algorithms
+### 9.2 Indirect Algorithms
 
 `LeanYjs/Indirect/Algorithm/Insert/Basic.lean` re-implements the integration algorithm using `YjsRef` lookup:
 
@@ -295,7 +316,7 @@ These collapse direct pointers to ids without changing item order, item ids, or 
 
 The key point is that the indirect algorithm is not a wrapper around the direct algorithm. It is a separate executable implementation that works on indirect states.
 
-### 8.3 State Equivalence
+### 9.3 State Equivalence
 
 The relation between direct and indirect states is intentionally simple:
 
@@ -311,7 +332,7 @@ This means equivalence is extensional: the indirect state must literally be the 
 - corresponding `origin`/`rightOrigin` point to the same logical positions, but encoded as `YjsId`/sentinels rather than recursive pointers
 - `deletedIds` are equal
 
-### 8.4 Direct/Indirect Algorithm Correspondence
+### 9.4 Direct/Indirect Algorithm Correspondence
 
 `LeanYjs/Indirect/Algorithm/Equivalence.lean` proves that the indirect executable algorithm matches the direct executable algorithm after applying `ofDirectState`.
 
@@ -339,7 +360,7 @@ These are the formal version of the intended statement:
 
 So the indirect algorithm is proved behaviorally identical to the direct algorithm under the erasure map `ofDirectState`.
 
-### 8.5 Indirect Network-Level Convergence
+### 9.5 Indirect Network-Level Convergence
 
 `LeanYjs/Indirect/Network/Yjs/YjsNetwork.lean` lifts the one-step correspondence to network executions.
 
