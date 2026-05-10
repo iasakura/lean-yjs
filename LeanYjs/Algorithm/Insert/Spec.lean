@@ -123,12 +123,10 @@ omit [DecidableEq A] in theorem not_rightOrigin_first (P : YjsPtr A -> Prop) (it
   apply not_ptr_lt_first hclosed hinv _ _ hin at hlt; assumption
 
 -- Bridge from the internal `loopInv` encoding to the paper-aligned `IntegrationInvariant`.
-theorem loopInv_to_IntegrationInvariant
+omit [DecidableEq A] in theorem loopInv_to_IntegrationInvariant
     {arr : Array (YjsItem A)} {newItem : YjsItem A}
     {leftIdx rightIdx : ℤ} {x : Option ℕ} {state : ForInStep (MProd ℤ Bool)}
-    (h : loopInv arr newItem leftIdx rightIdx x state)
-    (hright : findPtrIdx newItem.rightOrigin arr = Except.ok rightIdx)
-    (hrightIdx : 0 ≤ rightIdx) :
+    (h : loopInv arr newItem leftIdx rightIdx x state) :
     IntegrationInvariant arr newItem
       state.value.fst.toNat
       (offsetToIndex leftIdx rightIdx x (isBreak state))
@@ -1919,7 +1917,7 @@ theorem findIntegratedIndex_loopInv_spec
           else
             if b.snd = false then ForInStep.yield (⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, b.snd⟩ : MProd ℤ Bool)
             else ForInStep.yield (⟨b.fst, b.snd⟩ : MProd ℤ Bool)) = ForInStep.yield new_st := by
-      simp [h_oLeft_ge, h_oLeft_eq', h_id_lt', new_st]
+      simp [h_oLeft_eq', h_id_lt', new_st]
     have hinv_old' : loopInv arr newItem leftIdx (↑rightIdx.toNat) (some (1 + (cur - 1))) (ForInStep.yield b) := by
       rw [hcur]; rw [h_off_eq] at hloopInv_old; simpa using hloopInv_old
     have h_other_eq : getElemExcept arr (leftIdx + ↑(1 + (cur - 1))).toNat = Except.ok other := by
@@ -1992,7 +1990,7 @@ theorem findIntegratedIndex_loopInv_spec
           else
             if b.snd = false then ForInStep.yield (⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, b.snd⟩ : MProd ℤ Bool)
             else ForInStep.yield (⟨b.fst, b.snd⟩ : MProd ℤ Bool)) = ForInStep.yield (⟨b.fst, true⟩ : MProd ℤ Bool) := by
-      simp [h_oLeft_ge, h_oLeft_eq', h_oRight_neq', h_id_ge']
+      simp [h_oLeft_eq', h_oRight_neq', h_id_ge']
     have hinv_old' : loopInv arr newItem leftIdx (↑rightIdx.toNat) (some (1 + (cur - 1))) (ForInStep.yield b) := by
       rw [hcur]; rw [h_off_eq] at hloopInv_old; simpa using hloopInv_old
     have h_other_eq : getElemExcept arr (leftIdx + ↑(1 + (cur - 1))).toNat = Except.ok other := by
@@ -2047,7 +2045,7 @@ theorem findIntegratedIndex_loopInv_spec
           else
             if b.snd = false then ForInStep.yield (⟨(leftIdx + ↑(1 + (cur - 1))) ⊔ 0 + 1, b.snd⟩ : MProd ℤ Bool)
             else ForInStep.yield (⟨b.fst, b.snd⟩ : MProd ℤ Bool)) = ForInStep.done (⟨b.fst, b.snd⟩ : MProd ℤ Bool) := by
-      simp [h_oLeft_ge, h_oLeft_eq', h_oRight_eq', h_id_ge']
+      simp [h_oLeft_eq', h_oRight_eq', h_id_ge']
     have hinv_old' : loopInv arr newItem leftIdx (↑rightIdx.toNat) (some (1 + (cur - 1))) (ForInStep.yield b) := by
       rw [hcur]
       rw [h_off_eq] at hloopInv_old
@@ -2243,7 +2241,6 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
     rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
     grind only
 
-  -- Extract `findIntegratedIndex` result without unfolding its body.
   generalize h_findInt : findIntegratedIndex leftIdx rightIdx input arr = d at hintegrate
   obtain ⟨ _ ⟩ | ⟨ destIdx ⟩ := d; cases hintegrate
   rw [ok_bind] at hintegrate
@@ -2252,35 +2249,24 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
   have h_left_ge : (-1 : Int) ≤ leftIdx := by apply findPtrIdx_ge_minus_1 at heqleft'; assumption
   have h_left_lt : leftIdx < arr.size := by omega
 
-  -- Apply the strong spec via `Except.of_wp`, deriving the post-loop invariant.
-  -- The post-condition uses `Except.casesOn` (rather than `match`) so the
-  -- iota-reduction `P (Except.ok a)` happens definitionally inside `Except.of_wp`.
-  have hP : Except.casesOn
-      (motive := fun _ => Prop)
-      (findIntegratedIndex leftIdx rightIdx input arr)
+  -- Lift the spec to a property of the result via `Except.of_wp`. We phrase
+  -- the post with `Except.casesOn` so it iota-reduces once `findIntegratedIndex`
+  -- is rewritten to `Except.ok destIdx`.
+  let post : Except IntegrateError ℕ → Prop := fun r =>
+    Except.casesOn (motive := fun _ => Prop) r
       (fun _ => True)
       (fun d => ∃ (offset : Option ℕ) (resState : ForInStep (MProd ℤ Bool)),
         resState.value.fst.toNat = d ∧
         loopInv arr newItem leftIdx ↑rightIdx.toNat offset resState ∧
-        ((∃ s, resState = ForInStep.done s) ∨ offset = none)) := by
-    apply (Except.of_wp (prog := findIntegratedIndex leftIdx rightIdx input arr)
-      (P := fun r => Except.casesOn (motive := fun _ => Prop) r
-        (fun _ => True)
-        (fun d => ∃ (offset : Option ℕ) (resState : ForInStep (MProd ℤ Bool)),
-          resState.value.fst.toNat = d ∧
-          loopInv arr newItem leftIdx ↑rightIdx.toNat offset resState ∧
-          ((∃ s, resState = ForInStep.done s) ∨ offset = none))))
-    have h_spec := findIntegratedIndex_loopInv_spec
-      newItem input arr h_eq leftIdx heqleft' rightIdx heqright'
-      hleftIdxrightIdx hrightIdx
-      horigin hrorigin horigin_consistent hreachable_consistent h_maximalId
-      harrinv hclosed harrsetinv
-      ⟨h_left_ge, h_left_lt, h_right_le⟩
-    -- Goal: ⊢ₛ wp⟦findIntegratedIndex⟧ (...) with `Except.casesOn (Except.ok/error a) ...` form.
-    -- h_spec gives the same wp triple but with reduced post (no casesOn).
-    -- Reduce casesOn in goal:
-    simp only [Except.casesOn]
-    exact fun _ => h_spec
+        ((∃ s, resState = ForInStep.done s) ∨ offset = none))
+  have hP : post (findIntegratedIndex leftIdx rightIdx input arr) := by
+    apply Except.of_wp (P := post)
+    exact fun _ =>
+      findIntegratedIndex_loopInv_spec newItem input arr h_eq
+        leftIdx heqleft' rightIdx heqright' hleftIdxrightIdx hrightIdx
+        horigin hrorigin horigin_consistent hreachable_consistent h_maximalId
+        harrinv hclosed harrsetinv
+        ⟨h_left_ge, h_left_lt, h_right_le⟩
   rw [h_findInt] at hP
   obtain ⟨ offset, res', hres', hloopInv, hdone ⟩ := hP
 
@@ -2337,8 +2323,6 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
         | inr h => subst h; simp [isDone]
       have hii := loopInv_to_IntegrationInvariant
         (rightIdx := ↑rightIdx.toNat) hloopInv
-        (by simpa [Int.max_eq_left hrightIdx] using heqright')
-        (by exact_mod_cast Nat.zero_le _)
       intros hisize
       have h_dest_le_current : destIdx ≤ offsetToIndex leftIdx rightIdx offset (isBreak res') := by
         rw [← hres']
