@@ -62,6 +62,21 @@ theorem not_ptr_lt'_first {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInva
   apply not_ptr_lt_first hclosed hinv _ o hpo at hlt
   assumption
 
+theorem not_rightOrigin_first {A} (P : YjsPtr A -> Prop) (item : YjsItem A) :
+  IsClosedItemSet P ->
+  ItemSetInvariant P ->
+  P item ->
+  item.rightOrigin ≠ YjsPtr.first := by
+  intros hclosed hinv hin heq
+  have hlt : YjsLt' (A := A) item item.rightOrigin := by
+    exists 1
+    obtain ⟨ o, r, id, c ⟩ := item
+    apply YjsLt.ltRightOrigin
+    left
+  obtain ⟨ _, hlt ⟩ := hlt
+  rw [heq] at hlt
+  apply not_ptr_lt_first hclosed hinv _ _ hin at hlt; assumption
+
 theorem not_last_lt_ptr {A} {P : ItemSet A} : IsClosedItemSet P -> ItemSetInvariant P -> ∀ h (o : YjsPtr A), P o -> ¬ @YjsLt A h YjsPtr.last o := by
   intros hclosed hinv h o hpo
   generalize hsize : o.size = size
