@@ -49,27 +49,27 @@
 
 \begin{document}
 
-\title{Conditional Commutativity: A Generic Convergence Proof for
-  CRDTs and Its Application to Yjs}
+\title{A Mechanized Convergence Proof for the Yjs CRDT}
 
 \begin{abstract}
-Operation-based CRDTs are typically proved correct by showing that
-concurrent operations commute, possibly under enabledness or delivery
-preconditions.  Existing mechanized convergence frameworks, such as that of
-Gomes~et~al., side-step the precondition obligation by requiring
-\emph{unconditional} commutativity; this approach does not extend to Yjs,
-whose insert effector is well-defined only on states satisfying a
-structural invariant.  We exhibit a mechanized counterexample in Lean~4
-witnessing the failure of unconditional commutativity for Yjs, and propose
-a generic \emph{prefix-level conditional commutativity} framework: a
-convergence theorem that requires commutativity only on invariant-satisfying
-states and combines it with a prefix-level causal validity transport
-condition.  The latter is a mechanized refinement of the
-delivery-precondition obligation already implicit in the Shapiro-style
-op-based CRDT theorem.  We instantiate the framework for Yjs, obtaining the first
-complete machine-checked proof that the Yjs core CRDT algorithm achieves
-strong eventual consistency.  The entire development is formalized in
-Lean~4 with no axioms beyond those of its type theory.
+Yjs is one of the most widely deployed CRDTs for collaborative sequence
+editing, yet its core algorithm has lacked a complete formal correctness
+proof.  We present the first machine-checked proof that the Yjs core
+CRDT algorithm achieves strong eventual consistency under causal
+delivery, mechanized in Lean~4.  The main lemma establishes that Yjs
+insert and delete preserve a strict total order on items; for the
+non-trivial insert procedure, we identify a four-part loop invariant
+that drives the preservation proof.  Standard op-based CRDT convergence
+theorems, including that of Gomes et al., do not apply to Yjs: we
+exhibit a mechanized counterexample showing that Yjs operations are
+not unconditionally commutative.  Convergence is therefore obtained via
+a generic \emph{conditional commutativity} framework we develop along
+the way, pairing a state-dependent commutativity premise with a
+prefix-level causal validity transport condition.  The latter refines
+the delivery-precondition obligation implicit in Shapiro-style op-based
+CRDTs.  The framework is potentially reusable for other CRDTs whose
+effectors are well-defined only on invariant-satisfying states.  The
+entire development uses no axioms beyond those of Lean's type theory.
 \end{abstract}
 
 \maketitle
@@ -81,20 +81,21 @@ Lean~4 with no axioms beyond those of its type theory.
 %%
 
 %% P1: Motivation
-Collaborative editors must reconcile edits like insertions and deletions
-of characters performed at different replicas without requiring a single
-global order of user actions.  Conflict-free replicated data types
-(CRDTs)~\cite{Shapiro2011} are a class of data structures designed for
-this style of replication, in which each replica processes operations
-locally and replicas converge to the same state once they have exchanged
-all updates.  Yjs~\cite{Yjs2023} is one of the most widely deployed CRDT
-implementations for sequence data, powering collaborative editors such as
-Tiptap~\cite{TipTap2024}.  Its core algorithm is intricate, however, and
-reasoning about its correctness by hand is error-prone.  Indeed, we
-discovered a non-convergent case in the pseudocode published in the YATA
-paper of Nicolaescu et al.~\cite{Nicolaescu2016} on which Yjs is based.  The original author
-confirmed our finding, remarking that ``Nine years later, you are
-actually the first to point out the issue in the pseudocode in the
+Collaborative editors must reconcile edits such as insertions and
+deletions of characters performed at different replicas without
+requiring a single global order of user actions.  Conflict-free
+replicated data types (CRDTs)~\cite{Shapiro2011} are a class of data
+structures designed for this style of replication, in which each
+replica processes operations locally and replicas converge to the same
+state once they have exchanged all updates.  Yjs~\cite{Yjs2023} is one
+of the most widely deployed CRDT implementations for sequence data,
+powering collaborative editors such as Tiptap~\cite{TipTap2024}.  Its
+core algorithm is intricate, however, and reasoning about its
+correctness by hand is error-prone.  Indeed, we discovered a
+non-convergent case in the pseudocode of YATA~\cite{Nicolaescu2016},
+the algorithm on which Yjs is based.  An author of the paper confirmed
+our finding, remarking that ``Nine years later, you are actually the
+first to point out the issue in the pseudocode in the
 paper''~\cite{YjsBugDiscussion2024}.  The fact that the issue went
 unnoticed for nine years illustrates why machine-checked correctness
 proofs are valuable for CRDTs of this complexity.
@@ -102,95 +103,113 @@ proofs are valuable for CRDTs of this complexity.
 %% P2: Prior work on Yjs correctness
 To the best of our knowledge, no complete machine-checked convergence
 proof has been published for the Yjs core algorithm.  Among prior work
-formally arguing the correctness of Yjs, Nicolaescu et
-al.~\cite{Nicolaescu2016} introduced YATA together with hand proofs of
-selected properties, and Weidner et al.'s Fugue~\cite{Weidner2023}, a
-closely related sequence CRDT, includes a by-hand proof for a variant
-of the Yjs insertion procedure in its appendix.  Both efforts
-remain at the level of proof sketches and leave significant gaps to a
-complete formalization.
+addressing Yjs's correctness, Nicolaescu et al.~\cite{Nicolaescu2016}
+introduced YATA together with hand proofs of selected properties, and
+Weidner et al.'s Fugue~\cite{Weidner2023}, a closely related sequence
+CRDT, includes a by-hand proof for a variant of the Yjs insertion
+procedure in its appendix.  Both efforts remain at the level of proof
+sketches and fall significantly short of a complete formalization.
 
 %% P3: Gomes framework
 Gomes et al.~\cite{Gomes2017} proposed a formal verification framework
-for operation-based CRDTs.  They give a network model of op-based CRDT,
-a commutativity-based convergence theorem, and instantiate them to
-verify several CRDT algorithms including RGA~\cite{Roh2011}, a simpler list CRDT than Yjs.
-Deriving convergence (strong eventual consistency) from commutativity of concurrent
-operations is the standard verification method for op-based CRDTs.
-The Gomes framework formalizes this method by providing a convergence
-theorem that says commutativity of all concurrent operation pairs on
-arbitrary state suffices to obtain convergence.
+for operation-based CRDTs in Isabelle/HOL.  Their main theorem
+encapsulates the standard sufficient condition for op-based CRDT
+convergence: if all concurrent operation pairs commute on every state,
+strong eventual consistency follows.  They use the framework to verify
+several CRDT algorithms including RGA~\cite{Roh2011}, a list CRDT in
+the same family as Yjs.
 
 %% P4: Why Gomes does not apply to Yjs
 However, as we show in \S\ref{sec:overview}, the Gomes framework cannot
 be applied to Yjs, because Yjs is not commutative in the sense the
-framework requires.  In that definition, commutativity is
+framework requires.  In Gomes's definition, commutativity is
 $\effect(a, \effect(b, s)) = \effect(b, \effect(a, s))$ for every
 concurrent pair of operations $a$, $b$ and every state $s$, where
 $\effect$ applies an operation (e.g., an insert) to a state (e.g., a
-list).  Yjs
-operations commute only when the operations and the state satisfy a
-specific structural condition.  Since Gomes's definition gives the
-operations and the state independently, such a relational constraint
-cannot be expressed.  In this work we prove a convergence theorem under
-a relaxed commutativity, which we call \emph{conditional commutativity},
-and use it to obtain the first complete machine-checked proof of strong
-eventual consistency for the Yjs core CRDT algorithm
-(Theorem~\ref{thm:yjs-convergence}).
+list).  Yjs operations commute only when the operations and the state
+satisfy a specific structural condition.  Since Gomes's definition
+quantifies over operations and states independently, such a relational
+constraint cannot be expressed.
 
-%% P5: Our solution — proving commutativity for Yjs
-We prove commutativity by defining a strict total order on Yjs items
-and showing that every Yjs operation preserves the invariant that the
-array is sorted under this order; since a strict total order admits at
+%% P5: Main result and proof framework
+This work presents the first complete machine-checked proof of strong
+eventual consistency for the Yjs core CRDT algorithm
+(Theorem~\ref{thm:yjs-convergence}).  To accommodate the failure of
+unconditional commutativity, our convergence theorem rests on a
+relaxed commutativity premise we call \emph{conditional commutativity}:
+$\effect(a, \effect(b, s)) = \effect(b, \effect(a, s))$ is required
+only when both $a$ and $b$ are valid at $s$ under a state-dependent
+validity predicate specified by the CRDT.  Conditional commutativity
+alone, however, is not enough.  The convergence proof reorders one
+delivery list into another by repeatedly swapping adjacent concurrent
+operations; the swap step requires both operations to be valid at the
+current state, which may differ from the one at which they were
+originally broadcast.  We therefore additionally require that
+broadcast-time validity carry over to any state reached under causal
+delivery---a transport property we call \emph{causal validity}.
+Together, conditional commutativity and causal validity yield
+convergence: causal delivery guarantees that every intermediate state
+visited during reordering is reached by a list containing the swapped
+operations' causal predecessors, causal validity then transports
+broadcast-time validity to that state, and conditional commutativity
+uses the resulting validity to justify each swap.
+
+%% P5b: Yjs proof strategy
+The bulk of the development establishes these premises for Yjs.  For
+conditional commutativity, we define a strict total order on Yjs items
+and show that every Yjs operation preserves the invariant that the
+array is sorted by this order; since a strict total order admits at
 most one sorted arrangement of any item set, two delivery orders
-producing the same item set produce identical arrays.  The overall
-strategy is the same as Nicolaescu et al.~\cite{Nicolaescu2016}, but
-the order definition and the preservation proof are new.  Our order is
-derived from the conditions intuitively required of any Yjs-compatible
-order, yet strong enough to be a strict total order.  Insert
-preservation is proved by a loop invariant with intricate conditions,
-and its preservation step reasons about six independent cases
-determined by the algorithm's branch and the loop's scanning state.
-The order definition, the loop invariant, and the six-case
-preservation analysis are all machine-checked in Lean~4, ruling out
-the case omissions to which informal correctness proofs of such
-intricate algorithms are prone.
+producing the same item set yield identical arrays.  The overall
+strategy follows that of Nicolaescu et al.~\cite{Nicolaescu2016}, but
+the order definition and the preservation proof are new.  Insert
+preservation is proved by a loop invariant with intricate conditions;
+the inductive step reasons about six independent cases, depending on
+which branch the algorithm takes and on the value of the scanning
+flag.  Causal validity follows because Yjs item validity depends only
+on which items are present in the state, not on the order in which
+the operations producing them were applied.  The order definition,
+the loop invariant, the six-case preservation analysis, and the
+causal-validity proof are all machine-checked in Lean~4, ruling out
+case omissions in the analysis of such an intricate algorithm.
 
 %% P6: Contributions
 This work makes two contributions.
 \begin{enumerate}
-\item \textbf{A prefix-level conditional commutativity framework.}
-  We formulate, and mechanize in Lean~4, a reusable convergence theorem
-  for operation-based CRDTs whose effectors are state-dependent.  The
-  theorem requires commutativity only when both concurrent operations are
-  valid at the current state, together with a prefix-level causal
+\item \textbf{First mechanized convergence proof for the Yjs core CRDT
+  algorithm.}
+  We provide the first machine-checked proof, in Lean~4, that the Yjs
+  core CRDT algorithm achieves strong eventual consistency under causal
+  delivery.  The proof rests on a strict total order on Yjs
+  items---with totality, transitivity, and asymmetry established by
+  dedicated proofs---together with a no-cross-origin lemma that
+  constrains the origin pointers of comparable items; the inference
+  rules of the order are carefully balanced so that transitivity and
+  asymmetry can be proved by size-based induction.  The main lemma is
+  that Yjs insert and delete preserve this order on the items array.
+  Insert preservation is the technical core: the procedure is defined
+  by a non-trivial procedural loop, and proving order preservation
+  required discovering a four-part loop invariant for the integration
+  scan.
+\item \textbf{A conditional commutativity convergence framework.}
+  We exhibit a mechanized counterexample showing that the unconditional
+  commutativity premise of standard op-based CRDT convergence theorems,
+  including that of Gomes et al., fails for Yjs.  We then formulate,
+  and mechanize in Lean~4, a generic convergence theorem in which
+  commutativity is required only when both concurrent operations are
+  valid at the current state, paired with a prefix-level causal
   validity transport condition ensuring that broadcast-time validity
   survives any causally compatible reordering of the delivery list.
-  This may be viewed as a mechanized, prefix-level refinement of the
-  delivery-precondition obligation implicit in Shapiro-style op-based CRDTs,
-  while generalizing the unconditional-commutativity convergence theorem
-  used by Gomes et al.  We accompany the framework with a mechanized
-  counterexample showing that unconditional commutativity is genuinely
-  too strong for Yjs.
-\item \textbf{First formal verification of the Yjs core CRDT algorithm.}
-  We instantiate the generic framework for Yjs, providing the first
-  machine-checked proof that the core algorithm achieves strong eventual
-  consistency.  Our main lemma is the preservation of the total order on
-  items by the Yjs insert and delete operations.  The insert operation,
-  in particular, is defined by a non-trivial procedural loop, and proving
-  that it preserves the order required discovering a four-part loop
-  invariant.  We also mechanize a strict total order on Yjs items, satisfying
-  totality, transitivity, and asymmetry, together with a no-cross-origin
-  lemma that drives the preservation proof.  The inference rules of the
-  order are carefully balanced so that transitivity and asymmetry can be
-  recovered via size-based induction.
+  The latter may be viewed as a mechanized, prefix-level refinement of
+  the delivery-precondition obligation implicit in Shapiro-style
+  op-based CRDTs.
 \end{enumerate}
 
 %% P7: Paper organization
 Section~\ref{sec:definitions} defines the network model and Yjs data
 structures.
 Section~\ref{sec:overview} presents the counterexample motivating
-conditional commutativity and gives an overview of the proof architecture.
+conditional commutativity and gives a high-level overview of the proof.
 Sections~\ref{sec:order}--\ref{sec:convergence} develop the proof.
 Section~\ref{sec:related} discusses related work, and
 Section~\ref{sec:conclusion} concludes.
@@ -1595,9 +1614,10 @@ for the Yjs core CRDT algorithm.  The main theorem
 Lean~4 with no axioms beyond those of its type theory.
 
 %% P2: Conditional commutativity as a reusable framework
-The framework is independent of Yjs: any CRDT whose effectors commute on
-invariant-satisfying reachable states, rather than on all states, which fits
-naturally into our generic theorem (Theorem~\ref{thm:generic-conv}).
+The framework is independent of Yjs: any CRDT whose effectors commute
+on invariant-satisfying reachable states, rather than on all states,
+fits naturally into our generic theorem
+(Theorem~\ref{thm:generic-conv}).
 Other CRDTs, such as the Matrix Event Graph~\cite{MatrixEventGraph2022},
 already require reasoning about delivery preconditions and their
 preservation; what appears specific to Yjs is the interaction between
@@ -1609,11 +1629,10 @@ Shapiro-style operational delivery-precondition discipline at the network
 layer, is a direction for future work.
 
 %% P3: Limitations and future work
-The present formalization models the core CRDT algorithm with insert and
-delete operations.  We do not model garbage collection, undo/redo,
-subdocuments, or the awareness protocol.  The artifact contains an
-incomplete indirect variant where items reference origins by identifier.
-Extending the proof to these features is future work.
+The present formalization models the core CRDT algorithm with insert
+and delete operations.  We do not model garbage collection, undo/redo,
+subdocuments, or the awareness protocol.  Extending the proof to these
+features is future work.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{refs}
