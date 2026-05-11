@@ -103,6 +103,15 @@ structure YjsOperationNetwork A [DecidableEq A] extends OperationNetwork (YjsOpe
   histories_client_id : forall {e i}, Event.Broadcast e ∈ histories i → e.id.clientId = i
   histories_UniqueId : forall {e i} {array : YjsState A}, histories i = hist1 ++ [Event.Broadcast e] ++ hist2 →
     interpHistory hist1 Operation.init = Except.ok array → YjsOperation.UniqueId e array
+  /--
+  Clocks of operations broadcast by the same client are strictly monotonic:
+  if `Broadcast a` precedes `Broadcast b` in client `i`'s history, then `a.id.clock < b.id.clock`.
+  Together with `histories_client_id`, this captures the standard Yjs assumption that each
+  client uses a strictly increasing local clock for the operations it issues.
+  -/
+  histories_clock_mono : forall {a b i} {pre mid post : List (Event (YjsOperation A))},
+    histories i = pre ++ [Event.Broadcast a] ++ mid ++ [Event.Broadcast b] ++ post →
+    a.id.clock < b.id.clock
 
 theorem Subtype_eq_of_val {α : Type} {P : α → Prop} {x y : { a : α // P a }} : x.val = y.val → x = y := by
   intros h
