@@ -30,7 +30,13 @@ def locallyOrdered {E} [DecidableEq E] (histories : NodeHistories E) (i : Client
 
 structure NetworkBase A [DecidableEq A] [DecidableEq M] [Message A M] extends NodeHistories (Event A) where
   deliver_has_a_cause : forall {i e}, Event.Deliver e ∈ histories i → ∃ j, Event.Broadcast e ∈ histories j
-  deliver_locally : forall {i e}, Event.Deliver e ∈ histories i →
+  -- A node that broadcasts a message must later deliver it locally (Gomes et
+  -- al., OOPSLA 2017). Deliberately NOT the converse (`Event.Deliver e ∈ …` as
+  -- the hypothesis): that would force every delivered message to have a *local*
+  -- broadcast, which together with per-client broadcast ownership
+  -- (`histories_client_id` / `msg_id_unique`) would rule out delivering any
+  -- remote message at all.
+  deliver_locally : forall {i e}, Event.Broadcast e ∈ histories i →
     locallyOrdered toNodeHistories i (Event.Broadcast e) (Event.Deliver e)
   msg_id_unique : forall {mi mj i j}, Event.Broadcast mi ∈ histories i → Event.Broadcast mj ∈ histories j → Message.messageId mi = Message.messageId mj → i = j ∧ mi = mj
 
@@ -259,11 +265,11 @@ lemma HappensBefore_assym [DecidableEq M] [Message A M] [DecidableEq A] {network
       right; apply HappensBefore.trans2 h_ba
       assumption
     have h_lo_broadcast_b'_deliver_b' : locallyOrdered network.toNodeHistories i (Event.Broadcast b') (Event.Deliver b') := by
-      have h_mem_deliver_b' : Event.Deliver b' ∈ network.toNetworkBase.histories i := by
-        obtain ⟨ l1, l2, l3, h_history_eq ⟩ := h_lo_deliver_b_deliver_a
+      have h_mem_broadcast_b' : Event.Broadcast b' ∈ network.toNetworkBase.histories i := by
+        obtain ⟨ l1, l2, l3, h_history_eq ⟩ := h_local
         rw [h_history_eq]
         simp
-      apply network.deliver_locally h_mem_deliver_b'
+      apply network.deliver_locally h_mem_broadcast_b'
     have h_lo_broadcast_b'_deliver_a' : locallyOrdered network.toNodeHistories i (Event.Broadcast b') (Event.Deliver a') := by
       apply locallyOrdered_trans h_lo_broadcast_b'_deliver_b' h_lo_deliver_b_deliver_a
     apply locallyOrdered_asymm h_lo_broadcast_b'_deliver_a' h_local
