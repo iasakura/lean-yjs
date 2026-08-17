@@ -825,11 +825,21 @@ following hold:
   we have $o \YjsLt r$.
 \item[(I2)] \textbf{ID uniqueness.} No two distinct items in $P$ share the
   same identifier.
-\item[(I3)] \textbf{Origin reachability.} For every
+\item[(I3)] \textbf{Origin adjacency.} For every
   $x = \langle o, r, \mathit{id}, c \rangle \in P$ and every pointer $z$
   origin-reachable from $x$, either $z \YjsLeq o$ or $r \YjsLeq z$.
 \end{itemize}
 \end{definition}
+
+Since $o$ and $r$ are themselves origin-reachable from $x$, I1 and I3
+together say that $o$ and $r$ are \emph{adjacent} among the pointers
+origin-reachable from $x$: they occur in this order, and nothing
+reachable from $x$ lies strictly between them.  This is what survives of
+$x$'s creation: at the generating replica $o$ and $r$ were the immediate
+array neighbors of the insertion position, hence adjacent in the whole
+document, and although later concurrent inserts destroy that global
+adjacency---placing an item between $o$ and $r$ is exactly what an insert
+does---adjacency restricted to what $x$ can reach is preserved.
 
 The three conditions support the three properties of a strict total order
 proved below: I1 powers asymmetry (Theorem~\ref{thm:asymmetry}), I2 powers

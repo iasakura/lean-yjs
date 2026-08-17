@@ -12,7 +12,10 @@ variable (P : ItemSet A)
 structure ItemSetInvariant where
   origin_not_leq : ∀ (o r : YjsPtr A) c id, P (YjsItem.mk o r id c) ->
     YjsLt' o r
-  origin_nearest_reachable : ∀ (o r : YjsPtr A) c id x,
+  -- Every pointer reachable from an item lies outside the (origin, rightOrigin)
+  -- interval, i.e. an item's origin and rightOrigin are adjacent among the
+  -- pointers reachable from it.
+  origins_adjacent_in_reachable : ∀ (o r : YjsPtr A) c id x,
     P (YjsItem.mk o r id c) ->
     OriginReachable (A := A) (YjsItem.mk o r id c) x ->
     (YjsLeq' x o) ∨ (YjsLeq' r x)
@@ -149,7 +152,7 @@ theorem ItemSetInvariant.eq_set {A} (P Q : ItemSet A) :
     apply hP.origin_not_leq <;> assumption
   . intros o r c id x hq hreachable
     rw [<-hiff] at *
-    apply hP.origin_nearest_reachable <;> assumption
+    apply hP.origins_adjacent_in_reachable <;> assumption
   . intros x y h_id_eq h_qx h_qy
     rw [<-hiff] at *
     apply hP.id_unique x y h_id_eq <;> assumption

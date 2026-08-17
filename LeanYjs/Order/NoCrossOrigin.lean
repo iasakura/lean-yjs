@@ -73,7 +73,7 @@ theorem no_cross_origin {x y : YjsItem A} :
           . obtain ⟨ yo, yr, yid, yc ⟩ := y
             apply OriginReachable.reachable_single
             apply OriginReachableStep.reachable
-        cases hinv.origin_nearest_reachable xo (YjsPtr.itemPtr y) xc xid y.origin hpx hreachable with
+        cases hinv.origins_adjacent_in_reachable xo (YjsPtr.itemPtr y) xc xid y.origin hpx hreachable with
         | inl hleq =>
           left
           assumption
@@ -108,7 +108,7 @@ theorem no_cross_origin {x y : YjsItem A} :
               obtain ⟨ xro, xrr, xrid, xrc ⟩ := xr
               apply OriginReachableStep.reachable
           have ⟨ _, hlt ⟩ : YjsLeq' xr.origin xo := by
-            cases hinv.origin_nearest_reachable xo xr xc xid xr.origin hpx hreachable with
+            cases hinv.origins_adjacent_in_reachable xo xr xc xid xr.origin hpx hreachable with
             | inl hleq => assumption
             | inr hleq =>
               have hlt : YjsLt' xr.origin xr := by

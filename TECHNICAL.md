@@ -61,7 +61,7 @@ Core assumptions:
 
 - closure of origins/right-origins in the item set
 - no pathological origin/right-origin shape (`origin_not_leq`)
-- nearest-reachable side condition (`origin_nearest_reachable`)
+- origin adjacency within the origin-reachable set (`origins_adjacent_in_reachable`)
 - id uniqueness (`id_unique`)
 
 These conditions capture the structural validity expected of `YjsItem`s in this model, and they are used by later order and algorithm proofs.
@@ -224,7 +224,7 @@ Role of each layer:
 
 Why the strong framework is needed:
 
-`LeanYjs/Algorithm/Insert/Basic.lean` (section `InconsistencyExample`) records a counterexample showing why an unconditional commutativity law is too strong for Yjs insert. Intuitively, if a state violates the nearest-reachable side condition (for example the `a/b/o/n` scenario in that section), different integration orders can produce different outcomes.
+`LeanYjs/Algorithm/Insert/Basic.lean` (section `InconsistencyExample`) records a counterexample showing why an unconditional commutativity law is too strong for Yjs insert. Intuitively, if a state violates the origin-adjacency side condition (for example the `a/b/o/n` scenario in that section), different integration orders can produce different outcomes.
 
 Therefore this project uses `StrongCausalOrder`, where commutativity is stated with explicit premises: state invariant, per-operation validity in that state, and successful execution. In that sense, the framework is "stronger" in assumptions but the commutativity claim itself is logically weaker than an unconditional one, which is exactly what Yjs needs.
 

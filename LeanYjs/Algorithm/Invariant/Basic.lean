@@ -266,7 +266,7 @@ omit [DecidableEq A] in theorem item_set_invariant_push (arr : List (YjsItem A))
     cases hin with
     | inr hin =>
       intro hreachable
-      exact hinv.origin_nearest_reachable _ _ _ _ _ hin hreachable
+      exact hinv.origins_adjacent_in_reachable _ _ _ _ _ hin hreachable
     | inl heq =>
       subst heq
       simp at *
