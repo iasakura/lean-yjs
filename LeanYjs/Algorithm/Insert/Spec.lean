@@ -690,7 +690,8 @@ theorem init : IntegrationInvariant arr u (leftIdx + 1).toNat (leftIdx + 1).toNa
   scanningOrigin := fun h => by cases h
   doneLt := fun h => by cases h
 
-/-- Branch 1 (`oLeftIdx < leftIdx`, lines 9–10): the loop exits; the examined element
+/-- Branch 1 (`oLeftIdx < leftIdx`, i.e. `arr[i].origin ∉ before`, lines 19–20): the loop
+exits; the examined element
 is above `u`.  Otherwise `arr[i] < u`, and the no-cross-origin lemma would put
 `arr[i].origin` at or after `u.origin`, or `arr[i]` at or before `u.origin`. -/
 theorem step_break_left {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
@@ -717,7 +718,7 @@ theorem step_break_left {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
           omega
     · exact hlt
 
-/-- Branch 2 (same origin, `u` wins the client tiebreak, lines 12–13): `arr[i]`
+/-- Branch 2 (same origin, `u` wins the client tiebreak, lines 10–11): `arr[i]`
 joins the confirmed prefix, by Conflict-SameOrigin. -/
 theorem step_advance_same {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
     (hi : i < arr.size) (hli : leftIdx < i) (hir : i < rightIdx)
@@ -741,7 +742,7 @@ theorem step_advance_same {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
   doneLt := fun h => by cases h
 
 /-- Branch 3 (same origin and same right origin, `u` loses the tiebreak,
-lines 14–15): the loop exits with `u < arr[i]` by Conflict-SameOrigin. -/
+lines 12–13): the loop exits with `u < arr[i]` by Conflict-SameOrigin. -/
 theorem step_break_same_right {d i : ℕ} {scanning : Bool} {oLeftIdx oRightIdx : ℤ}
     (hi : i < arr.size)
     (hoLeft : findPtrIdx arr[i].origin arr = Except.ok oLeftIdx) (h : oLeftIdx = leftIdx)
@@ -766,8 +767,8 @@ theorem step_break_same_right {d i : ℕ} {scanning : Bool} {oLeftIdx oRightIdx 
     exact ConflictLt'.ltOriginSame _ _ _ _ _ _ _
       (YjsLt'.self_lt_rightOrigin _) (YjsLt'.self_lt_rightOrigin _) hidlt
 
-/-- Branch 4 (same origin, different right origin, `u` loses the tiebreak,
-lines 16–17): `arr[i]` becomes pending under clause (a) and scanning starts. -/
+/-- Branch 4 (same origin, different right origin, `u` loses the tiebreak, line 9 with
+neither sub-branch): `arr[i]` becomes pending under clause (a) and scanning starts. -/
 theorem step_pending_same {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
     (hi : i < arr.size)
     (hoLeft : findPtrIdx arr[i].origin arr = Except.ok oLeftIdx) (h : oLeftIdx = leftIdx)
@@ -792,7 +793,8 @@ theorem step_pending_same {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
     · exact hinv.scanningOrigin hs
   doneLt := fun h => by cases h
 
-/-- Branch 5 (greater origin, not scanning): `arr[i]` joins the confirmed prefix.
+/-- Branch 5 (greater origin, not scanning; `arr[i].origin ∈ before ∖ conflicts`, lines
+16–17): `arr[i]` joins the confirmed prefix.
 Its origin sits at an index below `d = i`, hence below `u`, and `getElem_lt_u`
 concludes. -/
 theorem step_advance_other {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
@@ -821,7 +823,8 @@ theorem step_advance_other {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
   scanningOrigin := fun h => by subst hs; cases h
   doneLt := fun h => by cases h
 
-/-- Branch 6 (greater origin, scanning): `arr[i]` becomes pending under clause (b).
+/-- Branch 6 (greater origin, scanning; `arr[i].origin ∈ conflicts`, line 15 without
+line 16): `arr[i]` becomes pending under clause (b).
 `arr[d] < arr[i]` by sortedness (they differ because their origins do), and the
 no-cross-origin lemma gives `arr[d] ≤ arr[i].origin`. -/
 theorem step_pending_other {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
