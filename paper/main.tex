@@ -164,9 +164,8 @@ producing the same item set yield identical arrays.  The overall
 strategy follows that of Nicolaescu et al.~\cite{Nicolaescu2016}, but
 the order definition and the preservation proof are new.  Insert
 preservation is proved by a loop invariant with intricate conditions;
-the inductive step reasons about six independent cases, depending on
-which branch the algorithm takes and on the value of the scanning
-flag.  Causal validity follows because Yjs item validity depends only
+the inductive step reasons about six independent cases, one for each
+branch of the algorithm's loop body.  Causal validity follows because Yjs item validity depends only
 on which items are present in the state, not on the order in which
 the operations producing them were applied.  The order definition,
 the loop invariant, the six-case preservation analysis, and the
@@ -450,12 +449,22 @@ $\mathit{init} = ([\,],\; \emptyset)$, and
   \end{cases}
 \]
 Deletion simply adds $\mathit{did}$ to the tombstone set, so it always
-succeeds.  Insertion is defined by Algorithm~\ref{alg:integrate}: starting
-from the origin, the scan walks rightward through the existing items,
-comparing each encountered item against the new one using the order
-developed in \S\ref{sec:order}, and inserts the new item at the first
-position where no conflicting item precedes it.  The detailed invariant
-maintained by the loop is analyzed in \S\ref{sec:algorithm}.
+succeeds.  Insertion is defined by Algorithm~\ref{alg:integrate}, the
+integration procedure of Yjs: starting from the origin, the scan walks
+rightward through the items between the origin and the right origin,
+maintaining a candidate destination $\mathit{dest}$ together with two
+sets of items, $\mathit{before}$ (every item scanned so far) and
+$\mathit{conflicts}$ (the items scanned since $\mathit{dest}$ last
+advanced).  The destination advances past an item that shares the new
+item's origin but has a smaller client identifier, and past an item
+whose origin was scanned before $\mathit{dest}$ last advanced (it lies
+in $\mathit{before}$ but not in $\mathit{conflicts}$); the scan stops
+at an item whose origin was not scanned, and at an item that shares both
+origin and right origin with the new item without having a smaller
+client identifier.  The sentinel $\First$ belongs to no set, so an item
+whose origin is $\First$ stops the scan.  The new item is inserted at
+$\mathit{dest}$.  The detailed invariant maintained by the loop is
+analyzed in \S\ref{sec:algorithm}.
 \end{definition}
 
 \begin{algorithm}[t]
@@ -466,28 +475,28 @@ maintained by the loop is analyzed in \S\ref{sec:algorithm}.
 \Comment{$-1$ if origin is $\First$}
 \State $\mathit{rightIdx} \gets \mathit{findIndex}(\mathit{inp.rightOriginId},\, \mathit{arr})$
 \Comment{$|\mathit{arr}|$ if right-origin is $\Last$}
+\State $\mathit{newItem} \gets \mathit{mkItem}(\mathit{inp}, \mathit{arr})$
 \State $\mathit{dest} \gets \mathit{leftIdx} + 1$
-\State $\mathit{scanning} \gets \mathbf{false}$
+\State $\mathit{before} \gets \emptyset$;\; $\mathit{conflicts} \gets \emptyset$
 \For{$i \gets \mathit{leftIdx}+1$ \textbf{to} $\mathit{rightIdx}-1$}
   \State $\mathit{other} \gets \mathit{arr}[i]$
-  \State $\mathit{oLeft} \gets \mathit{findIndex}(\mathit{other.origin},\, \mathit{arr})$
-  \State $\mathit{oRight} \gets \mathit{findIndex}(\mathit{other.rightOrigin},\, \mathit{arr})$
-  \If{$\mathit{oLeft} < \mathit{leftIdx}$}
-    \State \textbf{break}
-  \ElsIf{$\mathit{oLeft} = \mathit{leftIdx}$}
-    \If{$\mathit{inp.clientId} > \mathit{other.clientId}$}
-      \State $\mathit{scanning} \gets \mathbf{false}$
-    \ElsIf{$\mathit{oRight} = \mathit{rightIdx}$}
+  \State $\mathit{before} \gets \mathit{before} \cup \{\mathit{other}\}$;\;
+    $\mathit{conflicts} \gets \mathit{conflicts} \cup \{\mathit{other}\}$
+  \If{$\mathit{other.origin} = \mathit{newItem.origin}$}
+    \If{$\mathit{other.clientId} < \mathit{newItem.clientId}$}
+      \State $\mathit{dest} \gets i + 1$;\; $\mathit{conflicts} \gets \emptyset$
+    \ElsIf{$\mathit{other.rightOrigin} = \mathit{newItem.rightOrigin}$}
       \State \textbf{break}
-    \Else
-      \State $\mathit{scanning} \gets \mathbf{true}$
     \EndIf
-  \EndIf
-  \If{$\neg\, \mathit{scanning}$}
-    \State $\mathit{dest} \gets i + 1$
+  \ElsIf{$\mathit{other.origin} \in \mathit{before}$}
+    \If{$\mathit{other.origin} \notin \mathit{conflicts}$}
+      \State $\mathit{dest} \gets i + 1$;\; $\mathit{conflicts} \gets \emptyset$
+    \EndIf
+  \Else
+    \State \textbf{break}
   \EndIf
 \EndFor
-\State \Return $\mathit{arr}.\mathit{insert}(\mathit{dest},\, \mathit{mkItem}(\mathit{inp}, \mathit{arr}))$
+\State \Return $\mathit{arr}.\mathit{insert}(\mathit{dest},\, \mathit{newItem})$
 \end{algorithmic}
 \end{algorithm}
 
@@ -588,15 +597,15 @@ Running Algorithm~\ref{alg:integrate} in the two orders gives:
 \end{tabular}
 \end{center}
 The discrepancy can be traced through Algorithm~\ref{alg:integrate}.  In
-the order $n$ then $o$, applying $o$ to $[a, b]$ enters the scan loop
-with $a$ as the first element (lines~5--6); $o$ and $a$ share origin
-$\First$ (line~11) but $o$'s client identifier exceeds $a$'s, so
-lines~12--13 clear $\mathit{scanning}$ and lines~20--21 advance
-$\mathit{dest}$ past $a$, placing $o$ at index~1; appending $n$ then
-yields $[a, o, b, n]$.  In the reverse order, applying $n$ to
-$[a, o, b]$ first encounters $o$, whose origin $\First$ lies strictly
-to the left of $n$'s origin $\langle a \rangle$, so the early break at
-lines~9--10 fires and $n$ is inserted at index~1; the result is
+the order $n$ then $o$, applying $o$ to $[a, b, n]$ enters the scan
+loop with $a$ as the first element (lines~6--7); $o$ and $a$ share
+origin $\First$ (line~9) and $a$'s client identifier is smaller than
+$o$'s (line~10), so line~11 advances $\mathit{dest}$ past $a$, placing
+$o$ at index~1; the result is $[a, o, b, n]$.  In the reverse order,
+applying $n$ to $[a, o, b]$ first encounters $o$, whose origin $\First$
+differs from $n$'s origin $\langle a \rangle$ (line~9) and, being a
+sentinel, is not an element of $\mathit{before}$ (line~15), so the
+break at line~20 fires and $n$ is inserted at index~1; the result is
 $[a, n, o, b]$.
 
 The root cause is that $o$ was generated with origin $\First$ and
@@ -1132,9 +1141,14 @@ invariant pins down the unique sorted insertion position.
 \label{def:loop-inv}
 Throughout the loop of Algorithm~\ref{alg:integrate} write
 $\mathit{newItem} = \mathit{inp}.\mathit{toItem}(s.\mathit{arr})$ for the
-item being inserted.  The \emph{integration invariant} at iteration
-position~$i$ (with candidate destination $\mathit{dest}$ and flag
-$\mathit{scanning}$) asserts the following.
+item being inserted, and write $\mathit{scanning}$ for the condition
+$\mathit{dest} < i$, which says that $\mathit{conflicts}$ is non-empty
+when the loop reaches position~$i$: the loop keeps $\mathit{conflicts}$
+equal to the set of items at positions $[\mathit{dest}, i)$ and
+$\mathit{before}$ equal to the set of items at positions
+$(\mathit{leftIdx}, i)$.  The \emph{integration invariant} at iteration
+position~$i$ (with candidate destination $\mathit{dest}$) asserts the
+following.
 \begin{enumerate}
 \item \textbf{Confirmed prefix} (\texttt{prefixLt}).
   For all $j < \mathit{dest}$, $\mathit{arr}[j] \YjsLt \mathit{newItem}$.
@@ -1146,10 +1160,11 @@ $\mathit{scanning}$) asserts the following.
   \item[(b)] $\mathit{newItem}.\mathit{origin} \YjsLt
     \mathit{arr}[j].\mathit{origin}$.
   \end{itemize}
-\item \textbf{Scanning flag} (\texttt{scanningOrigin}).
-  $\mathit{scanning}$ is set exactly when
+\item \textbf{Scanning origin} (\texttt{scanningOrigin}).
+  If $\mathit{scanning}$ holds, then
   $\mathit{arr}[\mathit{dest}].\mathit{origin} =
-  \mathit{newItem}.\mathit{origin}$.
+  \mathit{newItem}.\mathit{origin}$; that is, the first pending item
+  shares $\mathit{newItem}$'s origin.
 \item \textbf{Boundary ordering} (\texttt{doneLt}).
   When the loop exits via \textsc{break} at iteration $i$, we have
   $\mathit{newItem} \YjsLt \mathit{arr}[i]$.
@@ -1161,6 +1176,9 @@ The loop maintains, at iteration~$i$, a partition of the array positions
 $j \in [0, i)$ examined so far into a \emph{confirmed prefix}
 ($j < \mathit{dest}$) and a \emph{pending region}
 ($\mathit{dest} \leq j < i$); see Figure~\ref{fig:loop-partition}.
+The pending region is exactly the set $\mathit{conflicts}$ of
+Algorithm~\ref{alg:integrate}, and the positions scanned so far,
+$(\mathit{leftIdx}, i)$, are exactly $\mathit{before}$.
 Confirmed-prefix elements satisfy
 $\mathit{arr}[j] \YjsLt \mathit{newItem}$ (condition~1).  Pending-region
 elements have not yet been ordered against $\mathit{newItem}$, but by
@@ -1172,8 +1190,8 @@ Lemma~\ref{lem:pending-prop} below shows that whenever the loop
 encounters a strictly larger element
 $\mathit{newItem} \YjsLt \mathit{arr}[i]$, every $j$ in
 $[\mathit{dest}, i)$ also satisfies
-$\mathit{newItem} \YjsLt \mathit{arr}[j]$; the scanning-flag
-condition~(3) is what makes that proof go through.  Combined with the
+$\mathit{newItem} \YjsLt \mathit{arr}[j]$; condition~(3) on the
+origin of the first pending item is what makes that proof go through.  Combined with the
 boundary ordering~(4) and the confirmed prefix, this implies that at
 loop exit $\mathit{dest}$ is the smallest position at which
 $\mathit{newItem} \YjsLt \mathit{arr}[\mathit{dest}]$, that is, the
@@ -1240,13 +1258,13 @@ iteration, and we prove Lemma~\ref{lem:pending-prop}.
 
 \paragraph{Initialization.}
 The loop starts at $i = \mathit{leftIdx} + 1$ with
-$\mathit{dest} = \mathit{leftIdx} + 1$ and
-$\mathit{scanning} = \mathbf{false}$.  The confirmed prefix contains all
-elements before $\mathit{leftIdx} + 1$, each $\YjsLt \mathit{newItem}$
-because $\mathit{newItem}.\mathit{origin}$ sits at position
-$\mathit{leftIdx}$ and the array is sorted; the pending region and
-scanning flag are vacuous, and the boundary ordering condition does not
-yet apply.
+$\mathit{dest} = \mathit{leftIdx} + 1$ and both sets empty.  The
+confirmed prefix contains all elements before $\mathit{leftIdx} + 1$,
+each $\YjsLt \mathit{newItem}$ because
+$\mathit{newItem}.\mathit{origin}$ sits at position $\mathit{leftIdx}$
+and the array is sorted; the pending region is empty, so conditions~(2)
+and~(3) are vacuous, and the boundary ordering condition does not yet
+apply.
 
 \paragraph{Preservation (\leanref{IntegrationInvariant.step\_*}).}
 At each iteration of Algorithm~\ref{alg:integrate}, the body either
@@ -1261,31 +1279,45 @@ each case we must establish one of:
   $\mathit{arr}[i].\mathit{origin} = \mathit{newItem}.\mathit{origin}$
   with $\mathit{newItem}.\mathit{id} < \mathit{arr}[i].\mathit{id}$, or
   $\mathit{newItem}.\mathit{origin} \YjsLt
-  \mathit{arr}[i].\mathit{origin}$, together with the scanning-flag
-  invariant ($\mathit{scanning} \Rightarrow
-  \mathit{arr}[\mathit{dest}].\mathit{origin} =
-  \mathit{newItem}.\mathit{origin}$) (extending the pending region);
+  \mathit{arr}[i].\mathit{origin}$, together with condition~(3)
+  (extending the pending region);
 \item[(c)] $\mathit{newItem} \YjsLt \mathit{arr}[i]$
   (exiting via \textsc{break}, supplying \textbf{doneLt}).
 \end{description}
-The branches of Algorithm~\ref{alg:integrate} divide as follows.
+The branches of Algorithm~\ref{alg:integrate} divide as follows; the
+membership tests locate $\mathit{arr}[i].\mathit{origin}$ in the
+array, since $\mathit{before}$ holds the items at positions
+$(\mathit{leftIdx}, i)$ and $\mathit{conflicts}$ those at
+$[\mathit{dest}, i)$.
 \begin{itemize}
-\item \emph{Lines~9--10}
-  ($\mathit{arr}[i].\mathit{origin}$ at an index strictly less than
-  $\mathit{leftIdx}$): the loop exits and we must show~(c).
-\item \emph{Lines~12--13} (same origin,
-  $\mathit{newItem}.\mathit{clientId} >
-  \mathit{arr}[i].\mathit{clientId}$):
+\item \emph{Lines~10--11} (same origin,
+  $\mathit{arr}[i].\mathit{clientId} <
+  \mathit{newItem}.\mathit{clientId}$):
   $\mathit{dest}$ advances and we must show~(a).
-\item \emph{Lines~14--15} (same origin and same right-origin):
+\item \emph{Lines~12--13} (same origin and same right-origin):
   the loop exits and we must show~(c).
-\item \emph{Lines~16--17} (same origin, different right-origin):
+\item \emph{Line~9, neither sub-branch} (same origin, different
+  right-origin, $\mathit{arr}[i].\mathit{clientId} \geq
+  \mathit{newItem}.\mathit{clientId}$):
   $\mathit{arr}[i]$ enters the pending region under clause~(2a) and we
   must show~(b).
-\item \emph{Otherwise} (greater origin): when $\neg\mathit{scanning}$,
-  $\mathit{dest}$ advances and we show~(a); when $\mathit{scanning}$,
+\item \emph{Lines~16--17} ($\mathit{arr}[i].\mathit{origin}$ in
+  $\mathit{before}$ but not in $\mathit{conflicts}$, i.e.\ at a
+  position in $(\mathit{leftIdx}, \mathit{dest})$):
+  $\mathit{dest}$ advances and we must show~(a).  This branch is only
+  reached with an empty pending region: if $\mathit{dest} < i$, then
+  condition~(3) and the no-cross-origin lemma place
+  $\mathit{arr}[i].\mathit{origin}$ at position $\mathit{dest}$ or
+  later (the argument of case~(b) of Lemma~\ref{lem:pending-prop}
+  below), contradicting the branch condition.
+\item \emph{Line~15 without line~16} ($\mathit{arr}[i].\mathit{origin}$
+  in $\mathit{conflicts}$, i.e.\ at a position in $[\mathit{dest}, i)$):
   $\mathit{arr}[i]$ enters the pending region under clause~(2b) and we
-  show~(b).
+  must show~(b).
+\item \emph{Lines~19--20} ($\mathit{arr}[i].\mathit{origin}$ not in
+  $\mathit{before}$, i.e.\ at a position at most $\mathit{leftIdx}$,
+  and strictly less than $\mathit{leftIdx}$ because the origins differ):
+  the loop exits and we must show~(c).
 \end{itemize}
 Each case follows from the rules of Figure~\ref{fig:yjs-order} together
 with the no-cross-origin lemma (Lemma~\ref{lem:no-cross-origin}); see
@@ -1329,9 +1361,9 @@ case, \textsc{Conflict-SameOrigin} concludes $\mathit{newItem} \YjsLt
 a_j$.
 
 \textbf{Case (b):} $\mathit{newItem}.\mathit{origin} \YjsLt
-a_j.\mathit{origin}$.  By the preservation analysis above, clause~(2b)
-is only ever entered while $\mathit{scanning}$ is set, so we may assume
-$\mathit{scanning}$.  Condition~(3) of the invariant then gives
+a_j.\mathit{origin}$.  Since $j$ lies in the pending region,
+$\mathit{dest} \leq j < i$, so $\mathit{scanning}$ holds and
+condition~(3) of the invariant gives
 $\mathit{arr}[\mathit{dest}].\mathit{origin} =
 \mathit{newItem}.\mathit{origin}$, and the sorted invariant gives
 $\mathit{arr}[\mathit{dest}] \YjsLt a_j$.  No-cross-origin
@@ -1831,7 +1863,8 @@ $y_o \YjsLeq x_o$.
 Let $u = \mathit{newItem}$ and $o = \mathit{arr}[i]$ be the scanned element.
 
 \begin{itemize}
-\item \emph{$o.\mathit{origin} < u.\mathit{origin}$} ---
+\item \emph{$o.\mathit{origin} \notin \mathit{before}$} (lines~19--20),
+  so $o.\mathit{origin} < u.\mathit{origin}$ ---
   loop exits via \textsc{break}.
   Obligation: \textbf{doneLt} ($u \YjsLt o$).
   By totality either $u \YjsLt o$ or $o \YjsLeq u$.
@@ -1843,9 +1876,9 @@ Let $u = \mathit{newItem}$ and $o = \mathit{arr}[i]$ be the scanned element.
   in the sorted array.
 
 \item \emph{$o.\mathit{origin} = u.\mathit{origin}$,
-  $o.\mathit{id} < u.\mathit{id}$} ---
+  $o.\mathit{id} < u.\mathit{id}$} (lines~10--11) ---
   $\mathit{dest} \leftarrow i{+}1$,
-  $\mathit{scanning} \leftarrow \mathbf{false}$.
+  $\mathit{conflicts} \leftarrow \emptyset$.
   Obligation: \textbf{prefixLt} for the expanded
   prefix~$[0, i{+}1)$.
   For each $j$ in $[\mathit{dest}, i]$:
@@ -1855,7 +1888,7 @@ Let $u = \mathit{newItem}$ and $o = \mathit{arr}[i]$ be the scanned element.
   Transitivity gives $\mathit{arr}[j] \YjsLt u$.
 
 \item \emph{Same origin, $o.\mathit{id} \geq u.\mathit{id}$,
-  same right-origin} ---
+  same right-origin} (lines~12--13) ---
   loop exits via \textsc{break}.
   Obligation: \textbf{doneLt} ($u \YjsLt o$).
   Both items share origin and right-origin with
@@ -1863,36 +1896,51 @@ Let $u = \mathit{newItem}$ and $o = \mathit{arr}[i]$ be the scanned element.
   \textsc{Conflict-SameOrigin} gives $u \YjsLt o$.
 
 \item \emph{Same origin, $o.\mathit{id} \geq u.\mathit{id}$,
-  different right-origin} ---
-  $\mathit{scanning} \leftarrow \mathit{true}$.
+  different right-origin} (line~9, neither sub-branch) ---
+  continue; $o$ stays in $\mathit{conflicts}$.
   Obligation: \textbf{scannedRegion} for~$o$.
   Condition~(2a) holds:
   $o.\mathit{origin} = u.\mathit{origin}$
   and $u.\mathit{id} < o.\mathit{id}$
   (by unique-ID distinctness).
 
-\item \emph{$o.\mathit{origin} > u.\mathit{origin}$,
-  $\neg\mathit{scanning}$} ---
-  $\mathit{dest} \leftarrow i{+}1$.
+\item \emph{$o.\mathit{origin} \in \mathit{before} \setminus
+  \mathit{conflicts}$} (lines~16--17) ---
+  $\mathit{dest} \leftarrow i{+}1$,
+  $\mathit{conflicts} \leftarrow \emptyset$.
   Obligation: \textbf{prefixLt} for the expanded prefix.
-  When $\mathit{scanning}$ is false, $\mathit{dest}$
-  equals the current scan position, so every element
-  in the old pending region was already confirmed.
-  The origin of~$o$ lies at some array index
-  $k < \mathit{dest}$, so $o.\mathit{origin} \YjsLt u$
+  The branch condition places $o.\mathit{origin}$ at an
+  array index~$k$ with $\mathit{leftIdx} < k < \mathit{dest}$.
+  The pending region is empty, i.e.\ $\mathit{dest} = i$:
+  otherwise condition~(3) gives
+  $\mathit{arr}[\mathit{dest}].\mathit{origin} = u.\mathit{origin}$,
+  and Lemma~\ref{lem:no-cross-origin} applied to
+  $\mathit{arr}[\mathit{dest}] \YjsLt o$ yields
+  $\mathit{arr}[\mathit{dest}] \YjsLeq o.\mathit{origin}$
+  (its other alternative,
+  $o.\mathit{origin} \YjsLeq u.\mathit{origin}$,
+  contradicts $\mathit{leftIdx} < k$), so $k \geq \mathit{dest}$.
+  Hence every element in the old pending region was
+  already confirmed, and $o.\mathit{origin} \YjsLt u$
   by the prefix condition.
   Combined with item validity ($o$ lies between
   $u.\mathit{origin}$ and $u.\mathit{rightOrigin}$),
   we obtain $o \YjsLt u$; transitivity
   extends to all $j \leq i$.
 
-\item \emph{$o.\mathit{origin} > u.\mathit{origin}$,
-  $\mathit{scanning}$} ---
+\item \emph{$o.\mathit{origin} \in \mathit{conflicts}$}
+  (line~15 without line~16) ---
   continue; extend pending region.
   Obligation: \textbf{scannedRegion},
   condition~(2b), which asks for
   $u.\mathit{origin} \YjsLt o.\mathit{origin}$.
-  This is the scan hypothesis directly.
+  The branch condition places $o.\mathit{origin}$ at an
+  array index in $[\mathit{dest}, i)$, strictly after
+  $u.\mathit{origin}$ at index $\mathit{leftIdx}$, so the
+  sorted array gives the claim.  Condition~(3) for the
+  extended pending region is inherited: $\mathit{conflicts}$
+  contained an item other than~$o$ (namely $o.\mathit{origin}$),
+  so $\mathit{dest} < i$ already held.
 \end{itemize}
 
 %%
