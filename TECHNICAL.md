@@ -170,7 +170,10 @@ The proof of `YjsArrInvariant_integrate` follows the paper's loop-invariant argu
 - `IntegrationInvariant arr u d i scanning done` is the paper's loop invariant on the mathematical state (candidate destination `d`, scan position `i`, `scanning` flag, `done` flag).
 - `IntegrationInvariant.init` establishes it at loop entry and the six lemmas `IntegrationInvariant.step_break_left`, `step_advance_same`, `step_break_same_right`, `step_pending_same`, `step_advance_other`, `step_pending_other` preserve it along the six branches of the loop body (one lemma per row of the paper's case table).
 - `pending_propagation` collapses the pending region at loop exit; `SortedInsertPos arr u d` is the resulting postcondition ("`d` is the sorted insertion position of `u`").
-- `findIntegratedIndex_spec` connects this to the executable loop via `mvcgen`; `ScanLoopInv` is the thin layer relating the loop state `⟨dest, scanning⟩` and the cursor over the offset list to `IntegrationInvariant`.
+- The executable loop `findIntegratedIndex` is the set-based scan of Yjs's `Item.integrate` (Algorithm 3 of *The Art of the Fugue*): besides the destination it keeps two id lists, `itemsBeforeOrigin` (every item scanned so far, the paper's `before`) and `conflictingItems` (the items scanned since the destination last advanced, the paper's `conflicts`), and compares origins by id (`YjsPtr.id?`). Membership of an origin in one of these lists is the Boolean `idMem : Option YjsId → List YjsId → Bool`, false for the sentinel `first` (`none`), so the loop body is the paper's case analysis verbatim (`o.leftOrigin ∈ before`, `o.leftOrigin ∉ conflicts`). There is no `scanning` flag in the code; it is a ghost variable of the proof, `scanning := d < i`, i.e. "`conflictingItems` (before adding the current item) is non-empty".
+- `findIntegratedIndex_spec` connects the invariant to this loop via `mvcgen`. `ScanLoopInv` relates the loop state `⟨conflictingItems, destIdx, itemsBeforeOrigin⟩` and the cursor over the offset list to `IntegrationInvariant`; `IdsOfRange arr lo hi l` states that `l` is exactly the id list of the window `lo ≤ k < hi`, and the invariant records `itemsBeforeOrigin = ids of (leftIdx, i)` and `conflictingItems = ids of [d, i)`.
+- The id tests of the loop are translated to the position tests of the step lemmas by `IntegrateCtx.origin_id?_eq_iff` / `rightOrigin_id?_eq_iff` (same id iff same position, since origins are never `last` and right origins never `first`) and `IntegrateCtx.idMem_idsOfRange_iff` (`idMem o.origin.id? l` iff the position of `o.origin` lies in the window; for the sentinel `first` both sides are false because the windows start at a non-negative position). The one branch the set-based loop has and the scanning-flag loop lacks, "advance while scanning" (`o.origin ∈ before`, `o.origin ∉ conflicts`, `d < i`), is unreachable: `IntegrationInvariant.dest_le_origin_of_scanning` shows that in scanning mode `arr[d] ≤ o.origin` by no-cross-origin, so `o.origin ∈ conflicts`.
+- `findIntegratedIndex_ok_of_bounds` shows the loop never fails when the window lies inside the array (its only effect is reading `arr[i]`); `findIntegratedIndex_safe` in `Commutativity/InsertInsert.lean` is a corollary.
 - `YjsArrInvariant_insertIdxIfInBounds` turns `SortedInsertPos` into the invariant of the extended array.
 
 This theorem captures preservation of `YjsStateInvariant` across an insert step. More concretely, it assumes that the pre-state `arr` already satisfies `YjsStateInvariant`, that resolving `input` against `arr.items` succeeds and produces a concrete `newItem`, and that this item satisfies `newItem.isValid`. Under these assumptions, if the executable insert step `arr.insert input` returns `newArr`, then `newArr` also satisfies `YjsStateInvariant`.
@@ -320,7 +323,7 @@ These collapse direct pointers to ids without changing item order, item ids, or 
 
 ### 9.2 Indirect Algorithms
 
-`LeanYjs/Indirect/Algorithm/Insert/Basic.lean` re-implements the integration algorithm using `YjsRef` lookup:
+`LeanYjs/Indirect/Algorithm/Insert/Basic.lean` re-implements the integration algorithm on `YjsRef`-based items (the scan compares origins by id via `YjsRef.id?`, so `findRefIdx` is only kept for reference):
 
 - `findRefIdx`
 - `findLeftIdx`
@@ -359,7 +362,7 @@ Important bridge lemmas:
 
 - `findLeftIdx_ofDirect`
 - `findRightIdx_ofDirect`
-- `findIntegratedIndex_ofDirect`
+- `findIntegratedIndex_ofDirect` (the two scans are the same function of the ids, which `ofDirectItem` preserves: `getElemExcept_ofDirect`, `id?_ofDirectPtr`)
 - `ofDirectItem_mkItemByIndex`
 - `integrate_ofDirect`
 - `integrateSafe_ofDirect`

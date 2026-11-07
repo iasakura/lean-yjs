@@ -275,3 +275,37 @@ theorem IntegrateInput.toItem_id_eq (input : IntegrateInput A) (arr : Array (Yjs
   intro h
   obtain ⟨ o, r, rfl, -, - ⟩ := IntegrateInput.toItem_eq_ok_iff.1 h
   rfl
+
+/-- A successful lookup of an item pointer returns a position holding that item. -/
+theorem findPtrIdx_itemPtr_eq_ok {arr : Array (YjsItem A)} {x : YjsItem A} {idx : ℤ}
+    (h : findPtrIdx (YjsPtr.itemPtr x) arr = Except.ok idx) :
+    ∃ (n : ℕ) (hn : n < arr.size), idx = n ∧ arr[n] = x := by
+  unfold findPtrIdx at h
+  simp at h
+  generalize heq : Array.findIdx? (fun i => decide (i = x)) arr = idxOpt at h
+  cases idxOpt <;> cases h
+  rw [Array.findIdx?_eq_some_iff_getElem] at heq
+  obtain ⟨ hn, hx, _ ⟩ := heq
+  exact ⟨ _, hn, rfl, by simpa using hx ⟩
+
+omit [DecidableEq A] in
+/-- The item a successful `toItem` builds carries the input's id, and its origin
+pointers refer to the input's dependency ids. -/
+theorem IntegrateInput.toItem_ids {input : IntegrateInput A} {arr : Array (YjsItem A)}
+    {item : YjsItem A} (h : input.toItem arr = Except.ok item) :
+    input.id = item.id ∧ item.origin.id? = input.originId ∧
+      item.rightOrigin.id? = input.rightOriginId := by
+  obtain ⟨ o, r, rfl, ho, hr ⟩ := IntegrateInput.toItem_eq_ok_iff.1 h
+  refine ⟨ rfl, ?_, ?_ ⟩
+  · cases hoid : input.originId with
+    | none => rw [hoid] at ho; simp [ho]
+    | some oid =>
+      rw [hoid] at ho
+      obtain ⟨ x, rfl, hfind ⟩ := ho
+      simp [Array.find?_id_eq hfind]
+  · cases hrid : input.rightOriginId with
+    | none => rw [hrid] at hr; simp [hr]
+    | some rid =>
+      rw [hrid] at hr
+      obtain ⟨ x, rfl, hfind ⟩ := hr
+      simp [Array.find?_id_eq hfind]

@@ -132,6 +132,38 @@ theorem Std.Range.toList_one (n : ℕ) : [1:n].toList = List.range' 1 (n - 1) :=
   congr 1
   omega
 
+/-! ## Id lists of index windows -/
+
+/-- `l` lists exactly the ids of the elements of `arr` at the positions `lo ≤ k < hi`. -/
+def IdsOfRange (arr : Array (YjsItem A)) (lo : ℤ) (hi : ℕ) (l : List YjsId) : Prop :=
+  ∀ x, x ∈ l ↔ ∃ k : ℕ, lo ≤ k ∧ k < hi ∧ ∃ hk : k < arr.size, arr[k].id = x
+
+namespace IdsOfRange
+
+omit [DecidableEq A] in
+theorem nil {arr : Array (YjsItem A)} {lo : ℤ} {hi : ℕ} (h : (hi : ℤ) ≤ lo) :
+    IdsOfRange arr lo hi [] := fun x => by
+  simp only [List.not_mem_nil, false_iff]
+  rintro ⟨ k, h1, h2, _ ⟩
+  omega
+
+omit [DecidableEq A] in
+theorem cons {arr : Array (YjsItem A)} {lo : ℤ} {i : ℕ} {l : List YjsId}
+    (h : IdsOfRange arr lo i l) (hi : i < arr.size) (hlo : lo ≤ i) :
+    IdsOfRange arr lo (i + 1) (arr[i].id :: l) := fun x => by
+  rw [List.mem_cons, h x]
+  constructor
+  · rintro (rfl | ⟨ k, h1, h2, hk, rfl ⟩)
+    · exact ⟨ i, hlo, by omega, hi, rfl ⟩
+    · exact ⟨ k, h1, by omega, hk, rfl ⟩
+  · rintro ⟨ k, h1, h2, hk, rfl ⟩
+    rcases Nat.lt_or_ge k i with hk' | hk'
+    · exact Or.inr ⟨ k, h1, hk', hk, rfl ⟩
+    · obtain rfl : k = i := by omega
+      exact Or.inl rfl
+
+end IdsOfRange
+
 /-! ## The integration context -/
 
 /-- Standing hypotheses while integrating `u` into `arr`.  `leftIdx`/`rightIdx` are
@@ -258,6 +290,187 @@ theorem getElem_lt_u {i : ℕ} {oLeftIdx : ℤ} (hi : i < arr.size) (hli : leftI
       simp at h_origin_eq
       subst h_origin_eq
       exact ConflictLt'.ltOriginSame _ _ _ _ _ _ _ h_lt_ro hlt hid
+
+/-! ### Positions versus ids
+
+The set-based scan compares origins by id (`YjsPtr.id?`) and tests membership in id
+lists, while the step lemmas speak about positions.  The following lemmas translate. -/
+
+/-- Origins are never `last`. -/
+theorem origin_ne_last {i : ℕ} (hi : i < arr.size) : arr[i].origin ≠ YjsPtr.last := by
+  intro h
+  obtain ⟨ k, hlt ⟩ := YjsLt'.origin_lt_self arr[i]
+  rw [h] at hlt
+  exact not_last_lt_ptr ctx.closed ctx.setInv k _ (getElem_mem hi) hlt
+
+theorem u_origin_ne_last : u.origin ≠ YjsPtr.last := by
+  intro h
+  obtain ⟨ k, hlt ⟩ := YjsLt'.origin_lt_self u
+  rw [h] at hlt
+  exact not_last_lt_ptr ctx.closed ctx.setInv k _ u_mem hlt
+
+/-- Right origins are never `first`. -/
+theorem rightOrigin_ne_first {i : ℕ} (hi : i < arr.size) : arr[i].rightOrigin ≠ YjsPtr.first := by
+  intro h
+  obtain ⟨ k, hlt ⟩ := YjsLt'.self_lt_rightOrigin arr[i]
+  rw [h] at hlt
+  exact not_ptr_lt_first ctx.closed ctx.setInv k _ (getElem_mem hi) hlt
+
+theorem u_rightOrigin_ne_first : u.rightOrigin ≠ YjsPtr.first := by
+  intro h
+  obtain ⟨ k, hlt ⟩ := YjsLt'.self_lt_rightOrigin u
+  rw [h] at hlt
+  exact not_ptr_lt_first ctx.closed ctx.setInv k _ u_mem hlt
+
+/-- Every pointer of the array has a position. -/
+theorem exists_findPtrIdx {p : YjsPtr A} (hp : ArrSet arr.toList p) :
+    ∃ k, findPtrIdx p arr = Except.ok k := by
+  cases p with
+  | first => exact ⟨ -1, rfl ⟩
+  | last => exact ⟨ arr.size, rfl ⟩
+  | itemPtr x =>
+    obtain ⟨ n, hn, rfl ⟩ := Array.mem_iff_getElem.1 (by simpa [ArrSet] using hp)
+    exact ⟨ n, ctx.findPtrIdx_getElem hn ⟩
+
+theorem exists_origin_idx {i : ℕ} (hi : i < arr.size) :
+    ∃ k, findPtrIdx arr[i].origin arr = Except.ok k :=
+  ctx.exists_findPtrIdx (origin_p_valid ctx.arrInv.closed _ (by simp [ArrSet]))
+
+theorem exists_rightOrigin_idx {i : ℕ} (hi : i < arr.size) :
+    ∃ k, findPtrIdx arr[i].rightOrigin arr = Except.ok k :=
+  ctx.exists_findPtrIdx (right_origin_p_valid ctx.arrInv.closed _ (by simp [ArrSet]))
+
+/-- Two pointers of the array that are both origins (never `last`) or both right
+origins (never `first`) refer to the same id iff they sit at the same position. -/
+theorem id?_eq_iff {p q : YjsPtr A} {k l : ℤ}
+    (hk : findPtrIdx p arr = Except.ok k) (hl : findPtrIdx q arr = Except.ok l)
+    (hsent : (p ≠ YjsPtr.last ∧ q ≠ YjsPtr.last) ∨ (p ≠ YjsPtr.first ∧ q ≠ YjsPtr.first)) :
+    p.id? = q.id? ↔ k = l := by
+  cases p with
+  | first =>
+    simp [findPtrIdx, pure, Except.pure] at hk
+    subst hk
+    cases q with
+    | first => simp [findPtrIdx, pure, Except.pure] at hl; subst hl; simp
+    | last => simp at hsent
+    | itemPtr b =>
+      obtain ⟨ m, hm, rfl, rfl ⟩ := findPtrIdx_itemPtr_eq_ok hl
+      constructor
+      · intro h; cases h
+      · intro h; omega
+  | last =>
+    simp [findPtrIdx, pure, Except.pure] at hk
+    subst hk
+    cases q with
+    | first => simp at hsent
+    | last => simp [findPtrIdx, pure, Except.pure] at hl; subst hl; simp
+    | itemPtr b =>
+      obtain ⟨ m, hm, rfl, rfl ⟩ := findPtrIdx_itemPtr_eq_ok hl
+      constructor
+      · intro h; cases h
+      · intro h; omega
+  | itemPtr a =>
+    obtain ⟨ n, hn, rfl, rfl ⟩ := findPtrIdx_itemPtr_eq_ok hk
+    cases q with
+    | first =>
+      simp [findPtrIdx, pure, Except.pure] at hl
+      subst hl
+      constructor
+      · intro h; cases h
+      · intro h; omega
+    | last =>
+      simp [findPtrIdx, pure, Except.pure] at hl
+      subst hl
+      constructor
+      · intro h; cases h
+      · intro h; omega
+    | itemPtr b =>
+      obtain ⟨ m, hm, rfl, rfl ⟩ := findPtrIdx_itemPtr_eq_ok hl
+      simp only [YjsPtr.id?, Option.some.injEq]
+      constructor
+      · intro h
+        have heq := ctx.setInv.id_unique _ _ h (getElem_mem hn) (getElem_mem hm)
+        have h1 := ctx.findPtrIdx_getElem hn
+        rw [heq, ctx.findPtrIdx_getElem hm] at h1
+        exact (Except.ok.inj h1).symm
+      · intro h
+        obtain rfl : n = m := by omega
+        rfl
+
+/-- The same-origin test of the scan, as a position test. -/
+theorem origin_id?_eq_iff {i : ℕ} {oLeftIdx : ℤ} (hi : i < arr.size)
+    (hoLeft : findPtrIdx arr[i].origin arr = Except.ok oLeftIdx) :
+    arr[i].origin.id? = u.origin.id? ↔ oLeftIdx = leftIdx :=
+  ctx.id?_eq_iff hoLeft ctx.left (Or.inl ⟨ ctx.origin_ne_last hi, ctx.u_origin_ne_last ⟩)
+
+/-- The same-right-origin test of the scan, as a position test. -/
+theorem rightOrigin_id?_eq_iff {i : ℕ} {oRightIdx : ℤ} (hi : i < arr.size)
+    (hoRight : findPtrIdx arr[i].rightOrigin arr = Except.ok oRightIdx) :
+    arr[i].rightOrigin.id? = u.rightOrigin.id? ↔ oRightIdx = rightIdx :=
+  ctx.id?_eq_iff hoRight ctx.right
+    (Or.inr ⟨ ctx.rightOrigin_ne_first hi, ctx.u_rightOrigin_ne_first ⟩)
+
+/-- An element's origin sits strictly before it. -/
+theorem origin_idx_lt {i : ℕ} {oLeftIdx : ℤ} (hi : i < arr.size)
+    (hoLeft : findPtrIdx arr[i].origin arr = Except.ok oLeftIdx) : oLeftIdx < i :=
+  YjsLt'_findPtrIdx_lt _ _ _ _ _ ctx.arrInv (findPtrIdx_ArrSet hoLeft) (by simp [ArrSet])
+    (YjsLt'.origin_lt_self _) hoLeft (ctx.findPtrIdx_getElem hi)
+
+/-- A sentinel origin is `first`, at position `-1`. -/
+theorem origin_id?_none {i : ℕ} {oLeftIdx : ℤ} (hi : i < arr.size)
+    (hoLeft : findPtrIdx arr[i].origin arr = Except.ok oLeftIdx)
+    (h : arr[i].origin.id? = none) : oLeftIdx = -1 := by
+  have hne := ctx.origin_ne_last hi
+  cases ho : arr[i].origin with
+  | first =>
+    rw [ho] at hoLeft
+    simp [findPtrIdx, pure, Except.pure] at hoLeft
+    omega
+  | last => exact absurd ho hne
+  | itemPtr c =>
+    rw [ho] at h
+    cases h
+
+/-- Membership of an origin's id in a window id-list is a position test. -/
+theorem mem_idsOfRange_iff {i : ℕ} {oLeftIdx : ℤ} {oid : YjsId} {lo : ℤ} {hi' : ℕ}
+    {l : List YjsId} (hi : i < arr.size)
+    (hoLeft : findPtrIdx arr[i].origin arr = Except.ok oLeftIdx)
+    (h : arr[i].origin.id? = some oid) (hl : IdsOfRange arr lo hi' l) :
+    oid ∈ l ↔ lo ≤ oLeftIdx ∧ oLeftIdx < hi' := by
+  cases ho : arr[i].origin with
+  | first => rw [ho] at h; cases h
+  | last => rw [ho] at h; cases h
+  | itemPtr c =>
+    rw [ho] at h hoLeft
+    simp only [YjsPtr.id?, Option.some.injEq] at h
+    subst h
+    obtain ⟨ n, hn, rfl, rfl ⟩ := findPtrIdx_itemPtr_eq_ok hoLeft
+    rw [hl]
+    constructor
+    · rintro ⟨ m, h1, h2, hm, hid ⟩
+      have heq := ctx.setInv.id_unique _ _ hid (getElem_mem hm) (getElem_mem hn)
+      have h1' := ctx.findPtrIdx_getElem hm
+      rw [heq, ctx.findPtrIdx_getElem hn] at h1'
+      obtain rfl : n = m := by exact_mod_cast (Except.ok.inj h1')
+      exact ⟨ h1, by exact_mod_cast h2 ⟩
+    · rintro ⟨ h1, h2 ⟩
+      exact ⟨ n, h1, by exact_mod_cast h2, hn, rfl ⟩
+
+/-- The loop's membership test `idMem` of an origin in a window id-list is a position
+test.  The window starts at a non-negative position, so the sentinel `first` (position
+`-1`, `idMem` false) is handled uniformly. -/
+theorem idMem_idsOfRange_iff {i : ℕ} {oLeftIdx : ℤ} {lo : ℤ} {hi' : ℕ} {l : List YjsId}
+    (hi : i < arr.size) (hoLeft : findPtrIdx arr[i].origin arr = Except.ok oLeftIdx)
+    (hlo : 0 ≤ lo) (hl : IdsOfRange arr lo hi' l) :
+    idMem arr[i].origin.id? l = true ↔ lo ≤ oLeftIdx ∧ oLeftIdx < hi' := by
+  cases h : arr[i].origin.id? with
+  | none =>
+    have := ctx.origin_id?_none hi hoLeft h
+    simp only [idMem, Bool.false_eq_true, false_iff]
+    omega
+  | some oid =>
+    simp only [idMem, decide_eq_true_eq]
+    exact ctx.mem_idsOfRange_iff hi hoLeft h hl
 
 end IntegrateCtx
 
@@ -648,6 +861,25 @@ theorem step_pending_other {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
   scanningOrigin := fun _ => hinv.scanningOrigin hs
   doneLt := fun h => by cases h
 
+/-- While scanning, the origin of the examined element never lies below the
+destination `d`: by Branch 6 it is at or after `arr[d]`.  This rules out the
+set-based scan advancing in scanning mode. -/
+theorem dest_le_origin_of_scanning {d i : ℕ} {scanning : Bool} {oLeftIdx : ℤ}
+    (hi : i < arr.size)
+    (hoLeft : findPtrIdx arr[i].origin arr = Except.ok oLeftIdx) (h : leftIdx < oLeftIdx)
+    (hs : scanning = true)
+    (hinv : IntegrationInvariant arr u d i scanning false) (hdi : d ≤ i) :
+    (d : ℤ) ≤ oLeftIdx := by
+  obtain ⟨ _, hd, hcase ⟩ :=
+    (step_pending_other ctx hi hoLeft h hs hinv hdi).scannedRegion i hdi (Nat.lt_succ_self i)
+  rcases hcase with ⟨ horig, _ ⟩ | hle
+  · exfalso
+    rw [horig, ctx.left] at hoLeft
+    cases hoLeft
+    omega
+  · exact YjsLeq'_findPtrIdx_leq _ _ _ _ _ ctx.arrInv (by simp [ArrSet]) (findPtrIdx_ArrSet hoLeft)
+      hle (ctx.findPtrIdx_getElem hd) hoLeft
+
 /-- At loop exit the invariant determines the sorted insertion position: the
 confirmed prefix is below `u`, and pending propagation lifts `u < arr[i]` to every
 pending position, in particular to `arr[d]`. -/
@@ -665,19 +897,25 @@ end IntegrationInvariant
 
 /-! ## Connecting to the executable loop -/
 
+/-- The loop state of `findIntegratedIndex`: `⟨conflictingItems, destIdx, itemsBeforeOrigin⟩`
+(`do`-notation orders the mutable variables alphabetically). -/
+abbrev ScanState := MProd (List YjsId) (MProd ℤ (List YjsId))
+
 /-- Loop invariant of `findIntegratedIndex` for `mvcgen`.  `pref`/`suff` are the
-processed and remaining offsets of the loop range `[1 : rightIdx - leftIdx]`, and
-`st = ⟨dest, scanning⟩` is the loop state.  It records the mathematical
-`IntegrationInvariant` together with the bookkeeping that ties `i` to the cursor
-position and `dest` to `d`. -/
+processed and remaining offsets of the loop range `[1 : rightIdx - leftIdx]`.  Besides
+the mathematical `IntegrationInvariant` (with the ghost flag `scanning = (d < i)`), it
+records that `itemsBeforeOrigin` is the id list of the scanned window `(leftIdx, i)` and
+`conflictingItems` that of the pending region `[d, i)`. -/
 def ScanLoopInv (arr : Array (YjsItem A)) (u : YjsItem A) (leftIdx rightIdx : ℤ)
-    (pref suff : List ℕ) (st : MProd ℤ Bool) : Prop :=
-  ∃ (d i : ℕ) (done : Bool),
-    st.fst = (d : ℤ) ∧ d ≤ i ∧ (i : ℤ) ≤ rightIdx ∧
+    (pref suff : List ℕ) (st : ScanState) : Prop :=
+  ∃ (d i : ℕ) (scanning done : Bool),
+    st.snd.fst = (d : ℤ) ∧ d ≤ i ∧ (i : ℤ) ≤ rightIdx ∧
     (done = true → suff = []) ∧
     (done = false → (i : ℤ) = leftIdx + 1 + pref.length) ∧
-    (st.snd = false → done = false → d = i) ∧
-    IntegrationInvariant arr u d i st.snd done
+    (scanning = true ↔ d < i) ∧
+    (done = false → IdsOfRange arr (leftIdx + 1) i st.snd.snd) ∧
+    (done = false → IdsOfRange arr d i st.fst) ∧
+    IntegrationInvariant arr u d i scanning done
 
 namespace ScanLoopInv
 
@@ -686,53 +924,58 @@ variable {arr : Array (YjsItem A)} {u : YjsItem A} {leftIdx rightIdx : ℤ}
 
 include ctx
 
-theorem init {xs : List ℕ} : ScanLoopInv arr u leftIdx rightIdx [] xs ⟨leftIdx + 1, false⟩ := by
+theorem init {xs : List ℕ} : ScanLoopInv arr u leftIdx rightIdx [] xs ⟨[], leftIdx + 1, []⟩ := by
   have hl := ctx.left_ge
-  refine ⟨ (leftIdx + 1).toNat, (leftIdx + 1).toNat, false, by simp only; omega, le_refl _,
-    by have := ctx.left_lt_right; omega, by simp, fun _ => by simp; omega,
-    fun _ _ => rfl, IntegrationInvariant.init ctx ⟩
+  refine ⟨ (leftIdx + 1).toNat, (leftIdx + 1).toNat, false, false, by simp only; omega, le_refl _,
+    by have := ctx.left_lt_right; omega, by simp, fun _ => by simp; omega, by simp,
+    fun _ => IdsOfRange.nil (by omega), fun _ => IdsOfRange.nil (by omega),
+    IntegrationInvariant.init ctx ⟩
 
 /-- Unpacking the invariant at a loop step: the loop has not exited, and the
 examined index `(leftIdx + cur).toNat` is the scan position `i`. -/
-theorem step_pre {pref suff : List ℕ} {cur : ℕ} {st : MProd ℤ Bool}
+theorem step_pre {pref suff : List ℕ} {cur : ℕ} {st : ScanState}
     (hlist : List.range' 1 ((rightIdx - leftIdx).toNat - 1) = pref ++ cur :: suff)
     (h : ScanLoopInv arr u leftIdx rightIdx pref (cur :: suff) st) :
-    ∃ (d i : ℕ), st.fst = d ∧ d ≤ i ∧ (leftIdx + cur).toNat = i ∧ leftIdx < i ∧
-      (i : ℤ) < rightIdx ∧ i < arr.size ∧ (i : ℤ) = leftIdx + 1 + pref.length ∧
-      (st.snd = false → d = i) ∧ IntegrationInvariant arr u d i st.snd false := by
-  obtain ⟨ d, i, done, hdest, hdi, hir, hdone, hpos, hnd, hinv ⟩ := h
+    ∃ (d i : ℕ) (scanning : Bool), st.snd.fst = d ∧ d ≤ i ∧ (leftIdx + cur).toNat = i ∧
+      leftIdx < i ∧ (i : ℤ) < rightIdx ∧ i < arr.size ∧ (i : ℤ) = leftIdx + 1 + pref.length ∧
+      (scanning = true ↔ d < i) ∧
+      IdsOfRange arr (leftIdx + 1) i st.snd.snd ∧ IdsOfRange arr d i st.fst ∧
+      IntegrationInvariant arr u d i scanning false := by
+  obtain ⟨ d, i, scanning, done, hdest, hdi, hir, hdone, hpos, hs, hibo, hci, hinv ⟩ := h
   cases done
   · obtain ⟨ hcur, hlen ⟩ := List.range'_eq_append_cons hlist
     have hpos := hpos rfl
     have hl := ctx.left_ge
     have hr := ctx.right_le
     have hlr := ctx.left_lt_right
-    exact ⟨ d, i, hdest, hdi, by omega, by omega, by omega, by omega, hpos,
-      fun hs => hnd hs rfl, hinv ⟩
+    exact ⟨ d, i, scanning, hdest, hdi, by omega, by omega, by omega, by omega, hpos, hs,
+      hibo rfl, hci rfl, hinv ⟩
   · exact absurd (hdone rfl) (by simp)
 
 omit ctx [DecidableEq A] in
 theorem of_yield {d i : ℕ} {scanning : Bool} {pref suff : List ℕ} {cur : ℕ} {dest : ℤ}
+    {ibo ci : List YjsId}
     (hdest : dest = (d : ℤ)) (hinv : IntegrationInvariant arr u d (i + 1) scanning false)
     (hdi : d ≤ i + 1) (hir : (i : ℤ) + 1 ≤ rightIdx) (hpos : (i : ℤ) = leftIdx + 1 + pref.length)
-    (hnd : scanning = false → d = i + 1) :
-    ScanLoopInv arr u leftIdx rightIdx (pref ++ [cur]) suff ⟨dest, scanning⟩ :=
-  ⟨ d, i + 1, false, hdest, hdi, by omega, by simp,
-    fun _ => by simp; omega, fun hs _ => hnd hs, hinv ⟩
+    (hs : scanning = true ↔ d < i + 1)
+    (hibo : IdsOfRange arr (leftIdx + 1) (i + 1) ibo) (hci : IdsOfRange arr d (i + 1) ci) :
+    ScanLoopInv arr u leftIdx rightIdx (pref ++ [cur]) suff ⟨ci, dest, ibo⟩ :=
+  ⟨ d, i + 1, scanning, false, hdest, hdi, by omega, by simp,
+    fun _ => by simp; omega, hs, fun _ => hibo, fun _ => hci, hinv ⟩
 
 omit ctx [DecidableEq A] in
-theorem of_done {d i : ℕ} {scanning : Bool} {xs : List ℕ} {dest : ℤ}
+theorem of_done {d i : ℕ} {scanning : Bool} {xs : List ℕ} {dest : ℤ} {ibo ci : List YjsId}
     (hdest : dest = (d : ℤ)) (hinv : IntegrationInvariant arr u d i scanning true)
-    (hdi : d ≤ i) (hir : (i : ℤ) ≤ rightIdx) :
-    ScanLoopInv arr u leftIdx rightIdx xs [] ⟨dest, scanning⟩ :=
-  ⟨ d, i, true, hdest, hdi, hir, fun _ => rfl, by simp, by simp, hinv ⟩
+    (hdi : d ≤ i) (hir : (i : ℤ) ≤ rightIdx) (hs : scanning = true ↔ d < i) :
+    ScanLoopInv arr u leftIdx rightIdx xs [] ⟨ci, dest, ibo⟩ :=
+  ⟨ d, i, scanning, true, hdest, hdi, hir, fun _ => rfl, by simp, hs, by simp, by simp, hinv ⟩
 
 /-- At loop exit the invariant yields the sorted insertion position.  If the loop
 ran to completion, the scan position is `rightIdx`, where `u.rightOrigin` sits. -/
-theorem exit {st : MProd ℤ Bool}
+theorem exit {st : ScanState}
     (h : ScanLoopInv arr u leftIdx rightIdx (List.range' 1 ((rightIdx - leftIdx).toNat - 1)) [] st) :
-    SortedInsertPos arr u st.fst.toNat := by
-  obtain ⟨ d, i, done, hdest, hdi, hir, _, hpos, _, hinv ⟩ := h
+    SortedInsertPos arr u st.snd.fst.toNat := by
+  obtain ⟨ d, i, scanning, done, hdest, hdi, hir, _, hpos, _, _, _, hinv ⟩ := h
   have hr := ctx.right_le
   have hlr := ctx.left_lt_right
   have hl := ctx.left_ge
@@ -753,113 +996,182 @@ theorem exit {st : MProd ℤ Bool}
 end ScanLoopInv
 
 /-- Specification of the integration loop: under the integration context, it returns
-the sorted insertion position of `u`. -/
+the sorted insertion position of `u`, the item the input resolves to. -/
 @[spec]
 theorem findIntegratedIndex_spec (input : IntegrateInput A) {arr : Array (YjsItem A)}
     {u : YjsItem A} {leftIdx rightIdx : ℤ} (ctx : IntegrateCtx arr u leftIdx rightIdx)
-    (h_id : input.id = u.id) :
+    (h_item : input.toItem arr = Except.ok u) :
     ⦃⌜True⌝⦄ findIntegratedIndex leftIdx rightIdx input arr
     ⦃post⟨fun d => ⌜SortedInsertPos arr u d⌝, fun _ => ⌜True⌝⟩⦄ := by
+  obtain ⟨ h_id, h_oid, h_rid ⟩ := IntegrateInput.toItem_ids h_item
   unfold findIntegratedIndex
-  mvcgen [findPtrIdx_spec, getElemExcept_spec]
+  mvcgen [getElemExcept_spec]
   case inv1 =>
     exact post⟨fun ⟨xs, st⟩ => ⌜ScanLoopInv arr u leftIdx rightIdx xs.prefix xs.suffix st⌝,
       fun _ => ⌜True⌝⟩
   all_goals mleave
-  case vc11.step.except.handle => intros; trivial
-  case vc12.pre => exact ScanLoopInv.init ctx
-  case vc13.post.success =>
+  case vc7.step.except.handle => intros; trivial
+  case vc8.pre => exact ScanLoopInv.init ctx
+  case vc9.post.success =>
     rename_i st h
     rw [Std.Range.toList_one] at h
     exact ScanLoopInv.exit ctx h
-  -- Branch 1: `oLeftIdx < leftIdx`, break.
-  case vc1.step.success.success.success.isTrue =>
-    rename_i pref cur suff hlist b destIdx scanning i hex other h_other oLeftIdx h_oLeft
-      oRightIdx _ h_lt h_oRight
-    rw [Std.Range.toList_one] at hlist
-    obtain ⟨ d, i', hdest, hdi, hidx, hli, hir, hi, hpos, hnd, hinv ⟩ :=
-      ScanLoopInv.step_pre ctx hlist hex
-    have hii : i = i' := hidx
-    rw [hii] at h_other
-    obtain ⟨ _, rfl ⟩ := getElemExcept_eq_ok_iff.1 h_other.1
-    exact ScanLoopInv.of_done hdest
-      (IntegrationInvariant.step_break_left ctx hi hli h_oLeft.1 h_lt hinv) hdi (by omega)
   -- Branch 2: same origin, `u` wins the tiebreak, advance.
-  case vc2.step.success.success.success.isFalse.isTrue.isTrue.isTrue =>
-    rename_i pref cur suff hlist b destIdx scanning i hex other h_other oLeftIdx h_oLeft
-      oRightIdx _ h_nlt h_eq h_id_lt h_oRight _
+  case vc1.step.success.isTrue.isTrue =>
+    rename_i pref cur suff hlist b x destIdx ibo0 i hex other ibo ci h_eq h_id_lt h_other
     rw [Std.Range.toList_one] at hlist
     rw [h_id] at h_id_lt
-    obtain ⟨ d, i', hdest, hdi, hidx, hli, hir, hi, hpos, hnd, hinv ⟩ :=
+    obtain ⟨ d, i', scanning, hdest, hdi, hidx, hli, hir, hi, hpos, hs, hibo, hci, hinv ⟩ :=
       ScanLoopInv.step_pre ctx hlist hex
     have hii : i = i' := hidx
     rw [hii] at h_other ⊢
     obtain ⟨ _, rfl ⟩ := getElemExcept_eq_ok_iff.1 h_other.1
+    obtain ⟨ oLeftIdx, hoLeft ⟩ := ctx.exists_origin_idx hi
+    have hol : oLeftIdx = leftIdx := (ctx.origin_id?_eq_iff hi hoLeft).1 (h_eq.trans h_oid.symm)
     exact ScanLoopInv.of_yield (by simp)
-      (IntegrationInvariant.step_advance_same ctx hi hli hir h_oLeft.1 (beq_iff_eq.1 h_eq)
-        h_id_lt hinv) (le_refl _) (by omega) hpos (fun _ => rfl)
+      (IntegrationInvariant.step_advance_same ctx hi hli hir hoLeft hol h_id_lt hinv) (le_refl _)
+      (by omega) hpos (by simp) (IdsOfRange.cons hibo hi (by omega)) (IdsOfRange.nil (le_refl _))
   -- Branch 3: same origin and right origin, `u` loses the tiebreak, break.
-  case vc4.step.success.success.success.isFalse.isTrue.isFalse.isTrue =>
-    rename_i pref cur suff hlist b destIdx scanning i hex other h_other oLeftIdx h_oLeft
-      oRightIdx _ h_nlt h_eq h_nid h_req h_oRight
+  case vc2.step.success.isTrue.isFalse.isTrue =>
+    rename_i pref cur suff hlist b x destIdx ibo0 i hex other ibo ci h_eq h_nid h_req h_other
     rw [Std.Range.toList_one] at hlist
     rw [h_id] at h_nid
-    obtain ⟨ d, i', hdest, hdi, hidx, hli, hir, hi, hpos, hnd, hinv ⟩ :=
+    obtain ⟨ d, i', scanning, hdest, hdi, hidx, hli, hir, hi, hpos, hs, hibo, hci, hinv ⟩ :=
       ScanLoopInv.step_pre ctx hlist hex
     have hii : i = i' := hidx
     rw [hii] at h_other
     obtain ⟨ _, rfl ⟩ := getElemExcept_eq_ok_iff.1 h_other.1
+    obtain ⟨ oLeftIdx, hoLeft ⟩ := ctx.exists_origin_idx hi
+    obtain ⟨ oRightIdx, hoRight ⟩ := ctx.exists_rightOrigin_idx hi
+    have hol : oLeftIdx = leftIdx := (ctx.origin_id?_eq_iff hi hoLeft).1 (h_eq.trans h_oid.symm)
+    have hor : oRightIdx = rightIdx :=
+      (ctx.rightOrigin_id?_eq_iff hi hoRight).1 (h_req.trans h_rid.symm)
     exact ScanLoopInv.of_done hdest
-      (IntegrationInvariant.step_break_same_right ctx hi h_oLeft.1 (beq_iff_eq.1 h_eq) h_nid
-        h_oRight.1 (beq_iff_eq.1 h_req) hinv) hdi (by omega)
+      (IntegrationInvariant.step_break_same_right ctx hi hoLeft hol h_nid hoRight hor hinv) hdi
+      (by omega) hs
   -- Branch 4: same origin, different right origin, `u` loses the tiebreak, pending.
-  case vc6.step.success.success.success.isFalse.isTrue.isFalse.isFalse.isFalse =>
-    rename_i pref cur suff hlist b destIdx scanning i hex other h_other oLeftIdx h_oLeft
-      oRightIdx _ h_nlt h_eq h_nid h_nreq h_oRight _
+  case vc3.step.success.isTrue.isFalse.isFalse =>
+    rename_i pref cur suff hlist b x destIdx ibo0 i hex other ibo ci h_eq h_nid h_nreq h_other
     rw [Std.Range.toList_one] at hlist
     rw [h_id] at h_nid
-    obtain ⟨ d, i', hdest, hdi, hidx, hli, hir, hi, hpos, hnd, hinv ⟩ :=
+    obtain ⟨ d, i', scanning, hdest, hdi, hidx, hli, hir, hi, hpos, hs, hibo, hci, hinv ⟩ :=
       ScanLoopInv.step_pre ctx hlist hex
     have hii : i = i' := hidx
     rw [hii] at h_other
     obtain ⟨ _, rfl ⟩ := getElemExcept_eq_ok_iff.1 h_other.1
+    obtain ⟨ oLeftIdx, hoLeft ⟩ := ctx.exists_origin_idx hi
+    have hol : oLeftIdx = leftIdx := (ctx.origin_id?_eq_iff hi hoLeft).1 (h_eq.trans h_oid.symm)
+    have hnd : scanning = false → d = i' := fun h => by simp [h] at hs; omega
     exact ScanLoopInv.of_yield hdest
-      (IntegrationInvariant.step_pending_same ctx hi h_oLeft.1 (beq_iff_eq.1 h_eq) h_nid hinv
-        hdi hnd) (by omega) (by omega) hpos (by simp)
-  -- Branch 5: greater origin, not scanning, advance.
-  case vc7.step.success.success.success.isFalse.isFalse.isTrue =>
-    rename_i pref cur suff hlist b destIdx scanning i hex other h_other oLeftIdx h_oLeft
-      oRightIdx _ h_nlt h_neq h_oRight h_s
+      (IntegrationInvariant.step_pending_same ctx hi hoLeft hol h_nid hinv hdi hnd)
+      (by omega) (by omega) hpos (by simp; omega) (IdsOfRange.cons hibo hi (by omega))
+      (IdsOfRange.cons hci hi (by omega))
+  -- Branch 5: greater origin, already scanned and not pending: advance.  In scanning
+  -- mode this cannot happen (`dest_le_origin_of_scanning`).
+  case vc4.step.success.isFalse.isTrue.isTrue =>
+    rename_i pref cur suff hlist b x destIdx ibo0 i hex other ibo ci h_neq h_in h_nin h_other
     rw [Std.Range.toList_one] at hlist
-    obtain ⟨ d, i', hdest, hdi, hidx, hli, hir, hi, hpos, hnd, hinv ⟩ :=
+    obtain ⟨ d, i', scanning, hdest, hdi, hidx, hli, hir, hi, hpos, hs, hibo, hci, hinv ⟩ :=
       ScanLoopInv.step_pre ctx hlist hex
     have hii : i = i' := hidx
     rw [hii] at h_other ⊢
     obtain ⟨ _, rfl ⟩ := getElemExcept_eq_ok_iff.1 h_other.1
-    have hs : b.snd = false := by simpa using h_s
+    obtain ⟨ oLeftIdx, hoLeft ⟩ := ctx.exists_origin_idx hi
+    have hibo' := IdsOfRange.cons hibo hi (by omega)
+    have hci' := IdsOfRange.cons hci hi (by omega)
+    have hl := ctx.left_ge
     have h_gt : leftIdx < oLeftIdx := by
-      have := mt beq_iff_eq.2 h_neq
+      have := (ctx.idMem_idsOfRange_iff hi hoLeft (by omega) hibo').1 h_in
       omega
-    exact ScanLoopInv.of_yield (by simp)
-      (IntegrationInvariant.step_advance_other ctx hi hli hir h_oLeft.1 h_gt hs hinv (hnd hs))
-      (le_refl _) (by omega) hpos (fun _ => rfl)
-  -- Branch 6: greater origin, scanning, pending.
-  case vc8.step.success.success.success.isFalse.isFalse.isFalse =>
-    rename_i pref cur suff hlist b destIdx scanning i hex other h_other oLeftIdx h_oLeft
-      oRightIdx _ h_nlt h_neq h_oRight h_s
+    have h_lt_d : oLeftIdx < d := by
+      have := mt (ctx.idMem_idsOfRange_iff hi hoLeft (by omega) hci').2 (by simpa using h_nin)
+      have := ctx.origin_idx_lt hi hoLeft
+      omega
+    cases scanning with
+    | true =>
+      exfalso
+      have := IntegrationInvariant.dest_le_origin_of_scanning ctx hi hoLeft h_gt rfl hinv hdi
+      omega
+    | false =>
+      have hdi' : d = i' := by simp at hs; omega
+      exact ScanLoopInv.of_yield (by simp)
+        (IntegrationInvariant.step_advance_other ctx hi hli hir hoLeft h_gt rfl hinv hdi')
+        (le_refl _) (by omega) hpos (by simp) hibo' (IdsOfRange.nil (le_refl _))
+  -- Branch 6: greater origin, already scanned and pending: keep scanning.
+  case vc5.step.success.isFalse.isTrue.isFalse =>
+    rename_i pref cur suff hlist b x destIdx ibo0 i hex other ibo ci h_neq h_in h_nnin h_other
     rw [Std.Range.toList_one] at hlist
-    obtain ⟨ d, i', hdest, hdi, hidx, hli, hir, hi, hpos, hnd, hinv ⟩ :=
+    obtain ⟨ d, i', scanning, hdest, hdi, hidx, hli, hir, hi, hpos, hs, hibo, hci, hinv ⟩ :=
       ScanLoopInv.step_pre ctx hlist hex
     have hii : i = i' := hidx
     rw [hii] at h_other
     obtain ⟨ _, rfl ⟩ := getElemExcept_eq_ok_iff.1 h_other.1
-    have hs : b.snd = true := by simpa using h_s
+    obtain ⟨ oLeftIdx, hoLeft ⟩ := ctx.exists_origin_idx hi
+    have hibo' := IdsOfRange.cons hibo hi (by omega)
+    have hci' := IdsOfRange.cons hci hi (by omega)
+    have hl := ctx.left_ge
     have h_gt : leftIdx < oLeftIdx := by
-      have := mt beq_iff_eq.2 h_neq
+      have := (ctx.idMem_idsOfRange_iff hi hoLeft (by omega) hibo').1 h_in
       omega
-    exact ScanLoopInv.of_yield hdest
-      (IntegrationInvariant.step_pending_other ctx hi h_oLeft.1 h_gt hs hinv hdi)
-      (by omega) (by omega) hpos (fun h => absurd (hs.symm.trans h) (by simp))
+    have h_ge_d : (d : ℤ) ≤ oLeftIdx :=
+      ((ctx.idMem_idsOfRange_iff hi hoLeft (by omega) hci').1 (by simpa using h_nnin)).1
+    have holt := ctx.origin_idx_lt hi hoLeft
+    cases scanning with
+    | false =>
+      exfalso
+      simp at hs
+      omega
+    | true =>
+      exact ScanLoopInv.of_yield hdest
+        (IntegrationInvariant.step_pending_other ctx hi hoLeft h_gt rfl hinv hdi)
+        (by omega) (by omega) hpos (by simp; omega) hibo' hci'
+  -- Branch 1: the origin was not scanned (it precedes `u.origin`, or is `first`): break.
+  case vc6.step.success.isFalse.isFalse =>
+    rename_i pref cur suff hlist b x destIdx ibo0 i hex other ibo ci h_neq h_nin h_other
+    rw [Std.Range.toList_one] at hlist
+    obtain ⟨ d, i', scanning, hdest, hdi, hidx, hli, hir, hi, hpos, hs, hibo, hci, hinv ⟩ :=
+      ScanLoopInv.step_pre ctx hlist hex
+    have hii : i = i' := hidx
+    rw [hii] at h_other
+    obtain ⟨ _, rfl ⟩ := getElemExcept_eq_ok_iff.1 h_other.1
+    obtain ⟨ oLeftIdx, hoLeft ⟩ := ctx.exists_origin_idx hi
+    have hibo' := IdsOfRange.cons hibo hi (by omega)
+    have hl := ctx.left_ge
+    have hne : oLeftIdx ≠ leftIdx := fun h =>
+      h_neq (((ctx.origin_id?_eq_iff hi hoLeft).2 h).trans h_oid)
+    have h_lt : oLeftIdx < leftIdx := by
+      have := mt (ctx.idMem_idsOfRange_iff hi hoLeft (by omega) hibo').2 h_nin
+      have := ctx.origin_idx_lt hi hoLeft
+      omega
+    exact ScanLoopInv.of_done hdest
+      (IntegrationInvariant.step_break_left ctx hi hli hoLeft h_lt hinv) hdi (by omega) hs
+
+/-- The scan never fails once the window lies inside the array: its only effect is
+reading `arr[i]` for `leftIdx < i < rightIdx`. -/
+theorem findIntegratedIndex_ok_of_bounds {leftIdx rightIdx : ℤ} (input : IntegrateInput A)
+    (arr : Array (YjsItem A)) (h_left : -1 ≤ leftIdx) (h_right : rightIdx ≤ arr.size) :
+    ∃ destIdx, findIntegratedIndex leftIdx rightIdx input arr = Except.ok destIdx := by
+  have hP : (match findIntegratedIndex leftIdx rightIdx input arr with
+      | Except.ok _ => True
+      | Except.error _ => False) := by
+    apply Except.of_wp (prog := findIntegratedIndex leftIdx rightIdx input arr)
+      (P := fun r => match r with
+        | Except.ok _ => True
+        | Except.error _ => False)
+    unfold findIntegratedIndex
+    mvcgen [getElemExcept_spec]
+    case inv1 => exact post⟨fun _ => ⌜True⌝, fun _ => ⌜False⌝⟩
+    all_goals mleave
+    case vc7.step.except.handle =>
+      rename_i pref cur suff hlist b x destIdx ibo i _ _
+      intro hge
+      have hi : i = (leftIdx + cur).toNat := rfl
+      rw [Std.Range.toList_one] at hlist
+      obtain ⟨ hcur, hlen ⟩ := List.range'_eq_append_cons hlist
+      omega
+  cases h : findIntegratedIndex leftIdx rightIdx input arr with
+  | ok d => exact ⟨ d, rfl ⟩
+  | error e => simp [h] at hP
 
 /-! ## Inserting at the sorted position -/
 
@@ -1035,9 +1347,6 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
     simp at h
   have ctx : IntegrateCtx arr item leftIdx rightIdx :=
     ⟨ harrinv, hclosed, harrsetinv, h_maximalId, heqleft', heqright' ⟩
-  have h_eq : input.id = item.id := by
-    rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
-    grind only
   -- The loop returned the sorted insertion position.
   have hpos : SortedInsertPos arr item destIdx := by
     have hP : (match findIntegratedIndex leftIdx rightIdx input arr with
@@ -1047,7 +1356,7 @@ theorem YjsArrInvariant_integrate (input : IntegrateInput A) (arr newArr : Array
         (P := fun r => match r with
           | Except.ok d => SortedInsertPos arr item d
           | Except.error _ => True)
-      exact fun _ => findIntegratedIndex_spec input ctx h_eq trivial
+      exact fun _ => findIntegratedIndex_spec input ctx h_newItem_def trivial
     simpa [h_findInt] using hP
   exact ⟨ destIdx, hpos.le_size, h_newArr, h_newArr ▸ hpos.insertIdxIfInBounds_inv ctx ⟩
 
