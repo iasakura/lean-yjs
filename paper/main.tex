@@ -450,7 +450,8 @@ $\mathit{init} = ([\,],\; \emptyset)$, and
 \]
 Deletion simply adds $\mathit{did}$ to the tombstone set, so it always
 succeeds.  Insertion is defined by Algorithm~\ref{alg:integrate}, the
-integration procedure of Yjs: starting from the origin, the scan walks
+integration loop of the Yjs implementation~\cite{Yjs2023}
+(\texttt{Item.integrate}): starting from the origin, the scan walks
 rightward through the items between the origin and the right origin,
 maintaining a candidate destination $\mathit{dest}$ together with two
 sets of items, $\mathit{before}$ (every item scanned so far) and

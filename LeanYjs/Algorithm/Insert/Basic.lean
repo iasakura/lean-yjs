@@ -58,9 +58,10 @@ def getElemExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError 
   | some item => return item
   | none => Except.error IntegrateError.error
 
-/-- Scan of the integration window `(leftIdx, rightIdx)` in the style of Yjs's
-`Item.integrate` (Algorithm 3 of *The Art of the Fugue*).  Two id sets drive the
-decisions:
+/-- Scan of the integration window `(leftIdx, rightIdx)`, following the loop of
+`Item.integrate` in the Yjs implementation (`src/structs/Item.js`) branch for
+branch; the only abstraction is that the two sets hold ids instead of item objects.
+Two id sets drive the decisions:
 - `itemsBeforeOrigin` (the paper's `before`): every item scanned so far;
 - `conflictingItems` (the paper's `conflicts`): the items scanned since the
   destination last advanced, i.e. the pending region `[destIdx, i]`.
