@@ -160,3 +160,13 @@ theorem yjs_lt'_cases A (x y : YjsPtr A) :
   intros hlt
   obtain ⟨ h, hlt ⟩ := hlt
   apply yjs_lt_cases A h x y hlt
+
+/-! ### Items versus their own origins -/
+
+theorem YjsLt'.origin_lt_self {A : Type} (x : YjsItem A) : YjsLt' x.origin x := by
+  obtain ⟨ o, r, id, c ⟩ := x
+  exact YjsLt'.ltOrigin _ _ _ _ _ (YjsLeq'.leqSame _)
+
+theorem YjsLt'.self_lt_rightOrigin {A : Type} (x : YjsItem A) : YjsLt' x x.rightOrigin := by
+  obtain ⟨ o, r, id, c ⟩ := x
+  exact YjsLt'.ltRightOrigin _ _ _ _ _ (YjsLeq'.leqSame _)

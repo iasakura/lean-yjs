@@ -164,6 +164,15 @@ theorem YjsStateInvariant_insert (arr newArr : YjsState A) (input : IntegrateInp
   → YjsStateInvariant newArr
 ```
 
+The proof of `YjsArrInvariant_integrate` follows the paper's loop-invariant argument and is organised as follows (all in `LeanYjs/Algorithm/Insert/Spec.lean`):
+
+- `IntegrateCtx arr u leftIdx rightIdx` bundles the standing hypotheses of an integration step: the array invariant, closure and `ItemSetInvariant` of the extended item set `u :: arr`, clock maximality (`maximalId`), and the positions `leftIdx`/`rightIdx` of `u.origin`/`u.rightOrigin`. Derived facts (`origin_lt_getElem`, `getElem_lt_rightOrigin`, `u_id_lt`, `getElem_lt_u`, ...) live in the `IntegrateCtx` namespace.
+- `IntegrationInvariant arr u d i scanning done` is the paper's loop invariant on the mathematical state (candidate destination `d`, scan position `i`, `scanning` flag, `done` flag).
+- `IntegrationInvariant.init` establishes it at loop entry and the six lemmas `IntegrationInvariant.step_break_left`, `step_advance_same`, `step_break_same_right`, `step_pending_same`, `step_advance_other`, `step_pending_other` preserve it along the six branches of the loop body (one lemma per row of the paper's case table).
+- `pending_propagation` collapses the pending region at loop exit; `SortedInsertPos arr u d` is the resulting postcondition ("`d` is the sorted insertion position of `u`").
+- `findIntegratedIndex_spec` connects this to the executable loop via `mvcgen`; `ScanLoopInv` is the thin layer relating the loop state `⟨dest, scanning⟩` and the cursor over the offset list to `IntegrationInvariant`.
+- `YjsArrInvariant_insertIdxIfInBounds` turns `SortedInsertPos` into the invariant of the extended array.
+
 This theorem captures preservation of `YjsStateInvariant` across an insert step. More concretely, it assumes that the pre-state `arr` already satisfies `YjsStateInvariant`, that resolving `input` against `arr.items` succeeds and produces a concrete `newItem`, and that this item satisfies `newItem.isValid`. Under these assumptions, if the executable insert step `arr.insert input` returns `newArr`, then `newArr` also satisfies `YjsStateInvariant`.
 
 The predicate `newItem.isValid` is defined in `LeanYjs/Algorithm/Insert/Spec.lean` as:
@@ -237,6 +246,16 @@ How the final step works:
 
 - `YjsOperationNetwork_concurrentCommutative` is proved by case analysis on concurrent operation pairs (insert/insert, insert/delete, delete/delete), using the commutativity theorems from Section 6.
 - `YjsOperationNetwork_converge'` then applies the generic convergence machinery for hb-consistent executions (from the network/order layer) together with the Yjs commutativity and validity/invariant lemmas, yielding equal final states when delivered operation sets are equal.
+
+The *causal validity* premise of the generic framework (`isValidState_insert_causally`: an insert valid at its broadcast state is valid at the state of any hb-consistent, hb-closed, duplicate-free replay containing its causal predecessors) is proved by *replay determinism* in `LeanYjs/Network/Yjs/YjsNetwork.lean`:
+
+- `IntegrateInput.toItem_congr` (in `LeanYjs/Algorithm/Insert/Lemmas.lean`): `toItem` inspects the array only through `find?` on the two dependency ids (`IntegrateInput.depIds`).
+- `effect_list_preserves_mem` / `effect_list_find?_exists_insert_id`: replaying never removes items, and an item found by id was created by the unique insert with that id in the list.
+- `YjsOperationNetwork.deps_hb`: the dependencies of a sourced insert are sourced causal predecessors (they were delivered at the source before the broadcast).
+- `ReplayPrefix network L op s`: `s` is the state of an hb-closed, duplicate-free replay `L` containing a sourced insert for each dependency id of `op`; `ReplayPrefix.find?_of_mem` locates the item created for a member insert.
+- `toItem_deterministic`: two replay prefixes for the same insert resolve it to the same item (induction on the length of the first replay).
+
+`isValidState_insert_causally` is then the instance comparing the broadcasting client's state (`YjsOperationNetwork.source_state`) with the given replay.
 
 ## 8. Progress (no-failure)
 

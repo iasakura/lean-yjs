@@ -1,4 +1,5 @@
 import LeanYjs.Item
+import LeanYjs.ExceptLemmas
 import Std.Data.ExtTreeSet
 
 inductive IntegrateError where

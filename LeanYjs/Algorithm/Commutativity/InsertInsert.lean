@@ -305,7 +305,7 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
       rw [h_other_eq]
       simp; eq_refl
 
-    rw [h_other_ok, ok_bind]
+    rw [h_other_ok, Except.ok_bind]
 
     have ArrSet_other_origin : ArrSet arr.toList other.origin := by
       obtain ⟨ o, r, id, c ⟩ := other
@@ -329,13 +329,13 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
       simp [getElemExcept] at h_other_ok
       apply ArrSet_findPtrIdx_eq_some ArrSet_other_origin
 
-    rw [h_oLeftIdx_ok, ok_bind]
+    rw [h_oLeftIdx_ok, Except.ok_bind]
 
     have ⟨ oRightIdx, h_oRightIdx_ok ⟩ : ∃ oRightIdx, findPtrIdx other.rightOrigin arr = Except.ok oRightIdx := by
       simp [getElemExcept] at h_other_ok
       apply ArrSet_findPtrIdx_eq_some ArrSet_other_rightOrigin
 
-    rw [h_oRightIdx_ok, ok_bind]
+    rw [h_oRightIdx_ok, Except.ok_bind]
 
     (repeat' (split)) <;> (constructor; eq_refl)
 
@@ -472,12 +472,12 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {input : IntegrateInp
         simp [findLeftIdx, h_eq, h_idx] at heqleft
         cases heqleft
   | ok leftIdx =>
-    rw [heqleft, ok_bind] at hintegrate
+    rw [heqleft, Except.ok_bind] at hintegrate
     cases heqleft' : findLeftIdx input.originId (arr.insertIdxIfInBounds idx other) with
     | error e =>
       exists e
     | ok leftIdx' =>
-      rw [ok_bind]
+      rw [Except.ok_bind]
       cases heqright : findRightIdx input.rightOriginId arr with
       | error e =>
         rw [heqright] at hintegrate
@@ -507,8 +507,8 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {input : IntegrateInp
         | error e =>
           exists e
         | ok rightIdx' =>
-          simp [heqright, ok_bind] at hintegrate
-          simp [ok_bind]
+          simp [heqright, Except.ok_bind] at hintegrate
+          simp [Except.ok_bind]
           have ⟨ destIdx, h_destIdx ⟩ : ∃ destdx, findIntegratedIndex leftIdx rightIdx input arr = Except.ok destdx := by
             apply findIntegratedIndex_safe harrinv h_newItem_def
             . cases h_originId : input.originId with
@@ -571,7 +571,7 @@ theorem integrate_insert_eq_none {arr : Array (YjsItem A)} {input : IntegrateInp
                   rw [Array.findIdx?_eq_some_iff_getElem] at h_find
                   obtain ⟨ hlt, _, _ ⟩ := h_find
                   exact_mod_cast Nat.le_of_lt hlt
-          rw [h_destIdx, ok_bind] at hintegrate
+          rw [h_destIdx, Except.ok_bind] at hintegrate
           simp [mkItemByIndex] at hintegrate
           have ⟨ item, hitem, hitemid ⟩ := findLeftIdx_some_getPtrExcept_some heqleft
           rw [hitem] at hintegrate
@@ -712,7 +712,7 @@ theorem integrate_integrate_eq_none {arr : Array (YjsItem A)} {a b : IntegrateIn
   . have h_integrate_b_idx : integrate b arr = Except.ok (arr.insertIdxIfInBounds idx bItem) := by
       have h_integrate_b_dest : integrate b arr = Except.ok (arr.insertIdxIfInBounds destIdx bItem') := by
         unfold integrate
-        rw [h_leftIdx_eq, ok_bind, h_rightIdx_eq, ok_bind, h_destIdx_eq, ok_bind, hbItem']
+        rw [h_leftIdx_eq, Except.ok_bind, h_rightIdx_eq, Except.ok_bind, h_destIdx_eq, Except.ok_bind, hbItem']
         simp
       simpa [heq'] using h_integrate_b_dest
     have h_maxb' : maximalId bItem arr := by assumption
@@ -943,12 +943,12 @@ theorem integrate_integrate_eq_some {arr : Array (YjsItem A)} {a b : IntegrateIn
 
   split_ifs
   . rw [h_leftIdx''_eq, h_rightIdx''_eq]
-    rw [ok_bind, ok_bind]
+    rw [Except.ok_bind, Except.ok_bind]
     have h : b.toItem (arr.insertIdxIfInBounds destIdx aItem) = Except.ok bItem := by
       exact hbItem_arr2
     have ⟨ _, h ⟩ := findIntegratedIndex_safe (leftIdx := leftIdx'') (rightIdx := rightIdx'') (newItem := bItem) harrinv_arr2 h (by omega) (by omega) (by omega) (by omega)
     rw [h]
-    rw [ok_bind]
+    rw [Except.ok_bind]
     have h : mkItemByIndex leftIdx'' rightIdx'' b (arr.insertIdxIfInBounds destIdx aItem) = Except.ok bItem := by
       have h_toItem := hbItem_arr2
       rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv_arr2.unique] at h_toItem
@@ -1138,9 +1138,9 @@ theorem insert_commutative (a b : IntegrateInput A) (aItem bItem : YjsItem A) (a
 
   have h_insert_a_after_b_ok : arrB.insert a = Except.ok res := by
     unfold YjsState.insert
-    rw [h_integrate_a_after_b_ok_state, ok_bind]
+    rw [h_integrate_a_after_b_ok_state, Except.ok_bind]
     simpa [pure, Except.pure, h_state_eq]
 
   rw [h_insert_b_ok]
-  rw [ok_bind]
+  rw [Except.ok_bind]
   exact h_insert_a_after_b_ok
