@@ -267,80 +267,8 @@ theorem findIntegratedIndex_safe {leftIdx rightIdx : ℤ} {arr : Array (YjsItem 
   → -1 ≤ leftIdx → leftIdx ≤ arr.size
   → -1 ≤ rightIdx → rightIdx ≤ arr.size
   → ∃ idx', findIntegratedIndex leftIdx rightIdx input arr = Except.ok idx' := by
-  intros harrinv h_newItem_def hleft_ge hleft_le hright_ge hright_le
-  unfold findIntegratedIndex
-  simp
-
-  rw [IntegrateInput.toItem_ok_iff _ _ _ harrinv.unique] at h_newItem_def
-
-  have ⟨ ⟨ dest, scanning ⟩, loop_ok ⟩ :
-    ∃ state, forIn (m := Except IntegrateError) (ρ := List ℕ) (α := ℕ) (β := MProd ℤ Bool)
-      (List.range' 1 ((rightIdx - leftIdx).toNat - 1)) ⟨leftIdx + 1, false⟩ (fun offset r => do
-        let other ← getElemExcept arr (leftIdx + ↑offset).toNat
-        let oLeftIdx ← findPtrIdx other.origin arr
-        let oRightIdx ← findPtrIdx other.rightOrigin arr
-        if oLeftIdx < leftIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
-          else
-            if oLeftIdx = leftIdx then
-              if other.id.clientId < input.id.clientId then
-                pure (ForInStep.yield ⟨max (leftIdx + ↑offset) 0 + 1, false⟩)
-              else
-                if oRightIdx = rightIdx then pure (ForInStep.done ⟨r.fst, r.snd⟩)
-                else pure (ForInStep.yield ⟨r.fst, true⟩)
-            else
-              if r.snd = false then pure (ForInStep.yield ⟨max (leftIdx + ↑offset) 0 + 1, r.snd⟩)
-              else pure (ForInStep.yield ⟨r.fst, r.snd⟩)) = Except.ok state := by
-    apply forIn_ok
-    intros offset h_offset_mem state
-    obtain ⟨ destIdx, scanning ⟩ := state
-
-    simp at h_offset_mem
-
-    have ⟨ other, h_other_eq ⟩ : ∃ other, arr[(leftIdx + ↑offset).toNat]? = some other := by
-      rw [Array.getElem?_eq_getElem (by omega)]
-      simp
-
-    have h_other_ok : getElemExcept arr (leftIdx + ↑offset).toNat = Except.ok other := by
-      simp [getElemExcept]
-      rw [h_other_eq]
-      simp; eq_refl
-
-    rw [h_other_ok, Except.ok_bind]
-
-    have ArrSet_other_origin : ArrSet arr.toList other.origin := by
-      obtain ⟨ o, r, id, c ⟩ := other
-      apply harrinv.closed.closedLeft o r id c
-      simp [ArrSet]
-      rw [getElem?_eq_some_iff] at h_other_eq
-      obtain ⟨ _, h_other_eq ⟩ := h_other_eq
-      rw [<-h_other_eq]
-      simp
-
-    have ArrSet_other_rightOrigin : ArrSet arr.toList other.rightOrigin := by
-      obtain ⟨ o, r, id, c ⟩ := other
-      apply harrinv.closed.closedRight o r id c
-      simp [ArrSet]
-      rw [getElem?_eq_some_iff] at h_other_eq
-      obtain ⟨ _, h_other_eq ⟩ := h_other_eq
-      rw [<-h_other_eq]
-      simp
-
-    have ⟨ oLeftIdx, h_oLeftIdx_ok ⟩ : ∃ oLeftIdx, findPtrIdx other.origin arr = Except.ok oLeftIdx := by
-      simp [getElemExcept] at h_other_ok
-      apply ArrSet_findPtrIdx_eq_some ArrSet_other_origin
-
-    rw [h_oLeftIdx_ok, Except.ok_bind]
-
-    have ⟨ oRightIdx, h_oRightIdx_ok ⟩ : ∃ oRightIdx, findPtrIdx other.rightOrigin arr = Except.ok oRightIdx := by
-      simp [getElemExcept] at h_other_ok
-      apply ArrSet_findPtrIdx_eq_some ArrSet_other_rightOrigin
-
-    rw [h_oRightIdx_ok, Except.ok_bind]
-
-    (repeat' (split)) <;> (constructor; eq_refl)
-
-  use dest.toNat; rw [loop_ok]
-  eq_refl
+  intros _ _ hleft_ge _ _ hright_le
+  exact findIntegratedIndex_ok_of_bounds input arr hleft_ge hright_le
 
 theorem findPtrIdx_none_insert {p : YjsItem A} {arr : Array (YjsItem A)} {a : YjsItem A} :
   findPtrIdx a arr = Except.error e

@@ -19,31 +19,32 @@ def getElemExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError 
   | some item => return item
   | none => Except.error IntegrateError.error
 
+/-- The set-based scan of `_root_.findIntegratedIndex`, on id-referencing items. -/
 def findIntegratedIndex (leftIdx rightIdx : Int) (newItem : IntegrateInput A)
     (arr : Array (YjsItem A)) : Except IntegrateError Nat := do
-  let mut scanning := false
   let mut destIdx := leftIdx + 1
+  let mut itemsBeforeOrigin : List YjsId := []
+  let mut conflictingItems : List YjsId := []
   for offset in [1:(rightIdx-leftIdx).toNat] do
     let i := (leftIdx + offset).toNat
     let other <- getElemExcept arr i
+    itemsBeforeOrigin := other.id :: itemsBeforeOrigin
+    conflictingItems := other.id :: conflictingItems
 
-    let oLeftIdx <- findRefIdx other.origin arr
-    let oRightIdx <- findRefIdx other.rightOrigin arr
-
-    if oLeftIdx < leftIdx then
-      break
-    else if oLeftIdx == leftIdx then
-      if newItem.id.clientId > other.id.clientId then
-        scanning := false
-      else if oRightIdx == rightIdx then
+    if other.origin.id? = newItem.originId then
+      if other.id.clientId < newItem.id.clientId then
+        destIdx := i + 1
+        conflictingItems := []
+      else if other.rightOrigin.id? = newItem.rightOriginId then
         break
-      else
-        scanning := true
+    else if idMem other.origin.id? itemsBeforeOrigin then
+      if !idMem other.origin.id? conflictingItems then
+        destIdx := i + 1
+        conflictingItems := []
+    else
+      break
 
-    if !scanning then
-      destIdx := i + 1
-
-  return Int.toNat destIdx
+  return destIdx.toNat
 
 def findLeftIdx (originId : Option YjsId) (arr : Array (YjsItem A)) : Except IntegrateError Int :=
   match originId with

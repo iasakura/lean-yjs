@@ -105,195 +105,34 @@ theorem ofDirectItem_mkItemByIndex (arr : Array (_root_.YjsItem A)) (input : Int
   rw [ofDirectPtr_eq_ofOriginId h_leftPtr, ofDirectPtr_eq_ofRightOriginId h_rightPtr]
   constructor <;> rfl
 
-private def scanStepDirect (leftIdx rightIdx : Int) (input : IntegrateInput A)
-    (arr : Array (_root_.YjsItem A)) (offset : Nat) (r : MProd Int Bool) :
-    Except IntegrateError (ForInStep (MProd Int Bool)) := do
-  let other <- _root_.getElemExcept arr (leftIdx + offset).toNat
-  let oLeftIdx <- _root_.findPtrIdx other.origin arr
-  let oRightIdx <- _root_.findPtrIdx other.rightOrigin arr
-  if oLeftIdx < leftIdx then
-    pure (ForInStep.done ⟨ r.fst, r.snd ⟩)
-  else if oLeftIdx = leftIdx then
-    if other.id.clientId < input.id.clientId then
-      pure (ForInStep.yield ⟨ max (leftIdx + offset) 0 + 1, false ⟩)
-    else if oRightIdx = rightIdx then
-      pure (ForInStep.done ⟨ r.fst, r.snd ⟩)
-    else
-      pure (ForInStep.yield ⟨ r.fst, true ⟩)
-  else if r.snd = false then
-    pure (ForInStep.yield ⟨ max (leftIdx + offset) 0 + 1, r.snd ⟩)
-  else
-    pure (ForInStep.yield ⟨ r.fst, r.snd ⟩)
+omit [DecidableEq A] in
+theorem getElemExcept_ofDirect (arr : Array (_root_.YjsItem A)) (i : Nat) :
+    getElemExcept (arr.map ofDirectItem) i = ofDirectItem <$> _root_.getElemExcept arr i := by
+  simp only [getElemExcept, _root_.getElemExcept, Array.getElem?_map]
+  cases arr[i]? <;> rfl
 
-private def scanStepIndirect (leftIdx rightIdx : Int) (input : IntegrateInput A)
-    (arr : Array (_root_.YjsItem A)) (offset : Nat) (r : MProd Int Bool) :
-    Except IntegrateError (ForInStep (MProd Int Bool)) := do
-  let other <- getElemExcept (arr.map ofDirectItem) (leftIdx + offset).toNat
-  let oLeftIdx <- findRefIdx other.origin (arr.map ofDirectItem)
-  let oRightIdx <- findRefIdx other.rightOrigin (arr.map ofDirectItem)
-  if oLeftIdx < leftIdx then
-    pure (ForInStep.done ⟨ r.fst, r.snd ⟩)
-  else if oLeftIdx = leftIdx then
-    if other.id.clientId < input.id.clientId then
-      pure (ForInStep.yield ⟨ max (leftIdx + offset) 0 + 1, false ⟩)
-    else if oRightIdx = rightIdx then
-      pure (ForInStep.done ⟨ r.fst, r.snd ⟩)
-    else
-      pure (ForInStep.yield ⟨ r.fst, true ⟩)
-  else if r.snd = false then
-    pure (ForInStep.yield ⟨ max (leftIdx + offset) 0 + 1, r.snd ⟩)
-  else
-    pure (ForInStep.yield ⟨ r.fst, r.snd ⟩)
+omit [DecidableEq A] in
+@[simp] theorem id?_ofDirectPtr (p : _root_.YjsPtr A) :
+    (YjsRef.ofDirectPtr p).id? = p.id? := by
+  cases p <;> rfl
 
-theorem findRefIdx_ofDirectPtr_exact (arr : Array (_root_.YjsItem A)) (ptr : _root_.YjsPtr A)
-    (h_unique : _root_.uniqueId arr.toList) (h_ptr : _root_.ArrSet arr.toList ptr) :
-    findRefIdx (YjsRef.ofDirectPtr ptr) (arr.map ofDirectItem) = _root_.findPtrIdx ptr arr := by
-  cases ptr with
-  | first =>
-      simp [findRefIdx, YjsRef.ofDirectPtr, _root_.findPtrIdx]
-  | last =>
-      simp [findRefIdx, YjsRef.ofDirectPtr, _root_.findPtrIdx]
-  | itemPtr item =>
-      simp [_root_.ArrSet] at h_ptr
-      simp [findRefIdx, YjsRef.ofDirectPtr, _root_.findPtrIdx]
-      have h_eq :
-          Array.findIdx? ((fun i => decide (i.id = item.id)) ∘ ofDirectItem) arr =
-            Array.findIdx? (fun i => decide (i = item)) arr := by
-        rw [Array.findIdx?_pred_eq_eq]
-        intro a h_a_mem
-        simp [Function.comp]
-        constructor
-        . intro h_id_eq
-          have h := _root_.uniqueId_id_eq_implies_eq h_unique _ _ h_ptr h_a_mem h_id_eq.symm
-          simp [h]
-        . intro h_item_eq
-          simp [h_item_eq, ofDirectItem]
-      rw [h_eq]
-      rfl
-
-theorem scanStep_ofDirect (leftIdx rightIdx : Int) (input : IntegrateInput A)
-    (arr : Array (_root_.YjsItem A)) (offset : Nat) (r : MProd Int Bool)
-    (harrinv : _root_.YjsArrInvariant arr.toList) :
-    scanStepIndirect leftIdx rightIdx input arr offset r =
-      scanStepDirect leftIdx rightIdx input arr offset r := by
-  simp [scanStepIndirect, scanStepDirect, getElemExcept, _root_.getElemExcept]
-  cases hGet : arr[(leftIdx + offset).toNat]? with
-  | none =>
-      rfl
-  | some other =>
-      simp
-      have h_mem : other ∈ arr := by
-        rw [Array.mem_iff_getElem]
-        rw [Array.getElem?_eq_some_iff] at hGet
-        exact ⟨ (leftIdx + offset).toNat, hGet.1, hGet.2 ⟩
-      have h_other_in : _root_.ArrSet arr.toList (_root_.YjsPtr.itemPtr other) := by
-        simp [_root_.ArrSet, h_mem]
-      have h_origin_in : _root_.ArrSet arr.toList other.origin := by
-        obtain ⟨ o, r, id, c ⟩ := other
-        exact harrinv.closed.closedLeft o r id c h_other_in
-      have h_right_in : _root_.ArrSet arr.toList other.rightOrigin := by
-        obtain ⟨ o, r, id, c ⟩ := other
-        exact harrinv.closed.closedRight o r id c h_other_in
-      have h_left_eq :
-          findRefIdx (ofDirectItem other).origin (arr.map ofDirectItem) =
-            _root_.findPtrIdx other.origin arr := by
-        simpa [ofDirectItem] using findRefIdx_ofDirectPtr_exact arr other.origin harrinv.unique h_origin_in
-      have h_right_eq :
-          findRefIdx (ofDirectItem other).rightOrigin (arr.map ofDirectItem) =
-            _root_.findPtrIdx other.rightOrigin arr := by
-        simpa [ofDirectItem] using findRefIdx_ofDirectPtr_exact arr other.rightOrigin harrinv.unique h_right_in
-      rw [h_left_eq, h_right_eq]
-      rfl
-
-theorem forIn_offsets_ofDirect_expanded (leftIdx rightIdx : Int) (input : IntegrateInput A)
-    (arr : Array (_root_.YjsItem A)) (offsets : List Nat) (r : MProd Int Bool)
-    (harrinv : _root_.YjsArrInvariant arr.toList) :
-    forIn offsets r (fun offset r => do
-      let other <- getElemExcept (arr.map ofDirectItem) (leftIdx + offset).toNat
-      let oLeftIdx <- findRefIdx other.origin (arr.map ofDirectItem)
-      let oRightIdx <- findRefIdx other.rightOrigin (arr.map ofDirectItem)
-      if oLeftIdx < leftIdx then
-        pure (ForInStep.done (MProd.mk r.fst r.snd))
-      else if oLeftIdx = leftIdx then
-        if other.id.clientId < input.id.clientId then
-          pure (ForInStep.yield (MProd.mk (max (leftIdx + offset) 0 + 1) false))
-        else if oRightIdx = rightIdx then
-          pure (ForInStep.done (MProd.mk r.fst r.snd))
-        else
-          pure (ForInStep.yield (MProd.mk r.fst true))
-      else if r.snd = false then
-        pure (ForInStep.yield (MProd.mk (max (leftIdx + offset) 0 + 1) r.snd))
-      else
-        pure (ForInStep.yield (MProd.mk r.fst r.snd))) =
-    forIn offsets r (fun offset r => do
-      let other <- _root_.getElemExcept arr (leftIdx + offset).toNat
-      let oLeftIdx <- _root_.findPtrIdx other.origin arr
-      let oRightIdx <- _root_.findPtrIdx other.rightOrigin arr
-      if oLeftIdx < leftIdx then
-        pure (ForInStep.done (MProd.mk r.fst r.snd))
-      else if oLeftIdx = leftIdx then
-        if other.id.clientId < input.id.clientId then
-          pure (ForInStep.yield (MProd.mk (max (leftIdx + offset) 0 + 1) false))
-        else if oRightIdx = rightIdx then
-          pure (ForInStep.done (MProd.mk r.fst r.snd))
-        else
-          pure (ForInStep.yield (MProd.mk r.fst true))
-      else if r.snd = false then
-        pure (ForInStep.yield (MProd.mk (max (leftIdx + offset) 0 + 1) r.snd))
-      else
-        pure (ForInStep.yield (MProd.mk r.fst r.snd))) := by
-  induction offsets generalizing r with
-  | nil =>
-      simp [List.forIn_nil]
-  | cons offset offsets ih =>
-      rw [List.forIn_cons, List.forIn_cons]
-      have hstep :
-          (do
-            let other <- getElemExcept (arr.map ofDirectItem) (leftIdx + offset).toNat
-            let oLeftIdx <- findRefIdx other.origin (arr.map ofDirectItem)
-            let oRightIdx <- findRefIdx other.rightOrigin (arr.map ofDirectItem)
-            if oLeftIdx < leftIdx then
-              pure (ForInStep.done (MProd.mk r.fst r.snd))
-            else if oLeftIdx = leftIdx then
-              if other.id.clientId < input.id.clientId then
-                pure (ForInStep.yield (MProd.mk (max (leftIdx + offset) 0 + 1) false))
-              else if oRightIdx = rightIdx then
-                pure (ForInStep.done (MProd.mk r.fst r.snd))
-              else
-                pure (ForInStep.yield (MProd.mk r.fst true))
-            else if r.snd = false then
-              pure (ForInStep.yield (MProd.mk (max (leftIdx + offset) 0 + 1) r.snd))
-            else
-              pure (ForInStep.yield (MProd.mk r.fst r.snd))) =
-          (do
-            let other <- _root_.getElemExcept arr (leftIdx + offset).toNat
-            let oLeftIdx <- _root_.findPtrIdx other.origin arr
-            let oRightIdx <- _root_.findPtrIdx other.rightOrigin arr
-            if oLeftIdx < leftIdx then
-              pure (ForInStep.done (MProd.mk r.fst r.snd))
-            else if oLeftIdx = leftIdx then
-              if other.id.clientId < input.id.clientId then
-                pure (ForInStep.yield (MProd.mk (max (leftIdx + offset) 0 + 1) false))
-              else if oRightIdx = rightIdx then
-                pure (ForInStep.done (MProd.mk r.fst r.snd))
-              else
-                pure (ForInStep.yield (MProd.mk r.fst true))
-            else if r.snd = false then
-              pure (ForInStep.yield (MProd.mk (max (leftIdx + offset) 0 + 1) r.snd))
-            else
-              pure (ForInStep.yield (MProd.mk r.fst r.snd))) := by
-        simpa [scanStepIndirect, scanStepDirect] using scanStep_ofDirect leftIdx rightIdx input arr offset r harrinv
-      rw [hstep]
-      cases hres : scanStepDirect leftIdx rightIdx input arr offset r <;> simp [ih, harrinv]
-
+omit [DecidableEq A] in
+/-- The two scans agree: the loop body only inspects ids, which `ofDirectItem`
+preserves. -/
 theorem findIntegratedIndex_ofDirect (leftIdx rightIdx : Int) (input : IntegrateInput A)
-    (arr : Array (_root_.YjsItem A)) (harrinv : _root_.YjsArrInvariant arr.toList) :
+    (arr : Array (_root_.YjsItem A)) (_harrinv : _root_.YjsArrInvariant arr.toList) :
     findIntegratedIndex leftIdx rightIdx input (arr.map ofDirectItem) =
       _root_.findIntegratedIndex leftIdx rightIdx input arr := by
-  simp [findIntegratedIndex, _root_.findIntegratedIndex]
-  exact congrArg (fun x => (fun a => a.fst.toNat) <$> x)
-    (forIn_offsets_ofDirect_expanded leftIdx rightIdx input arr
-      (List.range' 1 ((rightIdx - leftIdx).toNat - 1)) (MProd.mk (leftIdx + 1) false) harrinv)
+  unfold findIntegratedIndex _root_.findIntegratedIndex
+  dsimp only
+  congr 1
+  congr 1
+  funext offset r
+  dsimp only
+  rw [getElemExcept_ofDirect, bind_map_left]
+  congr 1
+  funext other
+  simp only [ofDirectItem, id?_ofDirectPtr]
 
 theorem map_ofDirectItem_insertIdxIfInBounds (arr : Array (_root_.YjsItem A)) (i : Nat)
     (item : _root_.YjsItem A) :

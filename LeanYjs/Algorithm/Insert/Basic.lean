@@ -6,6 +6,20 @@ import Std.Tactic.Do
 
 variable {A: Type} [DecidableEq A]
 
+omit [DecidableEq A] in
+/-- The id a pointer refers to: `none` for the sentinels `first` and `last`. -/
+@[simp] def YjsPtr.id? : YjsPtr A → Option YjsId
+  | YjsPtr.itemPtr item => some item.id
+  | YjsPtr.first => none
+  | YjsPtr.last => none
+
+/-- Membership of a pointer, given by its `YjsPtr.id?`, in an id list.  The sentinels
+(`none`) belong to no list, so a scan that tests `idMem other.origin.id? l` breaks on
+an item whose origin is `first` exactly as the paper's `o.leftOrigin ∈ l` does. -/
+@[simp] def idMem : Option YjsId → List YjsId → Bool
+  | some id, l => id ∈ l
+  | none, _ => false
+
 structure IntegrateInput (A : Type) where
   originId : Option YjsId
   rightOriginId : Option YjsId
@@ -44,30 +58,44 @@ def getElemExcept (arr : Array (YjsItem A)) (idx : Nat) : Except IntegrateError 
   | some item => return item
   | none => Except.error IntegrateError.error
 
+/-- Scan of the integration window `(leftIdx, rightIdx)`, following the loop of
+`Item.integrate` in the Yjs implementation (`src/structs/Item.js`) branch for
+branch; the only abstraction is that the two sets hold ids instead of item objects.
+Two id sets drive the decisions:
+- `itemsBeforeOrigin` (the paper's `before`): every item scanned so far;
+- `conflictingItems` (the paper's `conflicts`): the items scanned since the
+  destination last advanced, i.e. the pending region `[destIdx, i]`.
+
+The destination advances past `other` when `other` shares `newItem`'s origin and
+loses the client tiebreak, or when `other.origin` was already scanned but lies
+before the pending region.  The scan stops at the first item whose origin was not
+scanned (it precedes `newItem`'s origin, or is the sentinel `first`), and at a
+same-origin, same-right-origin item that wins the tiebreak.  Origins are compared
+by id (`YjsPtr.id?`, `idMem`). -/
 def findIntegratedIndex (leftIdx rightIdx : Int) (newItem : IntegrateInput A) (arr : Array (YjsItem A)) : Except IntegrateError Nat := do
-  let mut scanning := false
   let mut destIdx := leftIdx + 1
+  let mut itemsBeforeOrigin : List YjsId := []
+  let mut conflictingItems : List YjsId := []
   for offset in [1:(rightIdx-leftIdx).toNat] do
     let i := (leftIdx + offset).toNat
     let other <- getElemExcept arr i
+    itemsBeforeOrigin := other.id :: itemsBeforeOrigin
+    conflictingItems := other.id :: conflictingItems
 
-    let oLeftIdx <- findPtrIdx other.origin arr
-    let oRightIdx <- findPtrIdx other.rightOrigin arr
-
-    if oLeftIdx < leftIdx then
-      break
-    else if oLeftIdx == leftIdx then
-      if newItem.id.clientId > other.id.clientId then
-        scanning := false
-      else if oRightIdx == rightIdx then
+    if other.origin.id? = newItem.originId then
+      if other.id.clientId < newItem.id.clientId then
+        destIdx := i + 1
+        conflictingItems := []
+      else if other.rightOrigin.id? = newItem.rightOriginId then
         break
-      else
-        scanning := true
+    else if idMem other.origin.id? itemsBeforeOrigin then
+      if !idMem other.origin.id? conflictingItems then
+        destIdx := i + 1
+        conflictingItems := []
+    else
+      break
 
-    if !scanning then
-      destIdx := i + 1
-
-  return (Int.toNat destIdx)
+  return destIdx.toNat
 
 def findLeftIdx (originId : Option YjsId) (arr : Array (YjsItem A)) : Except IntegrateError Int :=
   match originId with
@@ -252,16 +280,17 @@ theorem except_bind_eq_ok_exists {ε α β : Type} {x : Except ε α} {f : α �
   ⦃⌜(-1 : Int) ≤ leftIdx ∧ leftIdx < arr.size ∧ rightIdx ≤ arr.size⌝⦄
     findIntegratedIndex leftIdx rightIdx input arr
   ⦃post⟨fun destIdx => ⌜destIdx ≤ arr.size⌝, fun _ => ⌜True⌝⟩⦄ := by
-  mvcgen [findIntegratedIndex, findPtrIdx_spec, getElemExcept_spec]
+  mvcgen [findIntegratedIndex, getElemExcept_spec]
   case inv1 =>
-    exact post⟨fun ⟨xs, st⟩ => ⌜st.fst ≤ arr.size⌝, fun _ => ⌜True⌝⟩
+    exact post⟨fun ⟨xs, st⟩ => ⌜st.snd.fst ≤ arr.size⌝, fun _ => ⌜True⌝⟩
   all_goals mleave
-  case vc1.step =>
-    omega
   all_goals try omega
-  case vc11.step.except.handle =>
+  case vc7.step.except.handle =>
     intro
     trivial
+  case vc9.post.success =>
+    rename_i r h
+    exact Int.toNat_le.2 h
 
 theorem findIntegratedIndex_ok_le_size_from_eq
   (leftIdx rightIdx : Int) (input : IntegrateInput A) (arr : Array (YjsItem A)) (destIdx : Nat) :
@@ -377,10 +406,10 @@ def YjsState.toString (arr : YjsState String) : String :=
 
 theorem inconsistent1_inconsistent2 : inconsistent1 ≠ inconsistent2 := by
   have h : inconsistent1.map (fun arr => YjsState.toString arr) = Except.ok "anob" := by
-    simp [inconsistent1, a, b, o, n, YjsState.insert, integrateSafe, integrate, findLeftIdx, findRightIdx, findIntegratedIndex, mkItemByIndex, bind, isClockSafe, YjsState.empty, Except.bind, pure, Except.pure, getPtrExcept, getElemExcept, ClientId, List.findIdx?_cons, findPtrIdx]
+    simp [inconsistent1, a, b, o, n, YjsState.insert, integrateSafe, integrate, findLeftIdx, findRightIdx, findIntegratedIndex, mkItemByIndex, bind, isClockSafe, YjsState.empty, Except.bind, pure, Except.pure, getPtrExcept, getElemExcept, ClientId, List.findIdx?_cons]
     eq_refl
   have h : inconsistent2.map (fun arr => YjsState.toString arr) = Except.ok "aobn" := by
-    simp [inconsistent2, a, b, o, n, YjsState.insert, integrateSafe, integrate, findLeftIdx, findRightIdx, findIntegratedIndex, mkItemByIndex, bind, isClockSafe, YjsState.empty, Except.bind, pure, Except.pure, getPtrExcept, getElemExcept, ClientId, List.findIdx?_cons, findPtrIdx]
+    simp [inconsistent2, a, b, o, n, YjsState.insert, integrateSafe, integrate, findLeftIdx, findRightIdx, findIntegratedIndex, mkItemByIndex, bind, isClockSafe, YjsState.empty, Except.bind, pure, Except.pure, getPtrExcept, getElemExcept, ClientId, List.findIdx?_cons]
     eq_refl
   grind
 

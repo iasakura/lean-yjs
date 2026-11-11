@@ -13,6 +13,12 @@ def YjsRef.ofDirectPtr {A : Type} : _root_.YjsPtr A → YjsRef
   | .first => .first
   | .last => .last
 
+/-- The id a reference refers to: `none` for the sentinels `first` and `last`. -/
+@[simp] def YjsRef.id? : YjsRef → Option YjsId
+  | .itemId id => some id
+  | .first => none
+  | .last => none
+
 def YjsRef.ofOriginId : Option YjsId → YjsRef
   | some id => .itemId id
   | none => .first
